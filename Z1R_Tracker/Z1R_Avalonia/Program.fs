@@ -198,10 +198,10 @@ type MyWindow() as this =
         let mutable settingsWereSuccessfullyRead = false
         this.Closed.Add(fun _ ->  // still does not handle 'rude' shutdown, like if they close the console window
             if settingsWereSuccessfullyRead then      // don't overwrite an unreadable file, the user may have been intentionally hand-editing it and needs feedback
-                TrackerModel.Options.writeSettings()  // save any settings changes they made before closing the startup window
+                TrackerModelOptions.writeSettings()  // save any settings changes they made before closing the startup window
             )
         HotKeys.PopulateHotKeyTables()
-        TrackerModel.Options.readSettings()
+        TrackerModelOptions.readSettings()
         settingsWereSuccessfullyRead <- true
         let options = OptionsMenu.makeOptionsCanvas(false)
         stackPanel.Children.Add(options) |> ignore
@@ -228,7 +228,7 @@ type MyWindow() as this =
                     Async.Start (async {
                         do! Async.Sleep(10) // get off UI thread so UI will update
                         do! Async.SwitchToContext ctxt
-                        TrackerModel.Options.writeSettings()
+                        TrackerModelOptions.writeSettings()
                         printfn "you pressed start after selecting %d" i
                         this.Background <- Brushes.Black
                         let heartShuffle = hscb.IsChecked.HasValue && hscb.IsChecked.Value

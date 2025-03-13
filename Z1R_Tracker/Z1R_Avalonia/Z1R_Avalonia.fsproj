@@ -70,9 +70,10 @@
     <PackageReference Include="Avalonia.Desktop" Version="0.10.3" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Z1R_Tracker_NETCoreApp31\Z1R_Tracker_NETCoreApp31.fsproj" />
+    <Folder Include="icons\" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="icons\" />
+    <ProjectReference Include="..\Z1R_Tracker\Z1R_Tracker.fsproj" />
+    <ProjectReference Include="..\Z1R_Tracker_NETCoreApp31\Z1R_Tracker_NETCoreApp31.fsproj" />
   </ItemGroup>
 </Project>

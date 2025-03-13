@@ -5,34 +5,35 @@ open Avalonia.Media
 open Avalonia
 open Avalonia.Layout
 
+
 let secondQuestDungeonsOptionChanged = new Event<unit>()
 
-let link(cb:CheckBox, b:TrackerModel.Options.Bool, needFU) =
+let link(cb:CheckBox, b:TrackerModelOptions.Bool, needFU) =
     let effect() = if needFU then TrackerModel.forceUpdate()
     cb.IsChecked <- System.Nullable.op_Implicit b.Value
     cb.Checked.Add(fun _ -> b.Value <- true; effect())
     cb.Unchecked.Add(fun _ -> b.Value <- false; effect())
 
 let data1 = [|
-    "Draw routes", "Constantly display routing lines when mousing over overworld tiles", TrackerModel.Options.Overworld.DrawRoutes, false
-    "Highlight nearby", "Highlight nearest unmarked overworld tiles when mousing", TrackerModel.Options.Overworld.HighlightNearby, false
-    "Show magnifier", "Display magnified view of overworld tiles when mousing", TrackerModel.Options.Overworld.ShowMagnifier, false
-    "Mirror overworld", "Flip the overworld map East<->West", TrackerModel.Options.Overworld.MirrorOverworld, true
-    "Shops before dungeons", "In the overworld map tile popup, the grid starts with shops when this is checked (starts with dungeons when unchecked)", TrackerModel.Options.Overworld.ShopsFirst, false
+    "Draw routes", "Constantly display routing lines when mousing over overworld tiles", TrackerModelOptions.Overworld.DrawRoutes, false
+    "Highlight nearby", "Highlight nearest unmarked overworld tiles when mousing", TrackerModelOptions.Overworld.HighlightNearby, false
+    "Show magnifier", "Display magnified view of overworld tiles when mousing", TrackerModelOptions.Overworld.ShowMagnifier, false
+    "Mirror overworld", "Flip the overworld map East<->West", TrackerModelOptions.Overworld.MirrorOverworld, true
+    "Shops before dungeons", "In the overworld map tile popup, the grid starts with shops when this is checked (starts with dungeons when unchecked)", TrackerModelOptions.Overworld.ShopsFirst, false
     |]
 let data2 = [|
     "Dungeon feedback", "Note when dungeons are located/completed, triforces obtained, and go-time", 
-        TrackerModel.Options.VoiceReminders.DungeonFeedback, TrackerModel.Options.VisualReminders.DungeonFeedback
+        TrackerModelOptions.VoiceReminders.DungeonFeedback, TrackerModelOptions.VisualReminders.DungeonFeedback
     "Sword hearts", "Remind to consider white/magical sword when you get 4-6 or 10-14 hearts", 
-        TrackerModel.Options.VoiceReminders.SwordHearts,     TrackerModel.Options.VisualReminders.SwordHearts
+        TrackerModelOptions.VoiceReminders.SwordHearts,     TrackerModelOptions.VisualReminders.SwordHearts
     "Coast Item", "Reminder to fetch to coast item when you have the ladder", 
-        TrackerModel.Options.VoiceReminders.CoastItem,       TrackerModel.Options.VisualReminders.CoastItem
+        TrackerModelOptions.VoiceReminders.CoastItem,       TrackerModelOptions.VisualReminders.CoastItem
     "Recorder/PB/Boomstick", "Periodic reminders of how many recorder/power-bracelet spots remain, or that the boomstick is available", 
-        TrackerModel.Options.VoiceReminders.RecorderPBSpotsAndBoomstickBook, TrackerModel.Options.VisualReminders.RecorderPBSpotsAndBoomstickBook
+        TrackerModelOptions.VoiceReminders.RecorderPBSpotsAndBoomstickBook, TrackerModelOptions.VisualReminders.RecorderPBSpotsAndBoomstickBook
     "Have any key/ladder", "One-time reminder, a little while after obtaining these items, that you have them", 
-        TrackerModel.Options.VoiceReminders.HaveKeyLadder,   TrackerModel.Options.VisualReminders.HaveKeyLadder
+        TrackerModelOptions.VoiceReminders.HaveKeyLadder,   TrackerModelOptions.VisualReminders.HaveKeyLadder
     "Blockers", "Reminder when you may have become unblocked on a previously-aborted dungeon", 
-        TrackerModel.Options.VoiceReminders.Blockers,        TrackerModel.Options.VisualReminders.Blockers
+        TrackerModelOptions.VoiceReminders.Blockers,        TrackerModelOptions.VisualReminders.Blockers
     |]
 
 let makeOptionsCanvas(includePopupExplainer) = 
@@ -59,11 +60,11 @@ let makeOptionsCanvas(includePopupExplainer) =
     let volumeText = new TextBox(Text="Volume",IsReadOnly=true, Margin=Thickness(0.))
     options2Topsp.Children.Add(volumeText) |> ignore
     let slider = new Slider(Orientation=Orientation.Horizontal, Maximum=100., TickFrequency=10., TickPlacement=TickPlacement.Outside, IsSnapToTickEnabled=true, Width=200.)
-    slider.Value <- float TrackerModel.Options.Volume
+    slider.Value <- float TrackerModelOptions.Volume
     slider.PropertyChanged.Add(fun _ -> 
-        TrackerModel.Options.Volume <- int slider.Value
+        TrackerModelOptions.Volume <- int slider.Value
         ()//Graphics.volumeChanged.Trigger(TrackerModel.Options.Volume)
-        if not(TrackerModel.Options.IsMuted) then 
+        if not(TrackerModelOptions.IsMuted) then 
             ()//voice.Volume <- TrackerModel.Options.Volume
         )
     let dp = new DockPanel(VerticalAlignment=VerticalAlignment.Center, Margin=Thickness(0.))
@@ -73,9 +74,9 @@ let makeOptionsCanvas(includePopupExplainer) =
     // stop
     let muteCB = new CheckBox(Content=new TextBox(Text="Stop all",IsReadOnly=true))
     ToolTip.SetTip(muteCB, "Turn off all reminders")
-    muteCB.IsChecked <- System.Nullable.op_Implicit TrackerModel.Options.IsMuted
-    muteCB.Checked.Add(fun _ -> TrackerModel.Options.IsMuted <- true; (*voice.Volume <- 0*))
-    muteCB.Unchecked.Add(fun _ -> TrackerModel.Options.IsMuted <- false; (*voice.Volume <- TrackerModel.Options.Volume*))
+    muteCB.IsChecked <- System.Nullable.op_Implicit TrackerModelOptions.IsMuted
+    muteCB.Checked.Add(fun _ -> TrackerModelOptions.IsMuted <- true; (*voice.Volume <- 0*))
+    muteCB.Unchecked.Add(fun _ -> TrackerModelOptions.IsMuted <- false; (*voice.Volume <- TrackerModel.Options.Volume*))
     options2sp.Children.Add(muteCB) |> ignore
     // other settings
     let options2Grid = new Grid()
@@ -116,9 +117,9 @@ let makeOptionsCanvas(includePopupExplainer) =
     let tb = new TextBox(Text="Other", IsReadOnly=true, FontWeight=FontWeight.Bold, BorderBrush=Brushes.Transparent, IsHitTestVisible=false) |> header
     options3sp.Children.Add(tb) |> ignore
     let cb = new CheckBox(Content=new TextBox(Text="Second quest dungeons",IsReadOnly=true, BorderBrush=Brushes.Transparent, IsHitTestVisible=false))
-    cb.IsChecked <- System.Nullable.op_Implicit TrackerModel.Options.IsSecondQuestDungeons.Value
-    cb.Checked.Add(fun _ -> TrackerModel.Options.IsSecondQuestDungeons.Value <- true; secondQuestDungeonsOptionChanged.Trigger())
-    cb.Unchecked.Add(fun _ -> TrackerModel.Options.IsSecondQuestDungeons.Value <- false; secondQuestDungeonsOptionChanged.Trigger())
+    cb.IsChecked <- System.Nullable.op_Implicit TrackerModelOptions.IsSecondQuestDungeons.Value
+    cb.Checked.Add(fun _ -> TrackerModelOptions.IsSecondQuestDungeons.Value <- true; secondQuestDungeonsOptionChanged.Trigger())
+    cb.Unchecked.Add(fun _ -> TrackerModelOptions.IsSecondQuestDungeons.Value <- false; secondQuestDungeonsOptionChanged.Trigger())
     ToolTip.SetTip(cb,"Check this if dungeon 4, rather than dungeon 1, has 3 items")
     options3sp.Children.Add(cb) |> ignore
 
