@@ -214,15 +214,23 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
         options1sp.Children.Add(cb) |> ignore
     optionsAllsp.Children.Add(options1sp) |> ignore
 
+    //This section starts the reminders panel in the initial startup screen
+    //The stack panel here is the middle column of content. Everything needs to be added to options2sp in order to render in this section. it is generally added top to bottom
     let options2sp = new StackPanel(Orientation=Orientation.Vertical, Margin=Thickness(10.,2.,10.,0.))
     let tb = new TextBox(Text="Reminders", IsReadOnly=true, FontWeight=FontWeights.Bold) |> header
+    //This is an example of how to add a text box to the middle column of content
     options2sp.Children.Add(tb) |> ignore
     // volume and slider
+    // This is a new StackPenel uniquely for the volume slider
     let options2Topsp = new StackPanel(Orientation=Orientation.Horizontal, Margin=Thickness(0.,0.,0.,6.))
     let volumeText = new TextBox(Text="Volume",IsReadOnly=true, Margin=Thickness(0.))
     options2Topsp.Children.Add(volumeText) |> ignore
     let slider = new Slider(Orientation=Orientation.Horizontal, Maximum=100., TickFrequency=10., TickPlacement=Primitives.TickPlacement.Both, IsSnapToTickEnabled=true, Width=200.)
     slider.Value <- float TrackerModelOptions.Volume
+    //The below is an important control for the UI. The slider.ValueChanged.Add(fun _ ->  is the event handler for the slider. It is triggered when the slider value changes.
+    //The code inside the event handler is executed when the slider value changes.
+    //This specifically keys to data that is part of the TrackerModelOptions class. ALSO the voice.Volume <- TrackerModelOptions.Volume is important for the voice to actually change.
+    //The Graphics.volumeChanged.Trigger seems redundant but is important for the UI to update correctly.
     slider.ValueChanged.Add(fun _ -> 
         TrackerModelOptions.Volume <- int slider.Value
         Graphics.volumeChanged.Trigger(TrackerModelOptions.Volume)

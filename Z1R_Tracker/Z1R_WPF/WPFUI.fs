@@ -1144,11 +1144,13 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                 if hasTheModelChanged then
                     doUIUpdateEvent.Trigger()
             stepAnimateLink()
+            //This is where the periodic reminders are called. Not all of them are here since there are one timers after
             periodicReminders.Check()
             // one-time reminders
             match oneTimeRemindAnyKey with
             | None -> ()
             | Some(lct, thunk) ->
+                //Frequency of the reminder
                 if (DateTime.Now - lct.Time).Minutes > 1 then  // 2 min
                     thunk()
             match oneTimeRemindLadder with

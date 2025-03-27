@@ -78,6 +78,8 @@ let mutable SmallerAppWindowScaleFactor = 2.0/3.0
 let mutable ShorterAppWindow = Bool(false)
 let mutable IsMuted = false
 let mutable Volume = 30
+//How often should reminders fire?  In milliseconds.
+let mutable ReminderFrequency = 1000
 let mutable PreferredVoice = ""
 let mutable MainWindowLT = ""
 let mutable BroadcastWindowLT = ""
@@ -175,6 +177,8 @@ type ReadWrite() =
 
 let mutable private cachedSettingJson = null
 
+//I don't want to write the settings file every time a setting changes, so I'll cache the json string and only write it when it changes.
+//I believe this is how we will set some settings controls to be "live" and others to be "on demand" (like save on completion).
 let private writeImpl(filename) =
     let data = ReadWrite()
     data.DrawRoutes <- Overworld.DrawRoutes.Value

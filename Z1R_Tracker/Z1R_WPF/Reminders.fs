@@ -184,7 +184,10 @@ let RemindTriforceCount(n, asyncBrieflyHighlightAnOverworldLocation) =
         SendReminderImpl(TrackerModel.ReminderCategory.DungeonFeedback, "Dungeon nine is open", [upcb(Graphics.iconRightArrow_bmp); upcb(MapStateProxy(8).DefaultInteriorBmp())],
                             Some(asyncBrieflyHighlightAnOverworldLocation(TrackerModel.mapStateSummary.DungeonLocations.[8])))
 
+ //This appears to be where the periodic reminders are set up
+ //Any controls regarding frequency of reminders should be added here
 type PeriodicReminders() =
+    //This defines the identification of the interval between reminders I think
     let recentlyAgo = TimeSpan.FromMinutes(3.0)
     let ladderTime, recorderTime, powerBraceletTime, boomstickTime = 
         new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo)
