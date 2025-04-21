@@ -354,17 +354,22 @@ type MyWindow() as this =
             let cm = new CustomComboBoxes.CanvasManager(rootCanvas, appMainCanvas)
             appMainCanvas, cm
         // Stubbed SignalR sync startup
-        let handleRemoteTileChange (_tileId: string, _iconId: string) =
-            System.Diagnostics.Debug.WriteLine("[SyncStub] Received remote tile change (but stubbed)")
-            printfn "[SyncStub] Received remote tile change (but stubbed)"
+        let handleRemoteTileChange (_tileId: string, _iconId: string, senderId: string) =
+            let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
+            let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
+            if senderId <> me && senderId = target then
+                System.Diagnostics.Debug.WriteLine("[SyncStub] Received remote tile change (but stubbed)")
+                printfn "[SyncStub] Received remote tile change (but stubbed)"
+            else 
+                printfn "[Sync] Ignored message from senderId=%s (target=%s, me=%s)" senderId target me
 
         let negotiateUrl = Config.NegotiateUrl
         // THIS is the correct way to run async without causing the Async<'T> comparison error
         Async.StartImmediate(async {
             try
                 do! SyncManager.StartAsync(negotiateUrl) |> Async.AwaitTask
-                let handlerDelegate = System.Action<string, string>(fun tileId iconId ->
-                    handleRemoteTileChange(tileId, iconId)
+                let handlerDelegate = System.Action<string, string, string>(fun tileId iconId senderId ->
+                    handleRemoteTileChange(tileId, iconId, senderId)
                 )
                 SyncManager.SetTileChangeHandler(handlerDelegate)
 

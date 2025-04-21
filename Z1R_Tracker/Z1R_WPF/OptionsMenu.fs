@@ -352,9 +352,16 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 sp.Children.Add(new TextBox(Text="Console ID (This instance):", IsReadOnly=true)) |> ignore
                 let myIdBox = new TextBox()
                 myIdBox.Text <- TrackerModelOptions.CoopSyncOptions.MyConsoleId
-                myIdBox.Width <- 250.
+                myIdBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                myIdBox.TextAlignment <- TextAlignment.Center
                 
-                sp.Children.Add(myIdBox) |> ignore
+                let myIdBorder = new Border(
+                    Child = myIdBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                sp.Children.Add(myIdBorder) |> ignore
 
                 let guidButton = Graphics.makeButton("Generate GUID", None, None)
                 guidButton.Click.Add(fun _ ->
@@ -368,9 +375,16 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 sp.Children.Add(new TextBox(Text="Target Console ID (to sync with):", IsReadOnly=true)) |> ignore
                 let targetIdBox = new TextBox()
                 targetIdBox.Text <- TrackerModelOptions.CoopSyncOptions.TargetConsoleId
-                targetIdBox.Width <- 250.
+                targetIdBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                targetIdBox.TextAlignment <- TextAlignment.Center
                 
-                sp.Children.Add(targetIdBox) |> ignore
+                let targetIdBorder = new Border(
+                    Child = targetIdBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                sp.Children.Add(targetIdBorder) |> ignore
 
                 sp.Children.Add(new DockPanel(Height=10.)) |> ignore
 
@@ -390,6 +404,7 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                             BorderBrush=Brushes.Gray,
                             BorderThickness=Thickness(3.),
                             Background = Brushes.Black,
+                            Width=400.,
                             HorizontalAlignment=HorizontalAlignment.Center
                         )
                     )

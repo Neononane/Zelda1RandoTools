@@ -10,7 +10,7 @@ namespace Z1R_Sync
     {
         private static HubConnection _connection;
         private static readonly HttpClient _httpClient = new HttpClient();
-        private static Action<string, string> _onTileChange;
+        private static Action<string, string, string> _onTileChange;
 
         public static async Task StartAsync(string negotiateUrl)
         {
@@ -38,7 +38,7 @@ namespace Z1R_Sync
                     {
                         var jsonPayload = payload.ToString();
                         var update = JsonConvert.DeserializeObject<MapUpdate>(jsonPayload);
-                        _onTileChange?.Invoke(update.tileId, update.iconId);
+                        _onTileChange?.Invoke(update.tileId, update.iconId, update.senderId);
                     }
                     catch (Exception ex)
                     {
@@ -57,7 +57,7 @@ namespace Z1R_Sync
             }
         }
 
-        public static void SetTileChangeHandler(Action<string, string> handler)
+        public static void SetTileChangeHandler(Action<string, string, string> handler)
         {
             _onTileChange = handler;
         }
