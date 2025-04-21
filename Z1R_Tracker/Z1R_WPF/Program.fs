@@ -3,6 +3,8 @@ open System.Windows
 open System.Windows.Controls 
 open System.Windows.Media
 open Z1R_Sync
+open SaveAndLoad
+open Newtonsoft.Json
 
 open CustomComboBoxes.GlobalFlag
 
@@ -354,24 +356,57 @@ type MyWindow() as this =
             let cm = new CustomComboBoxes.CanvasManager(rootCanvas, appMainCanvas)
             appMainCanvas, cm
         // Stubbed SignalR sync startup
-        let handleRemoteTileChange (_tileId: string, _iconId: string, senderId: string) =
+        let handleRemoteTileChange (tileId: string, iconId: string, senderId: string) =
+            let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
+            let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
+            if senderId <> me && senderId = target then
+                try
+                    let tileInt = int tileId
+                    let iconInt = int iconId
+                    //TileCustomization.assignIcon cm tileInt iconInt
+                    printfn "[Sync] Received tile change from %s: tileId=%s, iconId=%s" senderId tileId iconId
+                 with ex ->
+                    printfn "[Sync] Error applying tile change: %s" ex.Message
+                else
+                    // Optional debug log for ignored messages
+                    printfn "[Sync] Ignored tile update from senderId=%s (target=%s, me=%s)" senderId target me
+        let handleIncomingMessage (msgType: string) (payloadJson: string) (senderId: string) =
             let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
             let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
             if senderId <> me && senderId = target then
-                System.Diagnostics.Debug.WriteLine("[SyncStub] Received remote tile change (but stubbed)")
-                printfn "[SyncStub] Received remote tile change (but stubbed)"
-            else 
-                printfn "[Sync] Ignored message from senderId=%s (target=%s, me=%s)" senderId target me
+                match msgType with
+                | "PlayerProgress" ->
+                    try
+                        printfn "[Sync] Raw PlayerProgress payload: %s" payloadJson
+                        let data = JsonConvert.DeserializeObject<PlayerProgressAndTakeAnyHeartsModel>(payloadJson)
+                        Application.Current.Dispatcher.Invoke(fun () ->
+                            data.Apply()
+                            printfn "[Sync] Applied PlayerProgress update from %s" senderId
+                        )
+                    with ex ->
+                        printfn "[Sync] Failed to apply PlayerProgress update: %s" ex.Message
+                | _ ->
+                    printfn "[Sync] Unknown messageType: %s" msgType
+            else
+                printfn "[Sync] Ignored sync message from senderId=%s (target=%s, me=%s)" senderId target me
 
         let negotiateUrl = Config.NegotiateUrl
         // THIS is the correct way to run async without causing the Async<'T> comparison error
         Async.StartImmediate(async {
             try
                 do! SyncManager.StartAsync(negotiateUrl) |> Async.AwaitTask
-                let handlerDelegate = System.Action<string, string, string>(fun tileId iconId senderId ->
+
+                // Tile-specific handler
+                let tileHandlerDelegate = System.Action<string, string, string>(fun tileId iconId senderId ->
                     handleRemoteTileChange(tileId, iconId, senderId)
                 )
-                SyncManager.SetTileChangeHandler(handlerDelegate)
+                SyncManager.SetTileChangeHandler(tileHandlerDelegate)
+
+                // General message handler (e.g. PlayerProgress)
+                let messageHandlerDelegate = System.Action<string, string, string>(fun messageType payloadJson senderId ->
+                    handleIncomingMessage messageType payloadJson senderId
+                )
+                SyncManager.SetSyncMessageHandler(messageHandlerDelegate)
 
                 printfn "[Sync] Connected to Azure SignalR via negotiate"
             with ex ->
@@ -379,9 +414,10 @@ type MyWindow() as this =
                 match ex with
                 | :? System.AggregateException as agg ->
                     for inner in agg.InnerExceptions do
-                        printfn "[Sync] Inner exception: %s" inner.Message
+                    printfn "[Sync] Inner exception: %s" inner.Message
                 | _ -> ()
         })
+
 
 
         let wholeCanvas, hmsTimerCanvas = new Canvas(), new Canvas()

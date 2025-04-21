@@ -4,19 +4,33 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
 using Newtonsoft.Json;
 
+
 namespace Z1R_Sync
 {
     public static class SyncManager
     {
-        private static HubConnection _connection;
         private static readonly HttpClient _httpClient = new HttpClient();
+        private static HubConnection _connection;
+
+        // Delegates for handling different kinds of messages
         private static Action<string, string, string> _onTileChange;
+        private static Action<string, string, string> _onSyncMessage;
+
+        public static void SetTileChangeHandler(Action<string, string, string> handler)
+        {
+            _onTileChange = handler;
+        }
+
+        public static void SetSyncMessageHandler(Action<string, string, string> handler)
+        {
+            _onSyncMessage = handler;
+        }
 
         public static async Task StartAsync(string negotiateUrl)
         {
             try
             {
-                // Step 1: Negotiate with Azure Function to get SignalR connection info
+                // Step 1: Get SignalR connection info from Azure Function
                 var response = await _httpClient.PostAsync(negotiateUrl, null);
                 response.EnsureSuccessStatusCode();
                 var json = await response.Content.ReadAsStringAsync();
@@ -31,7 +45,7 @@ namespace Z1R_Sync
                     .WithAutomaticReconnect()
                     .Build();
 
-                // Step 3: Register handler for incoming messages
+                // Step 3: Register tile change handler
                 _connection.On<object>("ReceiveMapUpdate", payload =>
                 {
                     try
@@ -42,11 +56,26 @@ namespace Z1R_Sync
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[SyncManager] Failed to parse payload: {ex.Message}");
+                        System.Diagnostics.Debug.WriteLine($"[SyncManager] Failed to parse tile update: {ex.Message}");
                     }
                 });
 
-                // Step 4: Connect to SignalR hub
+                // Step 4: Register structured message handler
+                _connection.On<SyncMessage>("ReceiveSyncMessage", message =>
+                {
+                    try
+                    {
+                        //var payloadJson = JsonConvert.SerializeObject(message.payload);
+                        var payloadJson = message.payload.ToString();
+                        _onSyncMessage?.Invoke(message.messageType, payloadJson, message.senderId);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[SyncManager] Failed to process sync message: {ex.Message}");
+                    }
+                });
+
+                // Step 5: Connect
                 await _connection.StartAsync();
                 System.Diagnostics.Debug.WriteLine("[SyncManager] Connected to SignalR hub");
             }
@@ -57,20 +86,7 @@ namespace Z1R_Sync
             }
         }
 
-        public static void SetTileChangeHandler(Action<string, string, string> handler)
-        {
-            _onTileChange = handler;
-        }
-
-        // Optional: Send outbound messages (e.g., triggered by tile clicks)
-        public static async Task RaiseTileChangeAsync(string tileId, string iconId, string senderId)
-        {
-            if (_connection?.State == HubConnectionState.Connected)
-            {
-                var payload = new MapUpdate { tileId = tileId, iconId = iconId, senderId = senderId };
-                await _connection.SendAsync("ReceiveMapUpdate", payload);
-            }
-        }
+        // === Supporting Data Structures ===
 
         private class SignalRNegotiation
         {
@@ -82,8 +98,14 @@ namespace Z1R_Sync
         {
             public string tileId { get; set; }
             public string iconId { get; set; }
-
             public string senderId { get; set; }
+        }
+
+        public class SyncMessage
+        {
+            public string messageType { get; set; }
+            public string senderId { get; set; }
+            public object payload { get; set; }
         }
     }
 }
