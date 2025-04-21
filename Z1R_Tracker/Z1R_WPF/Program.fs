@@ -2,6 +2,7 @@
 open System.Windows
 open System.Windows.Controls 
 open System.Windows.Media
+open Z1R_Sync
 
 open CustomComboBoxes.GlobalFlag
 
@@ -352,6 +353,21 @@ type MyWindow() as this =
             Graphics.canvasAdd(rootCanvas, appMainCanvas, 0., 0.)
             let cm = new CustomComboBoxes.CanvasManager(rootCanvas, appMainCanvas)
             appMainCanvas, cm
+        // Stubbed SignalR sync startup
+        let handleRemoteTileChange (_tileId: string, _iconId: string) =
+            System.Diagnostics.Debug.WriteLine("[SyncStub] Received remote tile change (but stubbed)")
+            printfn "[SyncStub] Received remote tile change (but stubbed)"
+
+        // THIS is the correct way to run async without causing the Async<'T> comparison error
+        Async.StartImmediate(async {
+            printfn "[SyncStub] SyncManager.StartAsync would run here"
+            System.Diagnostics.Debug.WriteLine("[SyncStub] SyncManager.StartAsync would run here") |> ignore
+
+            printfn "[SyncStub] SyncManager.SetTileChangeHandler called"
+            System.Diagnostics.Debug.WriteLine("[SyncStub] SyncManager.SetTileChangeHandler called") |> ignore
+        })
+
+
         let wholeCanvas, hmsTimerCanvas = new Canvas(), new Canvas()
         this.Content <- wholeCanvas
         this.Loaded.Add(fun _ -> 

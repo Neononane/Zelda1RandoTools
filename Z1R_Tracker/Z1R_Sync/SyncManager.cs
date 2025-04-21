@@ -1,7 +1,7 @@
 ﻿using System;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
-using System.Net.Http;
 using Newtonsoft.Json;
 
 namespace Z1R_Sync
@@ -9,46 +9,79 @@ namespace Z1R_Sync
     public static class SyncManager
     {
         private static HubConnection _connection;
+        private static readonly HttpClient _httpClient = new HttpClient();
         private static Action<string, string> _onTileChange;
-        private static HttpClient _httpClient = new HttpClient();
 
-        // Call this from F# at app start
-        public static async Task StartAsync(string signalRHubUrl)
+        public static async Task StartAsync(string negotiateUrl)
         {
-            _connection = new HubConnectionBuilder()
-                .WithUrl(signalRHubUrl)
-                .WithAutomaticReconnect()
-                .Build();
-
-            _connection.On<string, string>("TileChanged", (tileId, iconId) =>
+            try
             {
-                _onTileChange?.Invoke(tileId, iconId);
-            });
+                // Step 1: Negotiate with Azure Function to get SignalR connection info
+                var response = await _httpClient.PostAsync(negotiateUrl, null);
+                response.EnsureSuccessStatusCode();
+                var json = await response.Content.ReadAsStringAsync();
+                var info = JsonConvert.DeserializeObject<SignalRNegotiation>(json);
 
-            await _connection.StartAsync();
+                // Step 2: Build SignalR connection
+                _connection = new HubConnectionBuilder()
+                    .WithUrl(info.url, options =>
+                    {
+                        options.AccessTokenProvider = () => Task.FromResult(info.accessToken);
+                    })
+                    .WithAutomaticReconnect()
+                    .Build();
+
+                // Step 3: Register handler for incoming messages
+                _connection.On<object>("ReceiveMapUpdate", payload =>
+                {
+                    try
+                    {
+                        var jsonPayload = payload.ToString();
+                        var update = JsonConvert.DeserializeObject<MapUpdate>(jsonPayload);
+                        _onTileChange?.Invoke(update.tileId, update.iconId);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[SyncManager] Failed to parse payload: {ex.Message}");
+                    }
+                });
+
+                // Step 4: Connect to SignalR hub
+                await _connection.StartAsync();
+                System.Diagnostics.Debug.WriteLine("[SyncManager] Connected to SignalR hub");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SyncManager] ERROR during startup: {ex.Message}");
+                throw;
+            }
         }
 
-        // Called by F# when a user triggers a state change
+        public static void SetTileChangeHandler(Action<string, string> handler)
+        {
+            _onTileChange = handler;
+        }
+
+        // Optional: Send outbound messages (e.g., triggered by tile clicks)
         public static async Task RaiseTileChangeAsync(string tileId, string iconId)
         {
             if (_connection?.State == HubConnectionState.Connected)
             {
-                await _connection.SendAsync("BroadcastTileChange", tileId, iconId);
+                var payload = new MapUpdate { tileId = tileId, iconId = iconId };
+                await _connection.SendAsync("ReceiveMapUpdate", payload);
             }
         }
 
-        // Optional: use this to call a separate Azure Function (e.g., auditing)
-        public static async Task SendToFunctionAsync(string url, object data)
+        private class SignalRNegotiation
         {
-            var json = JsonConvert.SerializeObject(data);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            await _httpClient.PostAsync(url, content);
+            public string url { get; set; }
+            public string accessToken { get; set; }
         }
 
-        // F# provides a handler for applying remote tile changes
-        public static void SetTileChangeHandler(Action<string, string> handler)
+        private class MapUpdate
         {
-            _onTileChange = handler;
+            public string tileId { get; set; }
+            public string iconId { get; set; }
         }
     }
 }

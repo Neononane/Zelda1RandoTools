@@ -150,7 +150,7 @@
     <Compile Include="MainTrackerTriforcesAndItems.fs" />
     <Compile Include="Sync.fs" />
     <Compile Include="Config.fs" />
-	<Compile Include="WPFUI.fs" />
+    <Compile Include="WPFUI.fs" />
     <Compile Include="Program.fs" />
     <Content Include="..\Z1R_Tracker\README.txt">
       <Link>README.txt</Link>
@@ -166,7 +166,6 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="packages.config" />
-    
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.AspNetCore.Connections.Abstractions">
@@ -305,6 +304,11 @@
     <Reference Include="UIAutomationClient" />
     <Reference Include="UIAutomationTypes" />
     <Reference Include="WindowsBase" />
+    <ProjectReference Include="..\Z1R_Sync\Z1R_Sync.csproj">
+      <Name>Z1R_Sync</Name>
+      <Project>{29a0f848-0e20-424b-8ae0-715ab2719e45}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <ProjectReference Include="..\Z1R_Tracker\Z1R_Tracker.fsproj">
       <Name>Z1R_Tracker</Name>
       <Project>{6b605496-ea45-4694-90f5-a3953d338bec}</Project>
