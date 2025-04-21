@@ -332,6 +332,75 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 )
         options2sp.Children.Add(changeVoiceButton) |> ignore
 
+    let coopSettingsButton = Graphics.makeButton("Co-op Settings", None, None)
+    coopSettingsButton.HorizontalAlignment <- HorizontalAlignment.Left
+    do
+        let mutable popupIsActive = false
+        let mutable changedGlobal = false
+        coopSettingsButton.Click.Add(fun _ ->
+            if not popupIsActive then
+                popupIsActive <- true
+                if not CustomComboBoxes.GlobalFlag.popupIsActive then
+                    CustomComboBoxes.GlobalFlag.popupIsActive <- true
+                    changedGlobal <- true
+
+
+                let wh = new System.Threading.ManualResetEvent(false)
+                let sp = new StackPanel(Orientation=Orientation.Vertical, Margin=Thickness(10.))
+                AddStyle(sp)
+
+                sp.Children.Add(new TextBox(Text="Console ID (This instance):", IsReadOnly=true)) |> ignore
+                let myIdBox = new TextBox()
+                myIdBox.Text <- TrackerModelOptions.CoopSyncOptions.MyConsoleId
+                myIdBox.Width <- 250.
+                
+                sp.Children.Add(myIdBox) |> ignore
+
+                let guidButton = Graphics.makeButton("Generate GUID", None, None)
+                guidButton.Click.Add(fun _ ->
+                    let newGuid = System.Guid.NewGuid().ToString()
+                    myIdBox.Text <- newGuid
+                )
+                sp.Children.Add(guidButton) |> ignore
+
+                sp.Children.Add(new DockPanel(Height=10.)) |> ignore
+
+                sp.Children.Add(new TextBox(Text="Target Console ID (to sync with):", IsReadOnly=true)) |> ignore
+                let targetIdBox = new TextBox()
+                targetIdBox.Text <- TrackerModelOptions.CoopSyncOptions.TargetConsoleId
+                targetIdBox.Width <- 250.
+                
+                sp.Children.Add(targetIdBox) |> ignore
+
+                sp.Children.Add(new DockPanel(Height=10.)) |> ignore
+
+                let saveButton = Graphics.makeButton("Save", None, None)
+                saveButton.Click.Add(fun _ ->
+                    TrackerModelOptions.CoopSyncOptions.MyConsoleId <- myIdBox.Text
+                    TrackerModelOptions.CoopSyncOptions.TargetConsoleId <- targetIdBox.Text
+                    TrackerModelOptions.writeSettings()
+                    wh.Set() |> ignore
+                )
+                sp.Children.Add(saveButton) |> ignore
+
+                async {
+                    do! CustomComboBoxes.DoModalDocked(cm, wh, Dock.Bottom,
+                        new Border(
+                            Child=sp,
+                            BorderBrush=Brushes.Gray,
+                            BorderThickness=Thickness(3.),
+                            Background = Brushes.Black,
+                            HorizontalAlignment=HorizontalAlignment.Center
+                        )
+                    )
+                    popupIsActive <- false
+                    if changedGlobal then
+                        CustomComboBoxes.GlobalFlag.popupIsActive <- false
+                } |> Async.StartImmediate
+        )
+    options2sp.Children.Add(coopSettingsButton) |> ignore
+
+
     optionsAllsp.Children.Add(new DockPanel(Width=2.,Background=Brushes.Gray)) |> ignore
     optionsAllsp.Children.Add(options2sp) |> ignore
     optionsAllsp.Children.Add(new DockPanel(Width=2.,Background=Brushes.Gray)) |> ignore
