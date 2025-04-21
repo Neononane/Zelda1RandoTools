@@ -52,6 +52,10 @@ module OverworldTilesToHide =
     let mutable TakeAny = Bool(false)
     let mutable Shop = Bool(false)
     let mutable AlwaysHideMeatShops = Bool(false)
+//RPT added this to the CoopSyncOptions module to allow for the ability to set the console ID for the local tracker and the target tracker.
+module CoopSyncOptions = 
+    let mutable MyConsoleId: string = "unspecified"
+    let mutable TargetConsoleId : string = "unspecified"
 let mutable UseBlurEffects = Bool(true)
 let mutable AnimateTileChanges = Bool(true)
 let mutable AnimateShopHighlights = Bool(true)
@@ -90,6 +94,7 @@ let mutable SpotSummaryPopout_DisplayedLT = ""
 let mutable InventoryAndHeartsPopout_DisplayedLT = ""
 let mutable RemainingItemsPoput_DisplayedLT = ""
 let mutable DungeonSummaryTabMode = 0
+
 
 type ReadWrite() =
     member val DrawRoutes = true with get,set
@@ -174,6 +179,9 @@ type ReadWrite() =
     member val InventoryAndHeartsPopout_DisplayedLT = "" with get,set
     member val RemainingItemsPoput_DisplayedLT = "" with get,set
     member val DungeonSummaryTabMode = 0 with get,set
+
+    member val MyConsoleId = CoopSyncOptions.MyConsoleId with get,set
+    member val TargetConsoleId = CoopSyncOptions.TargetConsoleId with get,set
 
 let mutable private cachedSettingJson = null
 
@@ -260,6 +268,8 @@ let private writeImpl(filename) =
     data.InventoryAndHeartsPopout_DisplayedLT <- InventoryAndHeartsPopout_DisplayedLT
     data.RemainingItemsPoput_DisplayedLT <- RemainingItemsPoput_DisplayedLT
     data.DungeonSummaryTabMode <- DungeonSummaryTabMode
+    data.MyConsoleId <- CoopSyncOptions.MyConsoleId
+    data.TargetConsoleId <- CoopSyncOptions.TargetConsoleId
 
     let json = JsonSerializer.Serialize<ReadWrite>(data, new JsonSerializerOptions(WriteIndented=true))
     if json <> cachedSettingJson then
@@ -357,6 +367,9 @@ let private read(filename) =
         InventoryAndHeartsPopout_DisplayedLT <- data.InventoryAndHeartsPopout_DisplayedLT
         RemainingItemsPoput_DisplayedLT <- data.RemainingItemsPoput_DisplayedLT
         DungeonSummaryTabMode <- data.DungeonSummaryTabMode
+
+        CoopSyncOptions.MyConsoleId <- data.MyConsoleId
+        CoopSyncOptions.TargetConsoleId <- data.TargetConsoleId
     with e ->
         cachedSettingJson <- null
         printfn "Unable to read settings file '%s':" filename 

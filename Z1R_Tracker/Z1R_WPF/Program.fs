@@ -358,13 +358,24 @@ type MyWindow() as this =
             System.Diagnostics.Debug.WriteLine("[SyncStub] Received remote tile change (but stubbed)")
             printfn "[SyncStub] Received remote tile change (but stubbed)"
 
+        let negotiateUrl = Config.NegotiateUrl
         // THIS is the correct way to run async without causing the Async<'T> comparison error
         Async.StartImmediate(async {
-            printfn "[SyncStub] SyncManager.StartAsync would run here"
-            System.Diagnostics.Debug.WriteLine("[SyncStub] SyncManager.StartAsync would run here") |> ignore
+            try
+                do! SyncManager.StartAsync(negotiateUrl) |> Async.AwaitTask
+                let handlerDelegate = System.Action<string, string>(fun tileId iconId ->
+                    handleRemoteTileChange(tileId, iconId)
+                )
+                SyncManager.SetTileChangeHandler(handlerDelegate)
 
-            printfn "[SyncStub] SyncManager.SetTileChangeHandler called"
-            System.Diagnostics.Debug.WriteLine("[SyncStub] SyncManager.SetTileChangeHandler called") |> ignore
+                printfn "[Sync] Connected to Azure SignalR via negotiate"
+            with ex ->
+                printfn "[Sync] ERROR: %s" ex.Message
+                match ex with
+                | :? System.AggregateException as agg ->
+                    for inner in agg.InnerExceptions do
+                        printfn "[Sync] Inner exception: %s" inner.Message
+                | _ -> ()
         })
 
 

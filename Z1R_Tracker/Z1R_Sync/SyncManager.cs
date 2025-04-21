@@ -63,11 +63,11 @@ namespace Z1R_Sync
         }
 
         // Optional: Send outbound messages (e.g., triggered by tile clicks)
-        public static async Task RaiseTileChangeAsync(string tileId, string iconId)
+        public static async Task RaiseTileChangeAsync(string tileId, string iconId, string senderId)
         {
             if (_connection?.State == HubConnectionState.Connected)
             {
-                var payload = new MapUpdate { tileId = tileId, iconId = iconId };
+                var payload = new MapUpdate { tileId = tileId, iconId = iconId, senderId = senderId };
                 await _connection.SendAsync("ReceiveMapUpdate", payload);
             }
         }
@@ -82,6 +82,8 @@ namespace Z1R_Sync
         {
             public string tileId { get; set; }
             public string iconId { get; set; }
+
+            public string senderId { get; set; }
         }
     }
 }
