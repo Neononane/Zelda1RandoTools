@@ -443,6 +443,46 @@ type MyWindow() as this =
                     with ex ->
                         printfn "[Sync] Failed to apply StartingItems update: %s" ex.Message
 
+                | "Overworld" ->
+                    try
+                        let data = JsonConvert.DeserializeObject<SaveAndLoad.Overworld>(payloadJson)
+                        Application.Current.Dispatcher.Invoke(fun () ->
+                            TrackerModel.owInstance.Quest.FromInt(data.Quest)
+                            TrackerModel.MirrorOverworld <- data.MirrorOverworld
+                            TrackerModel.startIconX <- data.StartIconX
+                            TrackerModel.startIconY <- data.StartIconY
+                            TrackerModel.customWaypointX <- data.CustomWaypointX
+                            TrackerModel.customWaypointY <- data.CustomWaypointY
+
+                            if data.Map <> null && data.Map.Length = 384 then
+                                for j = 0 to 7 do
+                                    for i = 0 to 15 do
+                                        let idx = (j * 16 + i) * 3
+                                        let cur = data.Map.[idx]
+                                        let ed  = data.Map.[idx + 1]
+                                        let circ = data.Map.[idx + 2]
+                                        TrackerModel.overworldMapMarks.[i,j].Set(cur)
+                                        if cur <> -1 then
+                                            TrackerModel.setOverworldMapExtraData(i, j, cur, ed)
+                                        TrackerModel.overworldMapCircles.[i,j] <- circ
+                            printfn "[Sync] Applied Overworld update from %s" senderId
+                        )
+                    with ex ->
+                        printfn "[Sync] Failed to apply Overworld update: %s" ex.Message
+                | "Hints" ->
+                    try
+                        let data = JsonConvert.DeserializeObject<SaveAndLoad.Hints>(payloadJson)
+                        Application.Current.Dispatcher.Invoke(fun () ->
+                            for i = 0 to 10 do
+                                TrackerModel.SetLevelHint(i, TrackerModel.HintZone.FromIndex(data.LocationHints.[i]))
+                            TrackerModel.NoFeatOfStrengthHintWasGiven <- data.NoFeatOfStrengthHint
+                            TrackerModel.SailNotHintWasGiven <- data.SailNotHint
+
+                            printfn "[Sync] Applied Hints update from %s" senderId
+                        )
+                    with ex ->
+                        printfn "[Sync] Failed to apply Hints update: %s" ex.Message
+
                 | _ ->
                     printfn "[Sync] Unknown messageType: %s" msgType
             else
