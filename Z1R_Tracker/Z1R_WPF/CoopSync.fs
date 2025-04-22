@@ -72,24 +72,37 @@ let sendPlayerProgressUpdate (myConsoleId: string) =
     }
 
 let subscribeToPlayerProgressChanges(myConsoleId: string) =
-    let sendUpdate() =
-        async {
-            do! sendPlayerProgressUpdate myConsoleId
-        } |> Async.StartImmediate
+    let lastChanged = TrackerModel.LastChangedTime()
+
+    let markChanged () = lastChanged.SetNow()
 
     // Listen to the TakeAnyHeart array changes
-    TrackerModel.playerProgressAndTakeAnyHearts.TakeAnyHeartChanged.Add(fun _ -> sendUpdate())
+    TrackerModel.playerProgressAndTakeAnyHearts.TakeAnyHeartChanged.Add(fun _ -> markChanged())
 
     // Listen to all BoolProperties
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBoomBook.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasWoodSword.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasWoodArrow.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBlueRing.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBlueCandle.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasMagicalSword.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasDefeatedGanon.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasRescuedZelda.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBombs.Changed.Add(fun _ -> sendUpdate())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBoomBook.Changed.Add(fun _ -> markChanged())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasWoodSword.Changed.Add(fun _ -> markChanged())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasWoodArrow.Changed.Add(fun _ -> markChanged())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBlueRing.Changed.Add(fun _ -> markChanged())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBlueCandle.Changed.Add(fun _ -> markChanged())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasMagicalSword.Changed.Add(fun _ -> markChanged())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasDefeatedGanon.Changed.Add(fun _ -> markChanged())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasRescuedZelda.Changed.Add(fun _ -> markChanged())
+    TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBombs.Changed.Add(fun _ -> markChanged())
+
+    let mutable lastSentTime = System.DateTime.MinValue
+
+    let rec loop () =
+        async {
+            do! Async.Sleep(500)
+            let currentTime = lastChanged.Time
+            if currentTime > lastSentTime then
+                lastSentTime <- currentTime
+                do! sendPlayerProgressUpdate myConsoleId
+            return! loop ()
+        }
+
+    Async.StartImmediate(loop ())
 
 let sendStartingItemsAndExtrasUpdate (myConsoleId: string) =
     async {
@@ -175,21 +188,37 @@ let sendItemsUpdate (myConsoleId: string) =
     }
 
 let subscribeToItemsChanges(myConsoleId: string) =
-    let sendUpdate () =
-        async {
-            do! sendItemsUpdate myConsoleId
-        } |> Async.StartImmediate
+    // Shared timestamp that all item-related changes update
+    let lastChanged = TrackerModel.LastChangedTime()
+
+    // Helper to mark the model as changed
+    let markChanged () = lastChanged.SetNow()
 
     // Top-level boxes
-    TrackerModel.sword2Box.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.ladderBox.Changed.Add(fun _ -> sendUpdate())
-    TrackerModel.armosBox.Changed.Add(fun _ -> sendUpdate())
+    TrackerModel.sword2Box.Changed.Add(fun _ -> markChanged())
+    TrackerModel.ladderBox.Changed.Add(fun _ -> markChanged())
+    TrackerModel.armosBox.Changed.Add(fun _ -> markChanged())
 
     // Dungeon boxes
     for i = 0 to 8 do
         let dungeon = TrackerModel.GetDungeon(i)
         for box in dungeon.Boxes do
-            box.Changed.Add(fun _ -> sendUpdate())
+            box.Changed.Add(fun _ -> markChanged())
+
+    // Polling loop to debounce updates
+    let mutable lastSentTime = System.DateTime.MinValue
+
+    let rec loop () =
+        async {
+            do! Async.Sleep(500)
+            let currentTime = lastChanged.Time
+            if currentTime > lastSentTime then
+                lastSentTime <- currentTime
+                do! sendItemsUpdate myConsoleId
+            return! loop ()
+        }
+
+    Async.StartImmediate(loop ())
 
 let createSerializableOverworldModel () =
     let model = SaveAndLoad.Overworld()
