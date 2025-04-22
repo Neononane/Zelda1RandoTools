@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Net.Http;
+using System.Net.NetworkInformation;
+using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
 using Newtonsoft.Json;
@@ -9,6 +12,7 @@ namespace Z1R_Sync
 {
     public static class SyncManager
     {
+        private static string AzureFunctionUrl = "https://ztrackersync.azurewebsites.net/api/SyncUpdate";
         private static readonly HttpClient _httpClient = new HttpClient();
         private static HubConnection _connection;
 
@@ -25,6 +29,59 @@ namespace Z1R_Sync
         {
             _onSyncMessage = handler;
         }
+
+        public static async Task Send(string msgType, string payload, string senderId)
+        {
+            if (string.IsNullOrEmpty(AzureFunctionUrl))
+                throw new InvalidOperationException("AzureFunctionUrl is not set");
+
+            var client = new HttpClient();
+            var request = new
+            {
+                messageType = msgType,
+                payload = payload,
+                senderId = senderId
+            };
+            var json = JsonConvert.SerializeObject(request);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            try
+            {
+                var response = await client.PostAsync(AzureFunctionUrl, content);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var responseText = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"[Sync] Azure Function call failed: {response.StatusCode} - {responseText}");
+                }
+                else
+                {
+                    Console.WriteLine($"[Sync] Azure Function POST succeeded for msgType={msgType}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Sync] Failed to send message via Azure Function: {ex.Message}");
+            }
+        }
+
+
+
+
+        public static void SendModelUpdate(string msgType, object model, string senderId)
+        {
+            try
+            {
+                var payload = JsonConvert.SerializeObject(model);
+                _ = Send(msgType, payload, senderId);  // Fire and forget
+                Debug.WriteLine($"[Sync] Sent {msgType} update: {payload}");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Sync] Failed to send {msgType} update: {ex.Message}");
+            }
+        }
+
+
 
         public static async Task StartAsync(string negotiateUrl)
         {

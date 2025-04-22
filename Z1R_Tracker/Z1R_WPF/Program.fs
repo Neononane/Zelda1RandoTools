@@ -5,6 +5,9 @@ open System.Windows.Media
 open Z1R_Sync
 open SaveAndLoad
 open Newtonsoft.Json
+open Newtonsoft.Json.Linq
+open DungeonUI
+
 
 open CustomComboBoxes.GlobalFlag
 
@@ -356,6 +359,19 @@ type MyWindow() as this =
             let cm = new CustomComboBoxes.CanvasManager(rootCanvas, appMainCanvas)
             appMainCanvas, cm
         // Stubbed SignalR sync startup
+        let mutable lastOverworldSyncSource = ""
+        let mutable lastOverworldSyncTime = System.DateTime.MinValue
+
+        let shouldApplyUpdate (senderId: string) =
+            let now = System.DateTime.UtcNow
+            let elapsed = now - lastOverworldSyncTime
+            if lastOverworldSyncSource = senderId && elapsed.TotalMilliseconds < 500.0 then
+                false
+            else
+                lastOverworldSyncSource <- senderId
+                lastOverworldSyncTime <- now
+                true
+
         let handleRemoteTileChange (tileId: string, iconId: string, senderId: string) =
             let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
             let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
@@ -444,31 +460,37 @@ type MyWindow() as this =
                         printfn "[Sync] Failed to apply StartingItems update: %s" ex.Message
 
                 | "Overworld" ->
-                    try
-                        let data = JsonConvert.DeserializeObject<SaveAndLoad.Overworld>(payloadJson)
-                        Application.Current.Dispatcher.Invoke(fun () ->
-                            TrackerModel.owInstance.Quest.FromInt(data.Quest)
-                            TrackerModel.MirrorOverworld <- data.MirrorOverworld
-                            TrackerModel.startIconX <- data.StartIconX
-                            TrackerModel.startIconY <- data.StartIconY
-                            TrackerModel.customWaypointX <- data.CustomWaypointX
-                            TrackerModel.customWaypointY <- data.CustomWaypointY
+                    if isNull TrackerModel.overworldMapMarks then
+                        printfn "[Sync] Skipping Overworld update — TrackerModel not initialized yet."
+                    elif not (shouldApplyUpdate senderId) then
+                        printfn "[Sync] Ignored Overworld update from %s (too soon after last update)" senderId
+                    else
+                        printfn "[Sync] Raw Overworld payload: %s" payloadJson
+                        // Apply the update safely here
+                        try
+                            let data = JsonConvert.DeserializeObject<SaveAndLoad.Overworld>(payloadJson)
+                            Application.Current.Dispatcher.Invoke(fun () ->
+                                TrackerModel.MirrorOverworld <- data.MirrorOverworld
+                                TrackerModel.startIconX <- data.StartIconX
+                                TrackerModel.startIconY <- data.StartIconY
+                                TrackerModel.customWaypointX <- data.CustomWaypointX
+                                TrackerModel.customWaypointY <- data.CustomWaypointY
 
-                            if data.Map <> null && data.Map.Length = 384 then
-                                for j = 0 to 7 do
-                                    for i = 0 to 15 do
-                                        let idx = (j * 16 + i) * 3
-                                        let cur = data.Map.[idx]
-                                        let ed  = data.Map.[idx + 1]
-                                        let circ = data.Map.[idx + 2]
-                                        TrackerModel.overworldMapMarks.[i,j].Set(cur)
-                                        if cur <> -1 then
-                                            TrackerModel.setOverworldMapExtraData(i, j, cur, ed)
-                                        TrackerModel.overworldMapCircles.[i,j] <- circ
-                            printfn "[Sync] Applied Overworld update from %s" senderId
-                        )
-                    with ex ->
-                        printfn "[Sync] Failed to apply Overworld update: %s" ex.Message
+                                if data.Map <> null && data.Map.Length = 384 then
+                                    for j = 0 to 7 do
+                                        for i = 0 to 15 do
+                                            let idx = (j * 16 + i) * 3
+                                            let cur = data.Map.[idx]
+                                            let ed  = data.Map.[idx + 1]
+                                            let circ = data.Map.[idx + 2]
+                                            TrackerModel.overworldMapMarks.[i,j].Set(cur)
+                                            if cur <> -1 then
+                                                TrackerModel.setOverworldMapExtraData(i, j, cur, ed)
+                                            TrackerModel.overworldMapCircles.[i,j] <- circ
+                                printfn "[Sync] Applied Overworld update from %s" senderId
+                            )
+                        with ex ->
+                            printfn "[Sync] Failed to apply Overworld update: %s" ex.Message
                 | "Hints" ->
                     try
                         let data = JsonConvert.DeserializeObject<SaveAndLoad.Hints>(payloadJson)
@@ -482,7 +504,29 @@ type MyWindow() as this =
                         )
                     with ex ->
                         printfn "[Sync] Failed to apply Hints update: %s" ex.Message
+                | "Blockers" ->
+                    try
+                        let data = JsonConvert.DeserializeObject<SaveAndLoad.Blocker[][]>(payloadJson)
+                        Application.Current.Dispatcher.Invoke(fun () ->
+                            for i = 0 to data.Length - 1 do
+                                for j = 0 to data.[i].Length - 1 do
+                                    let b = data.[i].[j]
+                                    if b <> null then
+                                        let blockerKind = TrackerModel.DungeonBlocker.FromHotKeyName(b.Kind)
+                                        TrackerModel.DungeonBlockersContainer.SetDungeonBlocker(i, j, blockerKind)
 
+                                        // Set appliesTo array (map, compass, tri, box1, box2, box3)
+                                        for k = 0 to b.AppliesTo.Length - 1 do
+                                            TrackerModel.DungeonBlockersContainer.SetDungeonBlockerAppliesTo(i, j, k, b.AppliesTo.[k])
+
+                                        let actualKind = TrackerModel.DungeonBlockersContainer.GetDungeonBlocker(i, j)
+                                        printfn "[Sync][Blockers] Applied blocker [%d,%d]: %A" i j actualKind
+                            TrackerModel.DungeonBlockersContainer.FinishIgnoreChangesDuringLoad()
+                            printfn "[Sync] Applied Blockers update from %s" senderId
+                        )
+                    with ex ->
+                        printfn "[Sync] Failed to apply Blockers update: %s" ex.Message
+                
                 | _ ->
                     printfn "[Sync] Unknown messageType: %s" msgType
             else
@@ -493,7 +537,9 @@ type MyWindow() as this =
         Async.StartImmediate(async {
             try
                 do! SyncManager.StartAsync(negotiateUrl) |> Async.AwaitTask
-
+                //CoopSync.subscribeToPlayerProgressChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+                //CoopSync.subscribeToStartingItemsAndExtrasChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+                //CoopSync.subscribeToItemsChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
                 // Tile-specific handler
                 let tileHandlerDelegate = System.Action<string, string, string>(fun tileId iconId senderId ->
                     handleRemoteTileChange(tileId, iconId, senderId)
