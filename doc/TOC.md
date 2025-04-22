@@ -3,9 +3,9 @@
 Here are the main documentation sections for Z-Tracker.  
 
 Most of the "Using Z-Tracker" potion of the documentation has not been updated since version 1.2.  So be sure to also read 
-the [what's new in 1.3.1](whats-new.md#v1.3.1) documentation to learn about all the newer features.
+the [what's new in 1.3.1](whats-new.md#v1.3.1) documentation to learn about all the newer features in 1.3.1.
 
-(To find out the current 'release' version, visit [here](https://github.com/brianmcn/Zelda1RandoTools/).)
+(To find out the current 'release' version, visit [here](https://github.com/neononane/Zelda1RandoTools/).)
 
 ### Documentation
 
@@ -18,6 +18,7 @@ the [what's new in 1.3.1](whats-new.md#v1.3.1) documentation to learn about all 
 - [Stream-Capturing Z-Tracker with OBS](stream-capture.md)
 - [Using Z-Tracker for other Zelda randomizers/ROMHacks](other.md)
 - Version History
+   - v2.0.0 Beta (released 2025-04-22) feature update (pending documentation) 
    - v1.3.1 (released 2023-08-17) feature update ([see what's new in 1.3.1](whats-new.md#v1.3.1))
    - v1.2.3 (released 2022-08-15) feature update ([see what's new in 1.2.3](whats-new.md#v1.2.3))
    - v1.2.2 (released 2022-05-31) feature update ([see what's new in 1.2.2](whats-new.md#v1.2.2))
