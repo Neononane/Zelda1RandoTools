@@ -1,10 +1,6 @@
 # About Z-Tracker and the people who made it
 
-Z-Tracker was developed principally by Dr. Brian Lorgon111 ([twitch](https://www.twitch.tv/lorgon), [YouTube](https://www.youtube.com/c/lorgon111)).
-
-That's me.  Hi!
-
-I did nearly all of the coding, most of the UI design, and most of the pixel art.
+Z-Tracker was initially developed principally by Dr. Brian Lorgon111 ([twitch](https://www.twitch.tv/lorgon), [YouTube](https://www.youtube.com/c/lorgon111)) who did nearly all of the initial coding, most of the UI design, and most of the pixel art.
 
 There are a number of other noteworthy contributors to this project:
 
@@ -13,12 +9,11 @@ There are a number of other noteworthy contributors to this project:
  - Questwizard is the author of ZHelper, the tool which inspired Z-Tracker, from which I borrowed much of the early pixel art and early overall design
  - homerjsmash gave extensive feedback on an early version of the tool which influenced many aspects of the design
  - Kigalas and abraxas were beta testers who gave a lot of feedback and found a number of bugs
- - many viewers of my twitch streams who watched me play z1r with alpha/beta versions of the tool and gave me direct feedback
- - many z1r players whose streams I lurked in, so I could watch them use ZHelper and note what mistakes they made or trouble they had
+ - Neononane who took over the project to usher in usage in the current Zelda 1 Randomizer Community
 
-# A brief history of Z-Tracker
+# A brief history of Z-Tracker from Brian Lorgon111's perspective
 
-I originally developed Z-Tracker using F# (a very nice programming language for .NET, and what I know best) and WPF (the .NET Windows library for UI and drawing stuff on the screen).
+I originally developed Z-Tracker using F# and WPF (the .NET Windows library for UI and drawing stuff on the screen).
 
 If I remember my original motivation correctly, it was that I was playing z1r using ZHelper, but struggling to navigate the overworld map.
 
@@ -93,8 +88,7 @@ And so it went.  Another month of adding more features, iterating, and polishing
 **EDIT in August 2023**: wow, the app has come so far in the last couple years.  So many more features, and greatly improved usability across a variety of devices.  Thanks to 
 many users (too many to name) who helped over the years by testing, reporting bugs, offering feature suggestions, and discussing design ideas.
 
-
-
+**EDIT in April 2025**: Brian has officially passed the torch to the community to continue to grow and evolve this software. We respect his vision, time, and effort put into making this a viable piece of software. Going forward this will be the repository for the tracker. Looking forward to everything we can accomplish together. --Neononane
 
 
 
