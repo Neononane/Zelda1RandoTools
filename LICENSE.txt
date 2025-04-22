@@ -1,6 +1,6 @@
 The MIT License (MIT)
 
-Copyright (c) 2021 Brian McNamara
+Copyright (c) 2025
 
 All rights reserved.
 
