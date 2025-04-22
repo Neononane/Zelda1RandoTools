@@ -388,147 +388,189 @@ type MyWindow() as this =
                     printfn "[Sync] Ignored tile update from senderId=%s (target=%s, me=%s)" senderId target me
         let handleIncomingMessage (msgType: string) (payloadJson: string) (senderId: string) =
             let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
-            let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
+            let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId                
             if senderId <> me && senderId = target then
-                match msgType with
-                | "PlayerProgress" ->
-                    try
-                        printfn "[Sync] Raw PlayerProgress payload: %s" payloadJson
-                        let data = JsonConvert.DeserializeObject<PlayerProgressAndTakeAnyHeartsModel>(payloadJson)
-                        Application.Current.Dispatcher.Invoke(fun () ->
-                            data.Apply()
-                            printfn "[Sync] Applied PlayerProgress update from %s" senderId
-                        )
-                    with ex ->
-                        printfn "[Sync] Failed to apply PlayerProgress update: %s" ex.Message
-                | "Items" ->
-                    try
-                        let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
-                        Application.Current.Dispatcher.Invoke(fun () ->
-                            TrackerModel.IsHiddenDungeonNumbers <- fun () -> data.HiddenDungeonNumbers
-                            TrackerModel.IsSecondQuestDungeons <- data.SecondQuestDungeons
-                            data.WhiteSwordBox.TryApply(TrackerModel.sword2Box) |> ignore
-                            data.LadderBox.TryApply(TrackerModel.ladderBox) |> ignore
-                            data.ArmosBox.TryApply(TrackerModel.armosBox) |> ignore
-                            data.Dungeons
-                            |> Array.iteri (fun i dungeon ->
-                                if dungeon <> null then
-                                    let targetDungeon = TrackerModel.GetDungeon(i)
-                                    let expectedLength = targetDungeon.Boxes.Length
-
-                                    if dungeon.Boxes = null || dungeon.Boxes.Length <> expectedLength then
-                                        let safeBoxes = 
-                                            Array.init expectedLength (fun j ->
-                                                if dungeon.Boxes <> null && j < dungeon.Boxes.Length && dungeon.Boxes.[j] <> null then
-                                                    dungeon.Boxes.[j]
-                                                else
-                                                    new SaveAndLoad.Box()
-                                            )
-                                        dungeon.Boxes <- safeBoxes
-                                    dungeon.TryApply(targetDungeon) |> ignore
-                            )
-                            printfn "[Sync] Applied Items update from %s" senderId
-                        )
-                    with ex ->
-                        printfn "[Sync] Failed to apply Items update: %s" ex.Message
-                | "StartingItems" ->
-                    try
-                        let data = JsonConvert.DeserializeObject<SaveAndLoad.StartingItemsAndExtrasModel>(payloadJson)
-                        Application.Current.Dispatcher.Invoke(fun () ->
-                            for i = 0 to 7 do
-                                TrackerModel.startingItemsAndExtras.HDNStartingTriforcePieces.[i].Set(data.HDNStartingTriforcePieces.[i])
-                                TrackerModel.startingItemsAndExtras.PlayerHasWhiteSword.Set(data.PlayerHasWhiteSword)
-                                TrackerModel.startingItemsAndExtras.PlayerHasMagicalSword.Set(data.PlayerHasMagicalSword)
-                                TrackerModel.startingItemsAndExtras.PlayerHasSilverArrow.Set(data.PlayerHasSilverArrow)
-                                TrackerModel.startingItemsAndExtras.PlayerHasBow.Set(data.PlayerHasBow)
-                                TrackerModel.startingItemsAndExtras.PlayerHasWand.Set(data.PlayerHasWand)
-                                TrackerModel.startingItemsAndExtras.PlayerHasRedCandle.Set(data.PlayerHasRedCandle)
-                                TrackerModel.startingItemsAndExtras.PlayerHasBoomerang.Set(data.PlayerHasBoomerang)
-                                TrackerModel.startingItemsAndExtras.PlayerHasMagicBoomerang.Set(data.PlayerHasMagicBoomerang)
-                                TrackerModel.startingItemsAndExtras.PlayerHasRedRing.Set(data.PlayerHasRedRing)
-                                TrackerModel.startingItemsAndExtras.PlayerHasPowerBracelet.Set(data.PlayerHasPowerBracelet)
-                                TrackerModel.startingItemsAndExtras.PlayerHasLadder.Set(data.PlayerHasLadder)
-                                TrackerModel.startingItemsAndExtras.PlayerHasRaft.Set(data.PlayerHasRaft)
-                                TrackerModel.startingItemsAndExtras.PlayerHasRecorder.Set(data.PlayerHasRecorder)
-                                TrackerModel.startingItemsAndExtras.PlayerHasAnyKey.Set(data.PlayerHasAnyKey)
-                                TrackerModel.startingItemsAndExtras.PlayerHasBook.Set(data.PlayerHasBook)
-                                TrackerModel.startingItemsAndExtras.MaxHeartsDifferential <- data.MaxHeartsDifferential
-
-                                printfn "[Sync] Applied StartingItems update from %s" senderId
-                        )
-                    with ex ->
-                        printfn "[Sync] Failed to apply StartingItems update: %s" ex.Message
-
-                | "Overworld" ->
-                    if isNull TrackerModel.overworldMapMarks then
-                        printfn "[Sync] Skipping Overworld update — TrackerModel not initialized yet."
-                    elif not (shouldApplyUpdate senderId) then
-                        printfn "[Sync] Ignored Overworld update from %s (too soon after last update)" senderId
-                    else
-                        printfn "[Sync] Raw Overworld payload: %s" payloadJson
-                        // Apply the update safely here
+                if CoopSync.alreadyReceived msgType payloadJson then
+                    printfn "[Sync] Ignored duplicate message from %s" senderId
+                else
+                    match msgType with
+                    | "PlayerProgress" ->
                         try
-                            let data = JsonConvert.DeserializeObject<SaveAndLoad.Overworld>(payloadJson)
+                            printfn "[Sync] Raw PlayerProgress payload: %s" payloadJson
+                            let data = JsonConvert.DeserializeObject<PlayerProgressAndTakeAnyHeartsModel>(payloadJson)
                             Application.Current.Dispatcher.Invoke(fun () ->
-                                TrackerModel.MirrorOverworld <- data.MirrorOverworld
-                                TrackerModel.startIconX <- data.StartIconX
-                                TrackerModel.startIconY <- data.StartIconY
-                                TrackerModel.customWaypointX <- data.CustomWaypointX
-                                TrackerModel.customWaypointY <- data.CustomWaypointY
-
-                                if data.Map <> null && data.Map.Length = 384 then
-                                    for j = 0 to 7 do
-                                        for i = 0 to 15 do
-                                            let idx = (j * 16 + i) * 3
-                                            let cur = data.Map.[idx]
-                                            let ed  = data.Map.[idx + 1]
-                                            let circ = data.Map.[idx + 2]
-                                            TrackerModel.overworldMapMarks.[i,j].Set(cur)
-                                            if cur <> -1 then
-                                                TrackerModel.setOverworldMapExtraData(i, j, cur, ed)
-                                            TrackerModel.overworldMapCircles.[i,j] <- circ
-                                printfn "[Sync] Applied Overworld update from %s" senderId
+                                data.Apply()
+                                printfn "[Sync] Applied PlayerProgress update from %s" senderId
                             )
                         with ex ->
-                            printfn "[Sync] Failed to apply Overworld update: %s" ex.Message
-                | "Hints" ->
-                    try
-                        let data = JsonConvert.DeserializeObject<SaveAndLoad.Hints>(payloadJson)
-                        Application.Current.Dispatcher.Invoke(fun () ->
-                            for i = 0 to 10 do
-                                TrackerModel.SetLevelHint(i, TrackerModel.HintZone.FromIndex(data.LocationHints.[i]))
-                            TrackerModel.NoFeatOfStrengthHintWasGiven <- data.NoFeatOfStrengthHint
-                            TrackerModel.SailNotHintWasGiven <- data.SailNotHint
+                            printfn "[Sync] Failed to apply PlayerProgress update: %s" ex.Message
+                    | "Items" ->
+                        
+                        if not (CoopSync.shouldApplyUpdate "Items" payloadJson) then
+                            printfn "[Sync] Skipping duplicate Items update from %s" senderId
+                        else   
+                            try
+                                let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
+                                Application.Current.Dispatcher.Invoke(fun () ->
+                                    // Top-level flags
+                                    TrackerModel.IsHiddenDungeonNumbers <- fun () -> data.HiddenDungeonNumbers
+                                    TrackerModel.IsSecondQuestDungeons <- data.SecondQuestDungeons
 
-                            printfn "[Sync] Applied Hints update from %s" senderId
-                        )
-                    with ex ->
-                        printfn "[Sync] Failed to apply Hints update: %s" ex.Message
-                | "Blockers" ->
-                    try
-                        let data = JsonConvert.DeserializeObject<SaveAndLoad.Blocker[][]>(payloadJson)
-                        Application.Current.Dispatcher.Invoke(fun () ->
-                            for i = 0 to data.Length - 1 do
-                                for j = 0 to data.[i].Length - 1 do
-                                    let b = data.[i].[j]
-                                    if b <> null then
-                                        let blockerKind = TrackerModel.DungeonBlocker.FromHotKeyName(b.Kind)
-                                        TrackerModel.DungeonBlockersContainer.SetDungeonBlocker(i, j, blockerKind)
+                                    // Top-level boxes
+                                    data.WhiteSwordBox.TryApply(TrackerModel.sword2Box) |> ignore
+                                    data.LadderBox.TryApply(TrackerModel.ladderBox) |> ignore
+                                    data.ArmosBox.TryApply(TrackerModel.armosBox) |> ignore
 
-                                        // Set appliesTo array (map, compass, tri, box1, box2, box3)
-                                        for k = 0 to b.AppliesTo.Length - 1 do
-                                            TrackerModel.DungeonBlockersContainer.SetDungeonBlockerAppliesTo(i, j, k, b.AppliesTo.[k])
+                                    // Dungeons
+                                    data.Dungeons
+                                    |> Array.iteri (fun i dungeon ->
+                                        if dungeon <> null then
+                                            let targetDungeon = TrackerModel.GetDungeon(i)
+                                            let expectedLength = targetDungeon.Boxes.Length
 
-                                        let actualKind = TrackerModel.DungeonBlockersContainer.GetDungeonBlocker(i, j)
-                                        printfn "[Sync][Blockers] Applied blocker [%d,%d]: %A" i j actualKind
-                            TrackerModel.DungeonBlockersContainer.FinishIgnoreChangesDuringLoad()
-                            printfn "[Sync] Applied Blockers update from %s" senderId
-                        )
-                    with ex ->
-                        printfn "[Sync] Failed to apply Blockers update: %s" ex.Message
+                                            //try this line
+                                            dungeon.Triforce <- targetDungeon.PlayerHasTriforce()
+
+                                            if dungeon.Boxes = null || dungeon.Boxes.Length <> expectedLength then
+                                                let safeBoxes = 
+                                                    Array.init expectedLength (fun j ->
+                                                        if dungeon.Boxes <> null && j < dungeon.Boxes.Length && dungeon.Boxes.[j] <> null then
+                                                            dungeon.Boxes.[j]
+                                                        else
+                                                            new SaveAndLoad.Box()
+                                                    )
+                                                dungeon.Boxes <- safeBoxes
+                    
+                                            // Apply all properties EXCEPT Triforce (sync separately)
+                                            targetDungeon.Color <- dungeon.Color
+                                            targetDungeon.LabelChar <- if dungeon.LabelChar.Length > 0 then dungeon.LabelChar.[0] else '?'
+                                            targetDungeon.PlayerHasMapOfThisDungeon <- dungeon.PlayerHasMap
+
+                                            (dungeon.Boxes, targetDungeon.Boxes)
+                                            ||> Array.iter2 (fun srcBox destBox ->
+                                                if srcBox <> null then
+                                                    srcBox.TryApply(destBox) |> ignore
+                                            )
+                                    )
+
+                                    printfn "[Sync] Applied Items update from %s (Triforce excluded)" senderId
+                                )
+                            with ex ->
+                                printfn "[Sync] Failed to apply Items update: %s" ex.Message
+                    | "StartingItems" ->
+                        try
+                            let data = JsonConvert.DeserializeObject<SaveAndLoad.StartingItemsAndExtrasModel>(payloadJson)
+                            Application.Current.Dispatcher.Invoke(fun () ->
+                                for i = 0 to 7 do
+                                    TrackerModel.startingItemsAndExtras.HDNStartingTriforcePieces.[i].Set(data.HDNStartingTriforcePieces.[i])
+                                    TrackerModel.startingItemsAndExtras.PlayerHasWhiteSword.Set(data.PlayerHasWhiteSword)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasMagicalSword.Set(data.PlayerHasMagicalSword)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasSilverArrow.Set(data.PlayerHasSilverArrow)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasBow.Set(data.PlayerHasBow)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasWand.Set(data.PlayerHasWand)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasRedCandle.Set(data.PlayerHasRedCandle)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasBoomerang.Set(data.PlayerHasBoomerang)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasMagicBoomerang.Set(data.PlayerHasMagicBoomerang)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasRedRing.Set(data.PlayerHasRedRing)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasPowerBracelet.Set(data.PlayerHasPowerBracelet)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasLadder.Set(data.PlayerHasLadder)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasRaft.Set(data.PlayerHasRaft)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasRecorder.Set(data.PlayerHasRecorder)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasAnyKey.Set(data.PlayerHasAnyKey)
+                                    TrackerModel.startingItemsAndExtras.PlayerHasBook.Set(data.PlayerHasBook)
+                                    TrackerModel.startingItemsAndExtras.MaxHeartsDifferential <- data.MaxHeartsDifferential
+
+                                    printfn "[Sync] Applied StartingItems update from %s" senderId
+                            )
+                        with ex ->
+                            printfn "[Sync] Failed to apply StartingItems update: %s" ex.Message
+
+                    | "Overworld" ->
+                        if isNull TrackerModel.overworldMapMarks then
+                            printfn "[Sync] Skipping Overworld update — TrackerModel not initialized yet."
+                        elif not (shouldApplyUpdate senderId) then
+                            printfn "[Sync] Ignored Overworld update from %s (too soon after last update)" senderId
+                        else
+                            printfn "[Sync] Raw Overworld payload: %s" payloadJson
+                            // Apply the update safely here
+                            try
+                                let data = JsonConvert.DeserializeObject<SaveAndLoad.Overworld>(payloadJson)
+                                Application.Current.Dispatcher.Invoke(fun () ->
+                                    TrackerModel.MirrorOverworld <- data.MirrorOverworld
+                                    TrackerModel.startIconX <- data.StartIconX
+                                    TrackerModel.startIconY <- data.StartIconY
+                                    TrackerModel.customWaypointX <- data.CustomWaypointX
+                                    TrackerModel.customWaypointY <- data.CustomWaypointY
+
+                                    if data.Map <> null && data.Map.Length = 384 then
+                                        for j = 0 to 7 do
+                                            for i = 0 to 15 do
+                                                let idx = (j * 16 + i) * 3
+                                                let cur = data.Map.[idx]
+                                                let ed  = data.Map.[idx + 1]
+                                                let circ = data.Map.[idx + 2]
+                                                TrackerModel.overworldMapMarks.[i,j].Set(cur)
+                                                if cur <> -1 then
+                                                    TrackerModel.setOverworldMapExtraData(i, j, cur, ed)
+                                                TrackerModel.overworldMapCircles.[i,j] <- circ
+                                    printfn "[Sync] Applied Overworld update from %s" senderId
+                                )
+                            with ex ->
+                                printfn "[Sync] Failed to apply Overworld update: %s" ex.Message
+                    | "Hints" ->
+                        try
+                            let data = JsonConvert.DeserializeObject<SaveAndLoad.Hints>(payloadJson)
+                            Application.Current.Dispatcher.Invoke(fun () ->
+                                for i = 0 to 10 do
+                                    TrackerModel.SetLevelHint(i, TrackerModel.HintZone.FromIndex(data.LocationHints.[i]))
+                                TrackerModel.NoFeatOfStrengthHintWasGiven <- data.NoFeatOfStrengthHint
+                                TrackerModel.SailNotHintWasGiven <- data.SailNotHint
+
+                                printfn "[Sync] Applied Hints update from %s" senderId
+                            )
+                        with ex ->
+                            printfn "[Sync] Failed to apply Hints update: %s" ex.Message
+                    | "Blockers" ->
+                        try
+                            let data = JsonConvert.DeserializeObject<SaveAndLoad.Blocker[][]>(payloadJson)
+                            Application.Current.Dispatcher.Invoke(fun () ->
+                                for i = 0 to data.Length - 1 do
+                                    for j = 0 to data.[i].Length - 1 do
+                                        let b = data.[i].[j]
+                                        if b <> null then
+                                            let blockerKind = TrackerModel.DungeonBlocker.FromHotKeyName(b.Kind)
+                                            TrackerModel.DungeonBlockersContainer.SetDungeonBlocker(i, j, blockerKind)
+
+                                            // Set appliesTo array (map, compass, tri, box1, box2, box3)
+                                            for k = 0 to b.AppliesTo.Length - 1 do
+                                                TrackerModel.DungeonBlockersContainer.SetDungeonBlockerAppliesTo(i, j, k, b.AppliesTo.[k])
+
+                                            let actualKind = TrackerModel.DungeonBlockersContainer.GetDungeonBlocker(i, j)
+                                            printfn "[Sync][Blockers] Applied blocker [%d,%d]: %A" i j actualKind
+                                TrackerModel.DungeonBlockersContainer.FinishIgnoreChangesDuringLoad()
+                                printfn "[Sync] Applied Blockers update from %s" senderId
+                            )
+                        with ex ->
+                            printfn "[Sync] Failed to apply Blockers update: %s" ex.Message
                 
-                | _ ->
-                    printfn "[Sync] Unknown messageType: %s" msgType
+                    | "DungeonTriforce" ->
+                        if not (CoopSync.shouldApplyUpdate "DungeonTriforce" payloadJson) then
+                            printfn "[Sync] Skipped DungeonTriforce update — no change"
+                        else
+                            try
+                                let data = JsonConvert.DeserializeObject<CoopSync.DungeonsTriforceState>(payloadJson)
+                                Application.Current.Dispatcher.Invoke(fun () ->
+                                    for i = 0 to 8 do
+                                        let dungeon = TrackerModel.GetDungeon(i)
+                                        let has = data.Triforces.[i]
+                                        if dungeon.PlayerHasTriforce() <> has then
+                                            dungeon.ToggleTriforce()
+                                    printfn "[Sync] Applied DungeonTriforce update from %s" senderId
+                                )
+                            with ex ->
+                                printfn "[Sync] Failed to apply DungeonTriforce update: %s" ex.Message
+                    | _ ->
+                        printfn "[Sync] Unknown messageType: %s" msgType
             else
                 printfn "[Sync] Ignored sync message from senderId=%s (target=%s, me=%s)" senderId target me
 

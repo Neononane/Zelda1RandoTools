@@ -3,11 +3,59 @@
 open Newtonsoft.Json
 open System.Threading.Tasks
 open Z1R_Sync
+open System.Security.Cryptography
+open System.Text
+open System
+open System.Collections.Concurrent
 
 let mutable lastSentPlayerProgressJson = ""
 let mutable lastSentStartingItemsJson = ""
 let mutable lastSentItemsJson = ""
 let mutable lastSentOverworldJson = ""
+let mutable lastSentDungeonJson = ""
+let mutable lastReceivedDungeonJson = ""
+let mutable lastSentTriforceJson = ""
+let mutable lastReceivedItemsHash: string option = None
+let mutable lastReceivedHashes = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
+let mutable lastAppliedHashes = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
+let mutable lastSentHashes = ConcurrentDictionary<string, string>()
+
+
+let computeHash (s: string) =
+    using (SHA256.Create()) (fun sha ->
+        s |> Encoding.UTF8.GetBytes
+          |> sha.ComputeHash
+          |> Convert.ToBase64String
+    )
+
+let alreadyReceived (messageType: string) (payloadJson: string) =
+    let newHash = computeHash payloadJson
+    match lastReceivedHashes.TryGetValue(messageType) with
+    | true, oldHash when oldHash = newHash -> true
+    | _ ->
+        lastReceivedHashes.[messageType] <- newHash
+        false
+
+let shouldSend (messageType: string) (payloadJson: string) =
+    let newHash = computeHash payloadJson
+    match lastSentHashes.TryGetValue(messageType) with
+    | true, oldHash when oldHash = newHash -> false  // same as last time, skip it
+    | _ ->
+        lastSentHashes.[messageType] <- newHash
+        true
+
+let shouldApplyUpdate (messageType: string) (payloadJson: string) =
+    let newHash = computeHash payloadJson
+    match lastAppliedHashes.TryGetValue(messageType) with
+    | true, oldHash when oldHash = newHash -> false
+    | _ ->
+        lastAppliedHashes.[messageType] <- newHash
+        true
+
+
+[<AllowNullLiteral>]
+type DungeonsTriforceState() =
+    member val Triforces: bool[] = null with get, set
 
 
 let sendPlayerProgressUpdate (myConsoleId: string) =
@@ -103,20 +151,28 @@ let sendItemsUpdate (myConsoleId: string) =
             model.ArmosBox <- toSerializableBox TrackerModel.armosBox
 
             model.Dungeons <- 
-                [| for i in 0 .. 8 -> 
+                [| for i in 0 .. 8 ->
                     let d = new SaveAndLoad.Dungeon()
-                    d.Boxes <- [| for j in TrackerModel.GetDungeon(i).Boxes -> toSerializableBox j |]
+                    let trackerDungeon = TrackerModel.GetDungeon(i)
+                    
+                    d.Triforce <- false // EXCLUDE this value — syncing Triforce separately
+                    d.Color <- trackerDungeon.Color
+                    d.LabelChar <- trackerDungeon.LabelChar.ToString()
+                    d.PlayerHasMap <- trackerDungeon.PlayerHasMapOfThisDungeon
+                    d.Boxes <- 
+                        [| for box in trackerDungeon.Boxes -> toSerializableBox box |]
                     d |]
 
             let jsonPayload = JsonConvert.SerializeObject(model)
-            if jsonPayload <> lastSentItemsJson then
-                lastSentItemsJson <- jsonPayload
-                printfn "[Sync] Sending Items update: %s" jsonPayload
+
+            if shouldSend "Items" jsonPayload then
+                printfn "[Sync] Sending Items update (excluding Triforce): %s" jsonPayload
                 do! SyncManager.Send("Items", jsonPayload, myConsoleId) |> Async.AwaitTask
+            else
+                printfn "[Sync] Skipped sending Items update — no change"
         with ex ->
             printfn "[Sync] Failed to send Items update: %s" ex.Message
     }
-
 
 let subscribeToItemsChanges(myConsoleId: string) =
     let sendUpdate () =
@@ -164,40 +220,40 @@ let createSerializableOverworldModel () =
 
 
 
-let sendOverworldUpdate (myConsoleId: string) =
-    async {
-        try
-            let model = new SaveAndLoad.Overworld()
-            model.MirrorOverworld <- TrackerModel.MirrorOverworld
-            model.StartIconX <- TrackerModel.startIconX
-            model.StartIconY <- TrackerModel.startIconY
-            model.CustomWaypointX <- TrackerModel.customWaypointX
-            model.CustomWaypointY <- TrackerModel.customWaypointY
+//let sendOverworldUpdate (myConsoleId: string) =
+//    async {
+//        try
+//            let model = new SaveAndLoad.Overworld()
+//            model.MirrorOverworld <- TrackerModel.MirrorOverworld
+//            model.StartIconX <- TrackerModel.startIconX
+//            model.StartIconY <- TrackerModel.startIconY
+//            model.CustomWaypointX <- TrackerModel.customWaypointX
+//            model.CustomWaypointY <- TrackerModel.customWaypointY
 
-            let mapData = Array.zeroCreate<int> (16 * 8 * 3)
+//            let mapData = Array.zeroCreate<int> (16 * 8 * 3)
 
-            for j = 0 to 7 do
-                for i = 0 to 15 do
-                    let idx = (j * 16 + i) * 3
-                    let mark = TrackerModel.overworldMapMarks.[i,j].Current()
-                    let extra = 
-                        if mark <> -1 && mark <= TrackerModel.MapSquareChoiceDomainHelper.DARK_X then
-                            try TrackerModel.getOverworldMapExtraData(i,j,mark)
-                            with _ -> 0
-                        else 0
-                    let circ = TrackerModel.overworldMapCircles.[i,j]
-                    mapData.[idx] <- mark
-                    mapData.[idx + 1] <- extra
-                    mapData.[idx + 2] <- circ
+//            for j = 0 to 7 do
+//                for i = 0 to 15 do
+//                    let idx = (j * 16 + i) * 3
+//                    let mark = TrackerModel.overworldMapMarks.[i,j].Current()
+//                    let extra = 
+//                        if mark <> -1 && mark <= TrackerModel.MapSquareChoiceDomainHelper.DARK_X then
+//                            try TrackerModel.getOverworldMapExtraData(i,j,mark)
+//                            with _ -> 0
+//                        else 0
+//                    let circ = TrackerModel.overworldMapCircles.[i,j]
+//                    mapData.[idx] <- mark
+//                    mapData.[idx + 1] <- extra
+//                    mapData.[idx + 2] <- circ
 
-            model.Map <- mapData
+//            model.Map <- mapData
 
-            let json = JsonConvert.SerializeObject(model)
-            printfn "[Sync] Sending Overworld update: %s" json
-            do! SyncManager.Send("Overworld", json, myConsoleId) |> Async.AwaitTask
-        with ex ->
-            printfn "[Sync] Failed to send Overworld update: %s" ex.Message
-    }
+//            let json = JsonConvert.SerializeObject(model)
+//            printfn "[Sync] Sending Overworld update: %s" json
+//            do! SyncManager.Send("Overworld", json, myConsoleId) |> Async.AwaitTask
+//        with ex ->
+//            printfn "[Sync] Failed to send Overworld update: %s" ex.Message
+//    }
 let mutable debounceOverworldSend: System.Threading.CancellationTokenSource option = None
 
 let sendOverworldUpdateDebounced (myConsoleId: string) =
@@ -229,6 +285,74 @@ let subscribeToOverworldChanges (myConsoleId: string) =
         }
     Async.StartImmediate(loop ())
 
+(*let createSerializableDungeonArray () =
+    [| for i in 0 .. 8 ->
+        let d = TrackerModel.GetDungeon(i)
+        let model = SaveAndLoad.Dungeon()
+        model.Triforce <- d.PlayerHasTriforce()
+        model.Color <- d.Color
+        model.LabelChar <- string d.LabelChar
+        model.PlayerHasMap <- d.PlayerHasMapOfThisDungeon
+        //model.Boxes <- d.Boxes |> Array.map (fun b -> 
+            //let box = SaveAndLoad.Box()
+            //box.CellCurrent <- b.CellCurrent()
+            //box.PlayerHas <- b.PlayerHas().AsInt()
+            //box)
+        model
+    |]
+
+let sendDungeonUpdate (myConsoleId: string) =
+    async {
+        try
+            let modelArray = createSerializableDungeonArray()
+            let json = JsonConvert.SerializeObject(modelArray)
+            if json = lastSentDungeonJson then
+                printfn "[Sync] Skipped sending Dungeon update — no change"
+            else
+                lastSentDungeonJson <- json
+                printfn "[Sync] Sending Dungeon update: %s" json
+                do! SyncManager.Send("Dungeon", json, myConsoleId) |> Async.AwaitTask
+        with ex ->
+            printfn "[Sync] Failed to send Dungeon update: %s" ex.Message
+    }
+
+let subscribeToDungeonChanges (myConsoleId: string) =
+    let sendUpdate () =
+        async {
+            do! sendDungeonUpdate myConsoleId
+        } |> Async.StartImmediate
+
+    for i = 0 to 8 do
+        let dungeon = TrackerModel.GetDungeon(i)
+        for box in dungeon.Boxes do
+            box.Changed.Add(fun _ -> sendUpdate())*)
 
 
+let sendDungeonTriforceUpdate (myConsoleId: string) =
+    async {
+        try
+            let model = DungeonsTriforceState()
+            model.Triforces <- [| for i in 0 .. 8 -> TrackerModel.GetDungeon(i).PlayerHasTriforce() |]
+            let json = JsonConvert.SerializeObject(model)
+            if shouldSend "DungeonTriforce" json then
+                printfn "[Sync] Sending DungeonTriforce update: %s" json
+                do! SyncManager.Send("DungeonTriforce", json, myConsoleId) |> Async.AwaitTask
+            else
+                printfn "[Sync] Skipped sending DungeonTriforce update — no change"
+        with ex ->
+            printfn "[Sync] Failed to send DungeonTriforce update: %s" ex.Message
+    }
+
+let subscribeToDungeonTriforceChanges (myConsoleId: string) =
+    let mutable lastSent: bool[] = Array.init 9 (fun _ -> false)
+    let rec loop () =
+        async {
+            do! Async.Sleep(750) // poll every ¾ second
+            let current = [| for i in 0 .. 8 -> TrackerModel.GetDungeon(i).PlayerHasTriforce() |]
+            if current <> lastSent then
+                lastSent <- current
+                do! sendDungeonTriforceUpdate myConsoleId
+            return! loop ()
+        }
+    Async.StartImmediate(loop())
 
