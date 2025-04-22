@@ -385,6 +385,64 @@ type MyWindow() as this =
                         )
                     with ex ->
                         printfn "[Sync] Failed to apply PlayerProgress update: %s" ex.Message
+                | "Items" ->
+                    try
+                        let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
+                        Application.Current.Dispatcher.Invoke(fun () ->
+                            TrackerModel.IsHiddenDungeonNumbers <- fun () -> data.HiddenDungeonNumbers
+                            TrackerModel.IsSecondQuestDungeons <- data.SecondQuestDungeons
+                            data.WhiteSwordBox.TryApply(TrackerModel.sword2Box) |> ignore
+                            data.LadderBox.TryApply(TrackerModel.ladderBox) |> ignore
+                            data.ArmosBox.TryApply(TrackerModel.armosBox) |> ignore
+                            data.Dungeons
+                            |> Array.iteri (fun i dungeon ->
+                                if dungeon <> null then
+                                    let targetDungeon = TrackerModel.GetDungeon(i)
+                                    let expectedLength = targetDungeon.Boxes.Length
+
+                                    if dungeon.Boxes = null || dungeon.Boxes.Length <> expectedLength then
+                                        let safeBoxes = 
+                                            Array.init expectedLength (fun j ->
+                                                if dungeon.Boxes <> null && j < dungeon.Boxes.Length && dungeon.Boxes.[j] <> null then
+                                                    dungeon.Boxes.[j]
+                                                else
+                                                    new SaveAndLoad.Box()
+                                            )
+                                        dungeon.Boxes <- safeBoxes
+                                    dungeon.TryApply(targetDungeon) |> ignore
+                            )
+                            printfn "[Sync] Applied Items update from %s" senderId
+                        )
+                    with ex ->
+                        printfn "[Sync] Failed to apply Items update: %s" ex.Message
+                | "StartingItems" ->
+                    try
+                        let data = JsonConvert.DeserializeObject<SaveAndLoad.StartingItemsAndExtrasModel>(payloadJson)
+                        Application.Current.Dispatcher.Invoke(fun () ->
+                            for i = 0 to 7 do
+                                TrackerModel.startingItemsAndExtras.HDNStartingTriforcePieces.[i].Set(data.HDNStartingTriforcePieces.[i])
+                                TrackerModel.startingItemsAndExtras.PlayerHasWhiteSword.Set(data.PlayerHasWhiteSword)
+                                TrackerModel.startingItemsAndExtras.PlayerHasMagicalSword.Set(data.PlayerHasMagicalSword)
+                                TrackerModel.startingItemsAndExtras.PlayerHasSilverArrow.Set(data.PlayerHasSilverArrow)
+                                TrackerModel.startingItemsAndExtras.PlayerHasBow.Set(data.PlayerHasBow)
+                                TrackerModel.startingItemsAndExtras.PlayerHasWand.Set(data.PlayerHasWand)
+                                TrackerModel.startingItemsAndExtras.PlayerHasRedCandle.Set(data.PlayerHasRedCandle)
+                                TrackerModel.startingItemsAndExtras.PlayerHasBoomerang.Set(data.PlayerHasBoomerang)
+                                TrackerModel.startingItemsAndExtras.PlayerHasMagicBoomerang.Set(data.PlayerHasMagicBoomerang)
+                                TrackerModel.startingItemsAndExtras.PlayerHasRedRing.Set(data.PlayerHasRedRing)
+                                TrackerModel.startingItemsAndExtras.PlayerHasPowerBracelet.Set(data.PlayerHasPowerBracelet)
+                                TrackerModel.startingItemsAndExtras.PlayerHasLadder.Set(data.PlayerHasLadder)
+                                TrackerModel.startingItemsAndExtras.PlayerHasRaft.Set(data.PlayerHasRaft)
+                                TrackerModel.startingItemsAndExtras.PlayerHasRecorder.Set(data.PlayerHasRecorder)
+                                TrackerModel.startingItemsAndExtras.PlayerHasAnyKey.Set(data.PlayerHasAnyKey)
+                                TrackerModel.startingItemsAndExtras.PlayerHasBook.Set(data.PlayerHasBook)
+                                TrackerModel.startingItemsAndExtras.MaxHeartsDifferential <- data.MaxHeartsDifferential
+
+                                printfn "[Sync] Applied StartingItems update from %s" senderId
+                        )
+                    with ex ->
+                        printfn "[Sync] Failed to apply StartingItems update: %s" ex.Message
+
                 | _ ->
                     printfn "[Sync] Unknown messageType: %s" msgType
             else
