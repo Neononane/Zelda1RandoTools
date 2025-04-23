@@ -60,6 +60,8 @@ module CoopSyncOptions =
     let mutable FunctionAppBase: string = "unspecified"
     let mutable baseNegotiateUrl: string = "/api/negotiate"
     let mutable baseSyncUpdateUrl: string = "/api/SyncUpdate"
+    let NegotiateUrl () = FunctionAppBase + baseNegotiateUrl
+    let SyncUpdateUrl () = FunctionAppBase + baseSyncUpdateUrl
     //let mutable NegotiateUrl: string = FunctionAppBase + baseNegotiateUrl
     //let mutable SyncUpdateUrl: string = FunctionAppBase + baseSyncUpdateUrl
 //RPT added this to check if the CoopSyncOptions module is enabled.
