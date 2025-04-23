@@ -410,21 +410,44 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 )
 
                 sp.Children.Add(urlLabel("Function App Base:")) |> ignore
+
                 let functionAppBaseBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.FunctionAppBase)
+
+                let functionAppBaseBorder = new Border(
+                    Child = functionAppBaseBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+
+                let functionAppBaseValidationMessage = 
+                    new TextBlock(
+                        Text = "Function App Base must be a valid URL",
+                        Foreground = Brushes.Red,
+                        Visibility = Visibility.Collapsed,
+                        Margin = Thickness(0., 0., 0., 6.)
+                    )
 
                 let validateFunctionAppBaseUrl () =
                     let isValid = System.Uri.IsWellFormedUriString(functionAppBaseBox.Text, System.UriKind.Absolute)
+
+                    // Toggle checkbox state
                     enableCoopCheckbox.IsEnabled <- isValid
+                    enableCoopCheckbox.Foreground <- if isValid then Brushes.Orange else Brushes.DarkGray
                     if not isValid then
                         enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit false
 
-                // initial validation on open
+                    // Border visual feedback
+                    functionAppBaseBorder.BorderBrush <- if isValid then Brushes.Orange else Brushes.Red
+
+                    // Error message visibility
+                    functionAppBaseValidationMessage.Visibility <- if isValid then Visibility.Collapsed else Visibility.Visible
+
+                // Initial validation on open
                 validateFunctionAppBaseUrl()
 
-                // dynamic validation on text change
-                functionAppBaseBox.TextChanged.Add(fun _ ->
-                    validateFunctionAppBaseUrl()
-                )
+                // Dynamic validation on text change
+                functionAppBaseBox.TextChanged.Add(fun _ -> validateFunctionAppBaseUrl())
 
 
                 functionAppBaseBox.TextChanged.Add(fun _ ->
@@ -440,15 +463,13 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
 
                 functionAppBaseBox.HorizontalAlignment <- HorizontalAlignment.Stretch
                 functionAppBaseBox.TextAlignment <- TextAlignment.Left
-                let functionAppBaseBorder = new Border(
-                    Child = functionAppBaseBox,
-                    BorderBrush = Brushes.Orange,
-                    BorderThickness = Thickness(2.),
-                    Margin = Thickness(0., 2., 0., 6.)
-                )
+                
                 functionAppBaseBorder.ToolTip <- "The base URL for the Azure Function App that handles co-op sync operations.\nThis must be a valid URL."
                 ToolTipService.SetShowDuration(functionAppBaseBorder, 10000)
                 sp.Children.Add(functionAppBaseBorder) |> ignore
+
+                sp.Children.Add(functionAppBaseValidationMessage) |> ignore
+
 
                 sp.Children.Add(urlLabel("Negotiate Suffix:")) |> ignore
                 let negotiateUrlBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.baseNegotiateUrl)
