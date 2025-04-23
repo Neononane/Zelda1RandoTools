@@ -411,6 +411,22 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
 
                 sp.Children.Add(urlLabel("Function App Base:")) |> ignore
                 let functionAppBaseBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.FunctionAppBase)
+
+                let validateFunctionAppBaseUrl () =
+                    let isValid = System.Uri.IsWellFormedUriString(functionAppBaseBox.Text, System.UriKind.Absolute)
+                    enableCoopCheckbox.IsEnabled <- isValid
+                    if not isValid then
+                        enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit false
+
+                // initial validation on open
+                validateFunctionAppBaseUrl()
+
+                // dynamic validation on text change
+                functionAppBaseBox.TextChanged.Add(fun _ ->
+                    validateFunctionAppBaseUrl()
+                )
+
+
                 functionAppBaseBox.TextChanged.Add(fun _ ->
                     let isValid = isValidUrl functionAppBaseBox.Text
                     if not isValid then
