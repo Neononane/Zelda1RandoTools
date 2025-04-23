@@ -395,13 +395,16 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 // Checkbox for Debug Mode
                 let debugModeCheckbox = new CheckBox(Content=new TextBlock(Text="Enable Debug Logging", Foreground=Brushes.Orange))
                 debugModeCheckbox.IsChecked <- System.Nullable.op_Implicit(TrackerModelOptions.DebugConfig.DebugMode)
+                debugModeCheckbox.ToolTip <- "Enables debug logging for co-op sync operations.\nThis is useful for troubleshooting issues with co-op sync."
+                ToolTipService.SetShowDuration(debugModeCheckbox, 10000)
                 sp.Children.Add(debugModeCheckbox) |> ignore
+
                 let urlLabel txt =
                     new TextBox(
                     Text = txt,
                     IsReadOnly = true,
                     BorderThickness = Thickness(0.),
-                    FontSize = 14.,
+                    FontSize = 16.,
                     Foreground = Brushes.Orange,
                     Background = Brushes.Black
                 )
@@ -427,6 +430,8 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     BorderThickness = Thickness(2.),
                     Margin = Thickness(0., 2., 0., 6.)
                 )
+                functionAppBaseBorder.ToolTip <- "The base URL for the Azure Function App that handles co-op sync operations.\nThis must be a valid URL."
+                ToolTipService.SetShowDuration(functionAppBaseBorder, 10000)
                 sp.Children.Add(functionAppBaseBorder) |> ignore
 
                 sp.Children.Add(urlLabel("Negotiate Suffix:")) |> ignore
@@ -439,6 +444,8 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     BorderThickness = Thickness(2.),
                     Margin = Thickness(0., 2., 0., 6.)
                 )
+                negotiateUrlBorder.ToolTip <- "The suffix for the Azure Function App that handles co-op sync operations.\nThis will be appended to the Function App Base."
+                ToolTipService.SetShowDuration(negotiateUrlBorder, 10000)
                 sp.Children.Add(negotiateUrlBorder) |> ignore
 
                 sp.Children.Add(urlLabel("SyncUpdate Suffix:")) |> ignore
@@ -451,6 +458,8 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     BorderThickness = Thickness(2.),
                     Margin = Thickness(0., 2., 0., 6.)
                 )
+                syncUpdateUrlBorder.ToolTip <- "The suffix for the Azure Function App that handles outgoing co-op sync operations.\nThis will be appended to the Function App Base."
+                ToolTipService.SetShowDuration(syncUpdateUrlBorder, 10000)
                 sp.Children.Add(syncUpdateUrlBorder) |> ignore
 
                 sp.Children.Add(new DockPanel(Height=10.)) |> ignore  // spacer before ID fields
@@ -468,6 +477,8 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     BorderThickness = Thickness(2.),
                     Margin = Thickness(0., 2., 0., 6.)
                 )
+                myIdBorder.ToolTip <- "The unique ID for this console instance.\nThis is used to identify this console in co-op sync operations."
+                ToolTipService.SetShowDuration(myIdBorder, 10000)
                 sp.Children.Add(myIdBorder) |> ignore
 
                 let guidButton = Graphics.makeButton("Generate GUID", None, None)
@@ -475,6 +486,8 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     let newGuid = System.Guid.NewGuid().ToString()
                     myIdBox.Text <- newGuid
                 )
+                guidButton.ToolTip <- "Generate a random ID for this console instance.\nThis will be used as the unique ID for this console in co-op sync operations."
+                ToolTipService.SetShowDuration(guidButton, 10000)
                 sp.Children.Add(guidButton) |> ignore
 
                 sp.Children.Add(new DockPanel(Height=10.)) |> ignore
@@ -491,6 +504,7 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     BorderThickness = Thickness(2.),
                     Margin = Thickness(0., 2., 0., 6.)
                 )
+                targetIdBorder.ToolTip <- "The unique ID for the target console instance.\nThis is used to identify the target console in co-op sync operations."
                 sp.Children.Add(targetIdBorder) |> ignore
 
                 sp.Children.Add(new DockPanel(Height=10.)) |> ignore
@@ -517,6 +531,7 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     TrackerModelOptions.writeSettings()
                     wh.Set() |> ignore
                 )
+                saveButton.ToolTip <- "Save the current settings for co-op sync operations.\nThis will update the settings."
                 sp.Children.Add(saveButton) |> ignore
 
                 async {
