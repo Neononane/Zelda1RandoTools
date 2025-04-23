@@ -1,7 +1,7 @@
 ﻿module OverworldData
 
 //Update version - was 1.3.1
-let VersionString = "2.0.0"
+let VersionString = "2.0.1"
 let ProgramNameString = sprintf "Z-Tracker Updated v%s" VersionString
 let Website = "https://github.com/Neononane/Zelda1RandoTools"
 let AboutBody = sprintf "%s originally by Dr. Brian Lorgon111 with updates by Neononane\n\nLearn more at\n%s\n" ProgramNameString Website

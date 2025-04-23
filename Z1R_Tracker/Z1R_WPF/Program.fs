@@ -361,6 +361,13 @@ type MyWindow() as this =
             let cm = new CustomComboBoxes.CanvasManager(rootCanvas, appMainCanvas)
             appMainCanvas, cm
         // Stubbed SignalR sync startup
+
+#if DEBUG
+        TrackerModelOptions.DebugConfig.DebugMode <- true
+#else
+        TrackerModelOptions.DebugConfig.DebugMode <- false
+#endif
+
         let mutable lastOverworldSyncSource = ""
         let mutable lastOverworldSyncTime = System.DateTime.MinValue
 
@@ -382,37 +389,37 @@ type MyWindow() as this =
                     let tileInt = int tileId
                     let iconInt = int iconId
                     //TileCustomization.assignIcon cm tileInt iconInt
-                    printfn "[Sync] Received tile change from %s: tileId=%s, iconId=%s" senderId tileId iconId
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Received tile change from %s: tileId=%s, iconId=%s" senderId tileId iconId)
                  with ex ->
-                    printfn "[Sync] Error applying tile change: %s" ex.Message
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Error applying tile change: %s" ex.Message)
                 else
                     // Optional debug log for ignored messages
-                    printfn "[Sync] Ignored tile update from senderId=%s (target=%s, me=%s)" senderId target me
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Ignored tile update from senderId=%s (target=%s, me=%s)" senderId target me)
         let handleIncomingMessage (msgType: string) (payloadJson: string) (senderId: string) =
             let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
             let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
-            if not TrackerModelOptions.CoopSyncOptions.EnableCoop then
-                printfn "[Sync] Co-op disabled — ignoring incoming message: %s" msgType
+            if not (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Co-op disabled — ignoring incoming message: %s" msgType)
             else
                 if senderId <> me && senderId = target then
                     if CoopSync.alreadyReceived msgType payloadJson then
-                        printfn "[Sync] Ignored duplicate message from %s" senderId
+                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Ignored duplicate message from %s" senderId)
                     else
                         match msgType with
                         | "PlayerProgress" ->
                             try
-                                printfn "[Sync] Raw PlayerProgress payload: %s" payloadJson
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Raw PlayerProgress payload: %s" payloadJson)
                                 let data = JsonConvert.DeserializeObject<PlayerProgressAndTakeAnyHeartsModel>(payloadJson)
                                 Application.Current.Dispatcher.Invoke(fun () ->
                                     data.Apply()
-                                    printfn "[Sync] Applied PlayerProgress update from %s" senderId
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied PlayerProgress update from %s" senderId)
                                 )
                             with ex ->
-                                printfn "[Sync] Failed to apply PlayerProgress update: %s" ex.Message
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply PlayerProgress update: %s" ex.Message)
                         | "Items" ->
                         
                             if not (CoopSync.shouldApplyUpdate "Items" payloadJson) then
-                                printfn "[Sync] Skipping duplicate Items update from %s" senderId
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipping duplicate Items update from %s" senderId)
                             else   
                                 try
                                     let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
@@ -458,10 +465,10 @@ type MyWindow() as this =
                                                 )
                                         )
 
-                                        printfn "[Sync] Applied Items update from %s (Triforce excluded)" senderId
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Items update from %s (Triforce excluded)" senderId)
                                     )
                                 with ex ->
-                                    printfn "[Sync] Failed to apply Items update: %s" ex.Message
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply Items update: %s" ex.Message)
                         | "StartingItems" ->
                             try
                                 let data = JsonConvert.DeserializeObject<SaveAndLoad.StartingItemsAndExtrasModel>(payloadJson)
@@ -485,18 +492,18 @@ type MyWindow() as this =
                                         TrackerModel.startingItemsAndExtras.PlayerHasBook.Set(data.PlayerHasBook)
                                         TrackerModel.startingItemsAndExtras.MaxHeartsDifferential <- data.MaxHeartsDifferential
 
-                                        printfn "[Sync] Applied StartingItems update from %s" senderId
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied StartingItems update from %s" senderId)
                                 )
                             with ex ->
-                                printfn "[Sync] Failed to apply StartingItems update: %s" ex.Message
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply StartingItems update: %s" ex.Message)
 
                         | "Overworld" ->
                             if isNull TrackerModel.overworldMapMarks then
-                                printfn "[Sync] Skipping Overworld update — TrackerModel not initialized yet."
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipping Overworld update — TrackerModel not initialized yet.")
                             elif not (shouldApplyUpdate senderId) then
-                                printfn "[Sync] Ignored Overworld update from %s (too soon after last update)" senderId
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Ignored Overworld update from %s (too soon after last update)" senderId)
                             else
-                                printfn "[Sync] Raw Overworld payload: %s" payloadJson
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Raw Overworld payload: %s" payloadJson)
                                 // Apply the update safely here
                                 try
                                     let data = JsonConvert.DeserializeObject<SaveAndLoad.Overworld>(payloadJson)
@@ -518,10 +525,10 @@ type MyWindow() as this =
                                                     if cur <> -1 then
                                                         TrackerModel.setOverworldMapExtraData(i, j, cur, ed)
                                                     TrackerModel.overworldMapCircles.[i,j] <- circ
-                                        printfn "[Sync] Applied Overworld update from %s" senderId
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Overworld update from %s" senderId)
                                     )
                                 with ex ->
-                                    printfn "[Sync] Failed to apply Overworld update: %s" ex.Message
+                                    printf "[Sync] Failed to apply Overworld update: %s" ex.Message
                         | "Hints" ->
                             try
                                 let data = JsonConvert.DeserializeObject<SaveAndLoad.Hints>(payloadJson)
@@ -531,7 +538,7 @@ type MyWindow() as this =
                                     TrackerModel.NoFeatOfStrengthHintWasGiven <- data.NoFeatOfStrengthHint
                                     TrackerModel.SailNotHintWasGiven <- data.SailNotHint
 
-                                    printfn "[Sync] Applied Hints update from %s" senderId
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Hints update from %s" senderId)
                                 )
                             with ex ->
                                 printfn "[Sync] Failed to apply Hints update: %s" ex.Message
@@ -551,16 +558,16 @@ type MyWindow() as this =
                                                     TrackerModel.DungeonBlockersContainer.SetDungeonBlockerAppliesTo(i, j, k, b.AppliesTo.[k])
 
                                                 let actualKind = TrackerModel.DungeonBlockersContainer.GetDungeonBlocker(i, j)
-                                                printfn "[Sync][Blockers] Applied blocker [%d,%d]: %A" i j actualKind
+                                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync][Blockers] Applied blocker [%d,%d]: %A" i j actualKind)
                                     TrackerModel.DungeonBlockersContainer.FinishIgnoreChangesDuringLoad()
-                                    printfn "[Sync] Applied Blockers update from %s" senderId
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Blockers update from %s" senderId)
                                 )
                             with ex ->
                                 printfn "[Sync] Failed to apply Blockers update: %s" ex.Message
                 
                         | "DungeonTriforce" ->
                             if not (CoopSync.shouldApplyUpdate "DungeonTriforce" payloadJson) then
-                                printfn "[Sync] Skipped DungeonTriforce update — no change"
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonTriforce update — no change")
                             else
                                 try
                                     let data = JsonConvert.DeserializeObject<CoopSync.DungeonsTriforceState>(payloadJson)
@@ -570,21 +577,21 @@ type MyWindow() as this =
                                             let has = data.Triforces.[i]
                                             if dungeon.PlayerHasTriforce() <> has then
                                                 dungeon.ToggleTriforce()
-                                        printfn "[Sync] Applied DungeonTriforce update from %s" senderId
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied DungeonTriforce update from %s" senderId)
                                     )
                                 with ex ->
                                     printfn "[Sync] Failed to apply DungeonTriforce update: %s" ex.Message
                         | _ ->
-                            printfn "[Sync] Unknown messageType: %s" msgType
+                            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Unknown messageType: %s" msgType)
                 else
-                    printfn "[Sync] Ignored sync message from senderId=%s (target=%s, me=%s)" senderId target me
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Ignored sync message from senderId=%s (target=%s, me=%s)" senderId target me)
 
-        let negotiateUrl = (TrackerModelOptions.CoopSyncOptions.NegotiateUrl())
+        //let negotiateUrl = (TrackerModelOptions.CoopSyncOptions.NegotiateUrl())
         // THIS is the correct way to run async without causing the Async<'T> comparison error
-        if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+        let tryStartSignalRConnection() =
             Async.StartImmediate(async {
                 try
-                    do! SyncManager.StartAsync(negotiateUrl) |> Async.AwaitTask
+                    do! SyncManager.StartAsync(TrackerModelOptions.CoopSyncOptions.NegotiateUrl()) |> Async.AwaitTask
                     //CoopSync.subscribeToPlayerProgressChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
                     //CoopSync.subscribeToStartingItemsAndExtrasChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
                     //CoopSync.subscribeToItemsChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
@@ -609,9 +616,18 @@ type MyWindow() as this =
                         printfn "[Sync] Inner exception: %s" inner.Message
                     | _ -> ()
             })
+        if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
+            tryStartSignalRConnection()
         else
-            printfn "[Sync] Co-op disabled — not connecting to Azure SignalR"
-
+            printfn "[Sync] Co-op disabled — not starting SignalR connection"
+        TrackerModelOptions.CoopSyncOptions.EnableCoopChanged.Publish.Add(fun isEnabled ->
+            if isEnabled then
+                printfn "[Sync] Co-op enabled at runtime — connecting to Azure SignalR"
+                tryStartSignalRConnection()
+            else
+                printfn "[Sync] Co-op disabled at runtime — not connecting"
+                // Optional: implement disconnect logic here
+        )
 
 
         let wholeCanvas, hmsTimerCanvas = new Canvas(), new Canvas()

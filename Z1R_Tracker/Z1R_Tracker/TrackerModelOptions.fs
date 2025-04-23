@@ -56,16 +56,36 @@ module OverworldTilesToHide =
 module CoopSyncOptions = 
     let mutable MyConsoleId: string = "unspecified"
     let mutable TargetConsoleId : string = "unspecified"
-    let mutable EnableCoop: bool = false
+    //let mutable EnableCoop: bool = false
     let mutable FunctionAppBase: string = "unspecified"
     let mutable baseNegotiateUrl: string = "/api/negotiate"
     let mutable baseSyncUpdateUrl: string = "/api/SyncUpdate"
+
     let NegotiateUrl () = FunctionAppBase + baseNegotiateUrl
     let SyncUpdateUrl () = FunctionAppBase + baseSyncUpdateUrl
-    //let mutable NegotiateUrl: string = FunctionAppBase + baseNegotiateUrl
-    //let mutable SyncUpdateUrl: string = FunctionAppBase + baseSyncUpdateUrl
+
+    //Event to notify when EnableCoop changes
+    let EnableCoopChanged = new Event<bool>()
+
+    //private backing field
+    let mutable private enableCoop = false
+
+    let GetEnableCoop () = enableCoop
+    let SetEnableCoop value =
+        if enableCoop <> value then
+            enableCoop <- value
+            EnableCoopChanged.Trigger(value)
+
+//RPT added this to support debugging for coop purposes
+module DebugConfig =
+    let mutable DebugMode = false
+
+    let Log message = 
+        if DebugMode then
+            printfn "%s" message
+
 //RPT added this to check if the CoopSyncOptions module is enabled.
-let isCoopEnabled () = CoopSyncOptions.EnableCoop
+let isCoopEnabled () = CoopSyncOptions.GetEnableCoop()
 let mutable UseBlurEffects = Bool(true)
 let mutable AnimateTileChanges = Bool(true)
 let mutable AnimateShopHighlights = Bool(true)
@@ -192,7 +212,7 @@ type ReadWrite() =
 
     member val MyConsoleId = CoopSyncOptions.MyConsoleId with get,set
     member val TargetConsoleId = CoopSyncOptions.TargetConsoleId with get,set
-    member val EnableCoop = CoopSyncOptions.EnableCoop with get,set
+    member val EnableCoop = CoopSyncOptions.GetEnableCoop() with get,set
     member val FunctionAppBase = CoopSyncOptions.FunctionAppBase with get,set
     member val baseNegotiateUrl = CoopSyncOptions.baseNegotiateUrl with get,set
     member val baseSyncUpdateUrl = CoopSyncOptions.baseSyncUpdateUrl with get,set
@@ -286,7 +306,7 @@ let private writeImpl(filename) =
     data.DungeonSummaryTabMode <- DungeonSummaryTabMode
     data.MyConsoleId <- CoopSyncOptions.MyConsoleId
     data.TargetConsoleId <- CoopSyncOptions.TargetConsoleId
-    data.EnableCoop <- CoopSyncOptions.EnableCoop
+    data.EnableCoop <- CoopSyncOptions.GetEnableCoop()
     data.FunctionAppBase <- CoopSyncOptions.FunctionAppBase
     data.baseNegotiateUrl <- CoopSyncOptions.baseNegotiateUrl
     data.baseSyncUpdateUrl <- CoopSyncOptions.baseSyncUpdateUrl
@@ -391,7 +411,7 @@ let private read(filename) =
 
         CoopSyncOptions.MyConsoleId <- data.MyConsoleId
         CoopSyncOptions.TargetConsoleId <- data.TargetConsoleId
-        CoopSyncOptions.EnableCoop <- data.EnableCoop
+        CoopSyncOptions.SetEnableCoop(data.EnableCoop)
         CoopSyncOptions.FunctionAppBase <- data.FunctionAppBase
         CoopSyncOptions.baseNegotiateUrl <- data.baseNegotiateUrl
         CoopSyncOptions.baseSyncUpdateUrl <- data.baseSyncUpdateUrl

@@ -65,13 +65,13 @@ let sendPlayerProgressUpdate (myConsoleId: string) =
             let jsonPayload = JsonConvert.SerializeObject(payload)
             if jsonPayload <> lastSentPlayerProgressJson then
                 lastSentPlayerProgressJson <- jsonPayload
-                printfn "[Sync] Sending PlayerProgress update: %s" jsonPayload
-                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending PlayerProgress update: %s" jsonPayload)
+                if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
                     do! SyncManager.Send("PlayerProgress", jsonPayload, myConsoleId) |> Async.AwaitTask
                 else
-                    printfn "[Sync] Coop sync is disabled, not sending PlayerProgress update"
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Coop sync is disabled, not sending PlayerProgress update")
         with ex ->
-            printfn "[Sync] Failed to send PlayerProgress update: %s" ex.Message
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send PlayerProgress update: %s" ex.Message)
     }
 
 let subscribeToPlayerProgressChanges(myConsoleId: string) =
@@ -114,13 +114,13 @@ let sendStartingItemsAndExtrasUpdate (myConsoleId: string) =
             let jsonPayload = JsonConvert.SerializeObject(payload)
             if jsonPayload <> lastSentStartingItemsJson then
                 lastSentStartingItemsJson <- jsonPayload
-                printfn "[Sync] Sending StartingItemsAndExtras update: %s" jsonPayload
-                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending StartingItemsAndExtras update: %s" jsonPayload)
+                if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
                     do! SyncManager.Send("StartingItems", jsonPayload, myConsoleId) |> Async.AwaitTask
                 else
-                    printfn "[Sync] Coop sync is disabled, not sending StartingItemsAndExtras update"
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Coop sync is disabled, not sending StartingItemsAndExtras update")
         with ex ->
-            printfn "[Sync] Failed to send StartingItemsAndExtras update: %s" ex.Message
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send StartingItemsAndExtras update: %s" ex.Message)
     }
 
 
@@ -185,15 +185,15 @@ let sendItemsUpdate (myConsoleId: string) =
             let jsonPayload = JsonConvert.SerializeObject(model)
 
             if shouldSend "Items" jsonPayload then
-                printfn "[Sync] Sending Items update (excluding Triforce): %s" jsonPayload
-                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending Items update (excluding Triforce): %s" jsonPayload)
+                if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
                     do! SyncManager.Send("Items", jsonPayload, myConsoleId) |> Async.AwaitTask
                 else
-                    printfn "[Sync] Coop sync is disabled, not sending Items update"
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Coop sync is disabled, not sending Items update")
             else
-                printfn "[Sync] Skipped sending Items update — no change"
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped sending Items update — no change")
         with ex ->
-            printfn "[Sync] Failed to send Items update: %s" ex.Message
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send Items update: %s" ex.Message)
     }
 
 let subscribeToItemsChanges(myConsoleId: string) =
@@ -301,13 +301,13 @@ let sendOverworldUpdateDebounced (myConsoleId: string) =
             let jsonPayload = JsonConvert.SerializeObject(model)
             if jsonPayload <> lastSentOverworldJson then
                 lastSentOverworldJson <- jsonPayload
-                printfn "[Sync] Sending Overworld update: %s" jsonPayload
-                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending Overworld update: %s" jsonPayload)
+                if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
                     do! SyncManager.Send("Overworld", jsonPayload, myConsoleId) |> Async.AwaitTask
                 else
-                    printfn "[Sync] Coop sync is disabled, not sending Overworld update"
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Coop sync is disabled, not sending Overworld update")
         with ex ->
-            printfn "[Sync] Failed to send Overworld update: %s" ex.Message
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send Overworld update: %s" ex.Message)
     }
 
 
@@ -376,15 +376,15 @@ let sendDungeonTriforceUpdate (myConsoleId: string) =
             model.Triforces <- [| for i in 0 .. 8 -> TrackerModel.GetDungeon(i).PlayerHasTriforce() |]
             let json = JsonConvert.SerializeObject(model)
             if shouldSend "DungeonTriforce" json then
-                printfn "[Sync] Sending DungeonTriforce update: %s" json
-                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending DungeonTriforce update: %s" json)
+                if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
                     do! SyncManager.Send("DungeonTriforce", json, myConsoleId) |> Async.AwaitTask
                 else
-                    printfn "[Sync] Coop sync is disabled, not sending DungeonTriforce update"
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Coop sync is disabled, not sending DungeonTriforce update")
             else
-                printfn "[Sync] Skipped sending DungeonTriforce update — no change"
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped sending DungeonTriforce update — no change")
         with ex ->
-            printfn "[Sync] Failed to send DungeonTriforce update: %s" ex.Message
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send DungeonTriforce update: %s" ex.Message)
     }
 
 let subscribeToDungeonTriforceChanges (myConsoleId: string) =

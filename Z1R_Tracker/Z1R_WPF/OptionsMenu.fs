@@ -355,8 +355,19 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 // NEW: Enable Co-op checkbox
                 // NEW: Enable Co-op checkbox with label
                 let enableCoopCheckbox = new CheckBox()
-                enableCoopCheckbox.IsChecked <- System.Nullable(TrackerModelOptions.CoopSyncOptions.EnableCoop)
+                // Initial validation of FunctionAppBase
+                let isValidUrl (url: string) =
+                    System.Uri.TryCreate(url, System.UriKind.Absolute) |> fst
+
+                let initialUrl = TrackerModelOptions.CoopSyncOptions.FunctionAppBase
+                let initialIsValid = isValidUrl initialUrl
+
+                // Only enable checkbox if URL is valid
+                enableCoopCheckbox.IsEnabled <- initialIsValid
+                enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit(initialIsValid && TrackerModelOptions.CoopSyncOptions.GetEnableCoop())
+
                 enableCoopCheckbox.HorizontalAlignment <- HorizontalAlignment.Left
+                enableCoopCheckbox.IsEnabled <- false
                 let enableCoopText = new TextBox(
                     Text = "Enable Co-op Sync", 
                     IsReadOnly = true, 
@@ -365,13 +376,18 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     Foreground = Brushes.Orange,
                     Background = Brushes.Black,
                     IsHitTestVisible = false
+                    
                 )
+                
 
                 let coopCheckStack = new StackPanel(Orientation = Orientation.Horizontal)
                 coopCheckStack.Children.Add(enableCoopCheckbox) |> ignore
                 coopCheckStack.Children.Add(enableCoopText) |> ignore
                 coopCheckStack.Margin <- Thickness(0., 0., 0., 10.)
-                enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit TrackerModelOptions.CoopSyncOptions.EnableCoop
+                coopCheckStack.ToolTip <- "Enables co-op syncing between two instances of Z-Tracker via Azure Functions and Azure SignalR.\nThis cannot be enabled if the value of Function App Base is not a valid URL"
+                ToolTipService.SetShowDuration(coopCheckStack, 10000)
+                enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit (TrackerModelOptions.CoopSyncOptions.GetEnableCoop())
+
 
                 sp.Children.Add(coopCheckStack) |> ignore
                 let urlLabel txt =
@@ -477,13 +493,16 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 saveButton.Click.Add(fun _ ->
                     TrackerModelOptions.CoopSyncOptions.MyConsoleId <- myIdBox.Text
                     TrackerModelOptions.CoopSyncOptions.TargetConsoleId <- targetIdBox.Text
-                    TrackerModelOptions.CoopSyncOptions.EnableCoop <- 
-                        match System.Nullable.op_Explicit(enableCoopCheckbox.IsChecked) with
-                        | true -> true
-                        | false -> false
+                    
                     TrackerModelOptions.CoopSyncOptions.FunctionAppBase <- functionAppBaseBox.Text
                     TrackerModelOptions.CoopSyncOptions.baseNegotiateUrl <- negotiateUrlBox.Text
                     TrackerModelOptions.CoopSyncOptions.baseSyncUpdateUrl <- syncUpdateUrlBox.Text
+
+                    TrackerModelOptions.CoopSyncOptions.SetEnableCoop( 
+                        match System.Nullable.op_Explicit(enableCoopCheckbox.IsChecked) with
+                        | true -> true
+                        | false -> false
+                        )
 
                     TrackerModelOptions.writeSettings()
                     wh.Set() |> ignore
