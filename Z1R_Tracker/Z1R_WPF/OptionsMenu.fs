@@ -27,6 +27,10 @@ let requestRedrawOverworldEvent = new Event<unit>()
 let hideTimerChanged = new Event<unit>()
 let dungeonSunglassesChanged = new Event<unit>()
 
+let isValidUrl (url: string) =
+    System.Uri.TryCreate(url, System.UriKind.Absolute) |> fst
+
+
 let link(cb:CheckBox, b:TrackerModelOptions.Bool, needFU, otherEffect) =
     let effect() = 
         if needFU then 
@@ -344,17 +348,98 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     CustomComboBoxes.GlobalFlag.popupIsActive <- true
                     changedGlobal <- true
 
-
                 let wh = new System.Threading.ManualResetEvent(false)
                 let sp = new StackPanel(Orientation=Orientation.Vertical, Margin=Thickness(10.))
                 AddStyle(sp)
+
+                // NEW: Enable Co-op checkbox
+                // NEW: Enable Co-op checkbox with label
+                let enableCoopCheckbox = new CheckBox()
+                enableCoopCheckbox.IsChecked <- System.Nullable(TrackerModelOptions.CoopSyncOptions.EnableCoop)
+                enableCoopCheckbox.HorizontalAlignment <- HorizontalAlignment.Left
+                let enableCoopText = new TextBox(
+                    Text = "Enable Co-op Sync", 
+                    IsReadOnly = true, 
+                    BorderThickness = Thickness(0.),
+                    FontSize = 16., 
+                    Foreground = Brushes.Orange,
+                    Background = Brushes.Black,
+                    IsHitTestVisible = false
+                )
+
+                let coopCheckStack = new StackPanel(Orientation = Orientation.Horizontal)
+                coopCheckStack.Children.Add(enableCoopCheckbox) |> ignore
+                coopCheckStack.Children.Add(enableCoopText) |> ignore
+                coopCheckStack.Margin <- Thickness(0., 0., 0., 10.)
+                enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit TrackerModelOptions.CoopSyncOptions.EnableCoop
+
+                sp.Children.Add(coopCheckStack) |> ignore
+                let urlLabel txt =
+                    new TextBox(
+                    Text = txt,
+                    IsReadOnly = true,
+                    BorderThickness = Thickness(0.),
+                    FontSize = 14.,
+                    Foreground = Brushes.Orange,
+                    Background = Brushes.Black
+                )
+
+                sp.Children.Add(urlLabel("Function App Base:")) |> ignore
+                let functionAppBaseBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.FunctionAppBase)
+                functionAppBaseBox.TextChanged.Add(fun _ ->
+                    let isValid = isValidUrl functionAppBaseBox.Text
+                    if not isValid then
+                        enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit false
+                        enableCoopCheckbox.IsEnabled <- false
+                        enableCoopCheckbox.Foreground <- Brushes.DarkGray
+                    else
+                        enableCoopCheckbox.IsEnabled <- true
+                        enableCoopCheckbox.Foreground <- Brushes.Orange
+                )
+
+                functionAppBaseBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                functionAppBaseBox.TextAlignment <- TextAlignment.Left
+                let functionAppBaseBorder = new Border(
+                    Child = functionAppBaseBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                sp.Children.Add(functionAppBaseBorder) |> ignore
+
+                sp.Children.Add(urlLabel("Negotiate Suffix:")) |> ignore
+                let negotiateUrlBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.baseNegotiateUrl)
+                negotiateUrlBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                negotiateUrlBox.TextAlignment <- TextAlignment.Left
+                let negotiateUrlBorder = new Border(
+                    Child = negotiateUrlBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                sp.Children.Add(negotiateUrlBorder) |> ignore
+
+                sp.Children.Add(urlLabel("SyncUpdate Suffix:")) |> ignore
+                let syncUpdateUrlBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.baseSyncUpdateUrl)
+                syncUpdateUrlBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                syncUpdateUrlBox.TextAlignment <- TextAlignment.Left
+                let syncUpdateUrlBorder = new Border(
+                    Child = syncUpdateUrlBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                sp.Children.Add(syncUpdateUrlBorder) |> ignore
+
+                sp.Children.Add(new DockPanel(Height=10.)) |> ignore  // spacer before ID fields
+
 
                 sp.Children.Add(new TextBox(Text="Console ID (This instance):", IsReadOnly=true)) |> ignore
                 let myIdBox = new TextBox()
                 myIdBox.Text <- TrackerModelOptions.CoopSyncOptions.MyConsoleId
                 myIdBox.HorizontalAlignment <- HorizontalAlignment.Stretch
                 myIdBox.TextAlignment <- TextAlignment.Center
-                
+
                 let myIdBorder = new Border(
                     Child = myIdBox,
                     BorderBrush = Brushes.Orange,
@@ -377,7 +462,7 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 targetIdBox.Text <- TrackerModelOptions.CoopSyncOptions.TargetConsoleId
                 targetIdBox.HorizontalAlignment <- HorizontalAlignment.Stretch
                 targetIdBox.TextAlignment <- TextAlignment.Center
-                
+
                 let targetIdBorder = new Border(
                     Child = targetIdBox,
                     BorderBrush = Brushes.Orange,
@@ -392,6 +477,14 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 saveButton.Click.Add(fun _ ->
                     TrackerModelOptions.CoopSyncOptions.MyConsoleId <- myIdBox.Text
                     TrackerModelOptions.CoopSyncOptions.TargetConsoleId <- targetIdBox.Text
+                    TrackerModelOptions.CoopSyncOptions.EnableCoop <- 
+                        match System.Nullable.op_Explicit(enableCoopCheckbox.IsChecked) with
+                        | true -> true
+                        | false -> false
+                    TrackerModelOptions.CoopSyncOptions.FunctionAppBase <- functionAppBaseBox.Text
+                    TrackerModelOptions.CoopSyncOptions.baseNegotiateUrl <- negotiateUrlBox.Text
+                    TrackerModelOptions.CoopSyncOptions.baseSyncUpdateUrl <- syncUpdateUrlBox.Text
+
                     TrackerModelOptions.writeSettings()
                     wh.Set() |> ignore
                 )
@@ -414,6 +507,7 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 } |> Async.StartImmediate
         )
     options2sp.Children.Add(coopSettingsButton) |> ignore
+
 
 
     optionsAllsp.Children.Add(new DockPanel(Width=2.,Background=Brushes.Gray)) |> ignore

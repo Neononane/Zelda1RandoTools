@@ -56,6 +56,14 @@ module OverworldTilesToHide =
 module CoopSyncOptions = 
     let mutable MyConsoleId: string = "unspecified"
     let mutable TargetConsoleId : string = "unspecified"
+    let mutable EnableCoop: bool = false
+    let mutable FunctionAppBase: string = "unspecified"
+    let mutable baseNegotiateUrl: string = "/api/negotiate"
+    let mutable baseSyncUpdateUrl: string = "/api/SyncUpdate"
+    let mutable NegotiateUrl: string = FunctionAppBase + baseNegotiateUrl
+    let mutable SyncUpdateUrl: string = FunctionAppBase + baseSyncUpdateUrl
+//RPT added this to check if the CoopSyncOptions module is enabled.
+let isCoopEnabled () = CoopSyncOptions.EnableCoop
 let mutable UseBlurEffects = Bool(true)
 let mutable AnimateTileChanges = Bool(true)
 let mutable AnimateShopHighlights = Bool(true)
@@ -182,6 +190,12 @@ type ReadWrite() =
 
     member val MyConsoleId = CoopSyncOptions.MyConsoleId with get,set
     member val TargetConsoleId = CoopSyncOptions.TargetConsoleId with get,set
+    member val EnableCoop = CoopSyncOptions.EnableCoop with get,set
+    member val FunctionAppBase = CoopSyncOptions.FunctionAppBase with get,set
+    member val baseNegotiateUrl = CoopSyncOptions.baseNegotiateUrl with get,set
+    member val baseSyncUpdateUrl = CoopSyncOptions.baseSyncUpdateUrl with get,set
+    member val NegotiateUrl = CoopSyncOptions.NegotiateUrl with get,set
+    member val SyncUpdateUrl = CoopSyncOptions.SyncUpdateUrl with get,set
 
 let mutable private cachedSettingJson = null
 
@@ -270,6 +284,12 @@ let private writeImpl(filename) =
     data.DungeonSummaryTabMode <- DungeonSummaryTabMode
     data.MyConsoleId <- CoopSyncOptions.MyConsoleId
     data.TargetConsoleId <- CoopSyncOptions.TargetConsoleId
+    data.EnableCoop <- CoopSyncOptions.EnableCoop
+    data.FunctionAppBase <- CoopSyncOptions.FunctionAppBase
+    data.baseNegotiateUrl <- CoopSyncOptions.baseNegotiateUrl
+    data.baseSyncUpdateUrl <- CoopSyncOptions.baseSyncUpdateUrl
+    data.NegotiateUrl <- CoopSyncOptions.NegotiateUrl
+    data.SyncUpdateUrl <- CoopSyncOptions.SyncUpdateUrl
 
     let json = JsonSerializer.Serialize<ReadWrite>(data, new JsonSerializerOptions(WriteIndented=true))
     if json <> cachedSettingJson then
@@ -370,6 +390,12 @@ let private read(filename) =
 
         CoopSyncOptions.MyConsoleId <- data.MyConsoleId
         CoopSyncOptions.TargetConsoleId <- data.TargetConsoleId
+        CoopSyncOptions.EnableCoop <- data.EnableCoop
+        CoopSyncOptions.FunctionAppBase <- data.FunctionAppBase
+        CoopSyncOptions.baseNegotiateUrl <- data.baseNegotiateUrl
+        CoopSyncOptions.baseSyncUpdateUrl <- data.baseSyncUpdateUrl
+        CoopSyncOptions.NegotiateUrl <- data.NegotiateUrl
+        CoopSyncOptions.SyncUpdateUrl <- data.SyncUpdateUrl
     with e ->
         cachedSettingJson <- null
         printfn "Unable to read settings file '%s':" filename 

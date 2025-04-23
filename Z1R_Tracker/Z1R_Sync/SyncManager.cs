@@ -12,13 +12,22 @@ namespace Z1R_Sync
 {
     public static class SyncManager
     {
-        private static string AzureFunctionUrl = "https://ztrackersync.azurewebsites.net/api/SyncUpdate";
+        //private static string AzureFunctionUrl = "https://ztrackersync.azurewebsites.net/api/SyncUpdate";
+        private static string _AzureFunctionUrl;
+
         private static readonly HttpClient _httpClient = new HttpClient();
         private static HubConnection _connection;
 
         // Delegates for handling different kinds of messages
         private static Action<string, string, string> _onTileChange;
         private static Action<string, string, string> _onSyncMessage;
+
+        public static void Configure(string azureFunctionUrl)
+        {
+            _AzureFunctionUrl = azureFunctionUrl;
+        }
+
+        public static string AzureFunctionUrl => _AzureFunctionUrl;
 
         public static void SetTileChangeHandler(Action<string, string, string> handler)
         {

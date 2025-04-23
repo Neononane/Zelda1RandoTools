@@ -66,7 +66,10 @@ let sendPlayerProgressUpdate (myConsoleId: string) =
             if jsonPayload <> lastSentPlayerProgressJson then
                 lastSentPlayerProgressJson <- jsonPayload
                 printfn "[Sync] Sending PlayerProgress update: %s" jsonPayload
-                do! SyncManager.Send("PlayerProgress", jsonPayload, myConsoleId) |> Async.AwaitTask
+                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                    do! SyncManager.Send("PlayerProgress", jsonPayload, myConsoleId) |> Async.AwaitTask
+                else
+                    printfn "[Sync] Coop sync is disabled, not sending PlayerProgress update"
         with ex ->
             printfn "[Sync] Failed to send PlayerProgress update: %s" ex.Message
     }
@@ -112,7 +115,10 @@ let sendStartingItemsAndExtrasUpdate (myConsoleId: string) =
             if jsonPayload <> lastSentStartingItemsJson then
                 lastSentStartingItemsJson <- jsonPayload
                 printfn "[Sync] Sending StartingItemsAndExtras update: %s" jsonPayload
-                do! SyncManager.Send("StartingItems", jsonPayload, myConsoleId) |> Async.AwaitTask
+                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                    do! SyncManager.Send("StartingItems", jsonPayload, myConsoleId) |> Async.AwaitTask
+                else
+                    printfn "[Sync] Coop sync is disabled, not sending StartingItemsAndExtras update"
         with ex ->
             printfn "[Sync] Failed to send StartingItemsAndExtras update: %s" ex.Message
     }
@@ -180,7 +186,10 @@ let sendItemsUpdate (myConsoleId: string) =
 
             if shouldSend "Items" jsonPayload then
                 printfn "[Sync] Sending Items update (excluding Triforce): %s" jsonPayload
-                do! SyncManager.Send("Items", jsonPayload, myConsoleId) |> Async.AwaitTask
+                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                    do! SyncManager.Send("Items", jsonPayload, myConsoleId) |> Async.AwaitTask
+                else
+                    printfn "[Sync] Coop sync is disabled, not sending Items update"
             else
                 printfn "[Sync] Skipped sending Items update — no change"
         with ex ->
@@ -293,7 +302,10 @@ let sendOverworldUpdateDebounced (myConsoleId: string) =
             if jsonPayload <> lastSentOverworldJson then
                 lastSentOverworldJson <- jsonPayload
                 printfn "[Sync] Sending Overworld update: %s" jsonPayload
-                do! SyncManager.Send("Overworld", jsonPayload, myConsoleId) |> Async.AwaitTask
+                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                    do! SyncManager.Send("Overworld", jsonPayload, myConsoleId) |> Async.AwaitTask
+                else
+                    printfn "[Sync] Coop sync is disabled, not sending Overworld update"
         with ex ->
             printfn "[Sync] Failed to send Overworld update: %s" ex.Message
     }
@@ -365,7 +377,10 @@ let sendDungeonTriforceUpdate (myConsoleId: string) =
             let json = JsonConvert.SerializeObject(model)
             if shouldSend "DungeonTriforce" json then
                 printfn "[Sync] Sending DungeonTriforce update: %s" json
-                do! SyncManager.Send("DungeonTriforce", json, myConsoleId) |> Async.AwaitTask
+                if TrackerModelOptions.CoopSyncOptions.EnableCoop then
+                    do! SyncManager.Send("DungeonTriforce", json, myConsoleId) |> Async.AwaitTask
+                else
+                    printfn "[Sync] Coop sync is disabled, not sending DungeonTriforce update"
             else
                 printfn "[Sync] Skipped sending DungeonTriforce update — no change"
         with ex ->

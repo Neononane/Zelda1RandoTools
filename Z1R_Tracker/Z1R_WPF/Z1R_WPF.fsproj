@@ -149,8 +149,7 @@
     <Compile Include="Reminders.fs" />
     <Compile Include="MainTrackerTriforcesAndItems.fs" />
     <Compile Include="Sync.fs" />
-    <Compile Include="Config.fs" />
-	<Compile Include="CoopSync.fs" />
+    <Compile Include="CoopSync.fs" />
     <Compile Include="WPFUI.fs" />
     <Compile Include="Program.fs" />
     <Content Include="..\Z1R_Tracker\README.txt">
