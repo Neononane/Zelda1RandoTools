@@ -362,12 +362,6 @@ type MyWindow() as this =
             appMainCanvas, cm
         // Stubbed SignalR sync startup
 
-#if DEBUG
-        TrackerModelOptions.DebugConfig.DebugMode <- true
-#else
-        TrackerModelOptions.DebugConfig.DebugMode <- false
-#endif
-
         let mutable lastOverworldSyncSource = ""
         let mutable lastOverworldSyncTime = System.DateTime.MinValue
 

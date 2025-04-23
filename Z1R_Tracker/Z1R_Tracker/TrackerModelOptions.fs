@@ -78,7 +78,7 @@ module CoopSyncOptions =
 
 //RPT added this to support debugging for coop purposes
 module DebugConfig =
-    let mutable DebugMode = false
+    let mutable DebugMode: bool = false
 
     let Log message = 
         if DebugMode then

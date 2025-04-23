@@ -383,6 +383,8 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 let coopCheckStack = new StackPanel(Orientation = Orientation.Horizontal)
                 coopCheckStack.Children.Add(enableCoopCheckbox) |> ignore
                 coopCheckStack.Children.Add(enableCoopText) |> ignore
+
+
                 coopCheckStack.Margin <- Thickness(0., 0., 0., 10.)
                 coopCheckStack.ToolTip <- "Enables co-op syncing between two instances of Z-Tracker via Azure Functions and Azure SignalR.\nThis cannot be enabled if the value of Function App Base is not a valid URL"
                 ToolTipService.SetShowDuration(coopCheckStack, 10000)
@@ -390,6 +392,10 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
 
 
                 sp.Children.Add(coopCheckStack) |> ignore
+                // Checkbox for Debug Mode
+                let debugModeCheckbox = new CheckBox(Content=new TextBlock(Text="Enable Debug Logging", Foreground=Brushes.Orange))
+                debugModeCheckbox.IsChecked <- System.Nullable.op_Implicit(TrackerModelOptions.DebugConfig.DebugMode)
+                sp.Children.Add(debugModeCheckbox) |> ignore
                 let urlLabel txt =
                     new TextBox(
                     Text = txt,
@@ -503,6 +509,10 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                         | true -> true
                         | false -> false
                         )
+                    TrackerModelOptions.DebugConfig.DebugMode <- 
+                        match System.Nullable.op_Explicit(debugModeCheckbox.IsChecked) with
+                        | true -> true
+                        | false -> false
 
                     TrackerModelOptions.writeSettings()
                     wh.Set() |> ignore
