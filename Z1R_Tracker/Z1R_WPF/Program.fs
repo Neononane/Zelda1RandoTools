@@ -298,7 +298,7 @@ type MyWindow() as this =
         TrackerModelOptions.readSettings()
         settingsWereSuccessfullyRead <- true
         //RPT try to initialize here for SyncManager
-        SyncManager.Configure(TrackerModelOptions.CoopSyncOptions.FunctionAppBase + TrackerModelOptions.CoopSyncOptions.SyncUpdateUrl)
+        SyncManager.Configure(TrackerModelOptions.CoopSyncOptions.FunctionAppBase + TrackerModelOptions.CoopSyncOptions.baseSyncUpdateUrl)
         // some global variables have already been initialized, and so they read the default value of settings, rather than the settings we just read; this bit patches that up:
         OptionsMenu.InitializeVoice()
         OptionsMenu.hideTimerChanged.Trigger()
@@ -579,7 +579,7 @@ type MyWindow() as this =
                 else
                     printfn "[Sync] Ignored sync message from senderId=%s (target=%s, me=%s)" senderId target me
 
-        let negotiateUrl = (TrackerModelOptions.CoopSyncOptions.FunctionAppBase + TrackerModelOptions.CoopSyncOptions.NegotiateUrl)
+        let negotiateUrl = (TrackerModelOptions.CoopSyncOptions.FunctionAppBase + TrackerModelOptions.CoopSyncOptions.baseNegotiateUrl)
         // THIS is the correct way to run async without causing the Async<'T> comparison error
         if TrackerModelOptions.CoopSyncOptions.EnableCoop then
             Async.StartImmediate(async {

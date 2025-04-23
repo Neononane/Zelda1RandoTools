@@ -60,8 +60,8 @@ module CoopSyncOptions =
     let mutable FunctionAppBase: string = "unspecified"
     let mutable baseNegotiateUrl: string = "/api/negotiate"
     let mutable baseSyncUpdateUrl: string = "/api/SyncUpdate"
-    let mutable NegotiateUrl: string = FunctionAppBase + baseNegotiateUrl
-    let mutable SyncUpdateUrl: string = FunctionAppBase + baseSyncUpdateUrl
+    //let mutable NegotiateUrl: string = FunctionAppBase + baseNegotiateUrl
+    //let mutable SyncUpdateUrl: string = FunctionAppBase + baseSyncUpdateUrl
 //RPT added this to check if the CoopSyncOptions module is enabled.
 let isCoopEnabled () = CoopSyncOptions.EnableCoop
 let mutable UseBlurEffects = Bool(true)
@@ -194,8 +194,8 @@ type ReadWrite() =
     member val FunctionAppBase = CoopSyncOptions.FunctionAppBase with get,set
     member val baseNegotiateUrl = CoopSyncOptions.baseNegotiateUrl with get,set
     member val baseSyncUpdateUrl = CoopSyncOptions.baseSyncUpdateUrl with get,set
-    member val NegotiateUrl = CoopSyncOptions.NegotiateUrl with get,set
-    member val SyncUpdateUrl = CoopSyncOptions.SyncUpdateUrl with get,set
+    member val NegotiateUrl = (CoopSyncOptions.FunctionAppBase + CoopSyncOptions.baseNegotiateUrl) with get
+    member val SyncUpdateUrl = (CoopSyncOptions.FunctionAppBase + CoopSyncOptions.baseSyncUpdateUrl) with get
 
 let mutable private cachedSettingJson = null
 
@@ -288,8 +288,7 @@ let private writeImpl(filename) =
     data.FunctionAppBase <- CoopSyncOptions.FunctionAppBase
     data.baseNegotiateUrl <- CoopSyncOptions.baseNegotiateUrl
     data.baseSyncUpdateUrl <- CoopSyncOptions.baseSyncUpdateUrl
-    data.NegotiateUrl <- CoopSyncOptions.NegotiateUrl
-    data.SyncUpdateUrl <- CoopSyncOptions.SyncUpdateUrl
+
 
     let json = JsonSerializer.Serialize<ReadWrite>(data, new JsonSerializerOptions(WriteIndented=true))
     if json <> cachedSettingJson then
@@ -394,8 +393,7 @@ let private read(filename) =
         CoopSyncOptions.FunctionAppBase <- data.FunctionAppBase
         CoopSyncOptions.baseNegotiateUrl <- data.baseNegotiateUrl
         CoopSyncOptions.baseSyncUpdateUrl <- data.baseSyncUpdateUrl
-        CoopSyncOptions.NegotiateUrl <- data.NegotiateUrl
-        CoopSyncOptions.SyncUpdateUrl <- data.SyncUpdateUrl
+
     with e ->
         cachedSettingJson <- null
         printfn "Unable to read settings file '%s':" filename 
