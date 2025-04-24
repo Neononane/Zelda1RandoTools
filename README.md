@@ -2,7 +2,7 @@
 
 ### A tracker for Zelda 1 Randomizer
 
-The most recent release is v2.0.0, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/v1.3/doc/TOC.md), which includes links for 
+The most recent release is v2.0.1 as a beta, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/v1.3/doc/TOC.md), which includes links for 
 downloading and installing Z-Tracker.
 
 Sample screenshots:
