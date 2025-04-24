@@ -864,15 +864,15 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
 
     // WANT!
     let kitty = new Image()
-    let imageStream = Graphics.GetResourceStream("CroppedBrianKitty.png")
+    let imageStream = Graphics.GetResourceStream("CatBird.png")
     kitty.Source <- System.Windows.Media.Imaging.BitmapFrame.Create(imageStream)
     kitty.Width <- THRU_MAIN_MAP_AND_ITEM_PROGRESS_H - THRU_MAIN_MAP_H
     kitty.Height <- THRU_MAIN_MAP_AND_ITEM_PROGRESS_H - THRU_MAIN_MAP_H
     let ztlogo = new Image()
     let imageStream = Graphics.GetResourceStream("ZTlogo64x64.png")
     ztlogo.Source <- System.Windows.Media.Imaging.BitmapFrame.Create(imageStream)
-    ztlogo.Width <- 40.
-    ztlogo.Height <- 40.
+    ztlogo.Width <- 20.
+    ztlogo.Height <- 20.
     let logoBorder = new Border(BorderThickness=Thickness(1.), BorderBrush=Brushes.Gray, Child=ztlogo)
     layout.AddKittyAndLogo(kitty, logoBorder, ztlogo)
     

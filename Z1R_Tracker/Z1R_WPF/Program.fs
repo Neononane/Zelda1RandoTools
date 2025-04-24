@@ -299,6 +299,14 @@ type MyWindow() as this =
         settingsWereSuccessfullyRead <- true
         //RPT try to initialize here for SyncManager
         SyncManager.Configure(TrackerModelOptions.CoopSyncOptions.SyncUpdateUrl())
+        TrackerModelOptions.CoopSyncOptions.EnableCoopChanged.Publish.Add(fun isEnabled ->
+            if isEnabled then
+                printfn "[Sync] Co-op enabled at runtime — resetting SyncUrl"
+                SyncManager.Configure(TrackerModelOptions.CoopSyncOptions.SyncUpdateUrl())
+            else
+                printfn "[Sync] Co-op disabled at runtime — not connecting"
+               
+        )
         // some global variables have already been initialized, and so they read the default value of settings, rather than the settings we just read; this bit patches that up:
         OptionsMenu.InitializeVoice()
         OptionsMenu.hideTimerChanged.Trigger()
