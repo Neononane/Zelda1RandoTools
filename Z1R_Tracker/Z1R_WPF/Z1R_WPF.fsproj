@@ -108,6 +108,7 @@
     <EmbeddedResource Include="icons\new_icons13x9.png" />
     <EmbeddedResource Include="icons\zelda_bosses16x16.png" />
     <EmbeddedResource Include="icons\zelda_items16x16.png" />
+    <EmbeddedResource Include="icons\CatBird.png" />
     <Content Include="ShowRunCustomImages\all-items-hud.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -148,6 +149,7 @@
     <Compile Include="Layout.fs" />
     <Compile Include="Reminders.fs" />
     <Compile Include="MainTrackerTriforcesAndItems.fs" />
+	<Compile Include="Debouncer.fs" />
     <Compile Include="CoopSync.fs" />
     <Compile Include="WPFUI.fs" />
     <Compile Include="Program.fs" />
@@ -165,7 +167,6 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="packages.config" />
-    <EmbeddedResource Include="icons\CatBird.png" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.AspNetCore.Connections.Abstractions">
