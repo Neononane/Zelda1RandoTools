@@ -422,7 +422,9 @@ type MyWindow() as this =
                         
                             if not (CoopSync.shouldApplyUpdate "Items" payloadJson) then
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipping duplicate Items update from %s" senderId)
-                            else   
+                            elif TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipping Items update from %s — TrackerModel not initialized" senderId)
+                            else
                                 try
                                     let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
                                     Application.Current.Dispatcher.Invoke(fun () ->
@@ -545,28 +547,29 @@ type MyWindow() as this =
                             with ex ->
                                 printfn "[Sync] Failed to apply Hints update: %s" ex.Message
                         | "Blockers" ->
-                            try
-                                let data = JsonConvert.DeserializeObject<SaveAndLoad.Blocker[][]>(payloadJson)
-                                Application.Current.Dispatcher.Invoke(fun () ->
-                                    for i = 0 to data.Length - 1 do
-                                        for j = 0 to data.[i].Length - 1 do
-                                            let b = data.[i].[j]
-                                            if b <> null then
-                                                let blockerKind = TrackerModel.DungeonBlocker.FromHotKeyName(b.Kind)
-                                                TrackerModel.DungeonBlockersContainer.SetDungeonBlocker(i, j, blockerKind)
+                            if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
+                                TrackerModelOptions.DebugConfig.Log("[Sync][Blockers] Skipping update — tracker not initialized yet.")
+                            else
+                                try
+                                    let data = JsonConvert.DeserializeObject<SaveAndLoad.Blocker[][]>(payloadJson)
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        TrackerModel.DungeonBlockersContainer.StartIgnoreChangesDuringLoad()
+                                        for i = 0 to data.Length - 1 do
+                                            for j = 0 to data.[i].Length - 1 do
+                                                let b = data.[i].[j]
+                                                if b <> null then
+                                                    let blockerKind = TrackerModel.DungeonBlocker.FromHotKeyName(b.Kind)
+                                                    TrackerModel.DungeonBlockersContainer.SetDungeonBlocker(i, j, blockerKind)
+                                                    for k = 0 to b.AppliesTo.Length - 1 do
+                                                        TrackerModel.DungeonBlockersContainer.SetDungeonBlockerAppliesTo(i, j, k, b.AppliesTo.[k])
+                                                    let actualKind = TrackerModel.DungeonBlockersContainer.GetDungeonBlocker(i, j)
+                                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync][Blockers] Applied blocker [%d,%d]: %A" i j actualKind)
+                                        TrackerModel.DungeonBlockersContainer.FinishIgnoreChangesDuringLoad()
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Blockers update from %s" senderId)
+                                    )
+                                with ex ->
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply Blockers update: %s" ex.Message)
 
-                                                // Set appliesTo array (map, compass, tri, box1, box2, box3)
-                                                for k = 0 to b.AppliesTo.Length - 1 do
-                                                    TrackerModel.DungeonBlockersContainer.SetDungeonBlockerAppliesTo(i, j, k, b.AppliesTo.[k])
-
-                                                let actualKind = TrackerModel.DungeonBlockersContainer.GetDungeonBlocker(i, j)
-                                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync][Blockers] Applied blocker [%d,%d]: %A" i j actualKind)
-                                    TrackerModel.DungeonBlockersContainer.FinishIgnoreChangesDuringLoad()
-                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Blockers update from %s" senderId)
-                                )
-                            with ex ->
-                                printfn "[Sync] Failed to apply Blockers update: %s" ex.Message
-                
                         | "DungeonTriforce" ->
                             if not (CoopSync.shouldApplyUpdate "DungeonTriforce" payloadJson) then
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonTriforce update — no change")

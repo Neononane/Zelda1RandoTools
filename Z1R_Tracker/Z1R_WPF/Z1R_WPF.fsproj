@@ -148,7 +148,6 @@
     <Compile Include="Layout.fs" />
     <Compile Include="Reminders.fs" />
     <Compile Include="MainTrackerTriforcesAndItems.fs" />
-    <Compile Include="Sync.fs" />
     <Compile Include="CoopSync.fs" />
     <Compile Include="WPFUI.fs" />
     <Compile Include="Program.fs" />

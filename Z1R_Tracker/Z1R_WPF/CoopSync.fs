@@ -19,6 +19,7 @@ let mutable lastReceivedItemsHash: string option = None
 let mutable lastReceivedHashes = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
 let mutable lastAppliedHashes = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
 let mutable lastSentHashes = ConcurrentDictionary<string, string>()
+let mutable lastSentBlockersJson = ""
 
 
 let computeHash (s: string) =
@@ -123,7 +124,6 @@ let sendStartingItemsAndExtrasUpdate (myConsoleId: string) =
             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send StartingItemsAndExtras update: %s" ex.Message)
     }
 
-
 let subscribeToStartingItemsAndExtrasChanges(myConsoleId: string) =
     let sendUpdate() =
         async {
@@ -145,6 +145,36 @@ let subscribeToStartingItemsAndExtrasChanges(myConsoleId: string) =
     TrackerModel.startingItemsAndExtras.PlayerHasRecorder.Changed.Add(fun _ -> sendUpdate())
     TrackerModel.startingItemsAndExtras.PlayerHasAnyKey.Changed.Add(fun _ -> sendUpdate())
     TrackerModel.startingItemsAndExtras.PlayerHasBook.Changed.Add(fun _ -> sendUpdate())
+
+let sendBlockersUpdate (myConsoleId: string) =
+    async {
+        try
+            let payload =
+                Array.init 8 (fun i ->
+                    Array.init TrackerModel.DungeonBlockersContainer.MAX_BLOCKERS_PER_DUNGEON (fun j ->
+                        let jsonStr = TrackerModel.DungeonBlockersContainer.AsJsonString(i, j)
+                        JsonConvert.DeserializeObject<SaveAndLoad.Blocker>(jsonStr)
+                    )
+                )
+            let jsonPayload = JsonConvert.SerializeObject(payload)
+            if shouldSend "Blockers" jsonPayload then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending Blockers update: %s" jsonPayload)
+                if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
+                    do! SyncManager.Send("Blockers", jsonPayload, myConsoleId) |> Async.AwaitTask
+                else
+                    TrackerModelOptions.DebugConfig.Log("[Sync] Coop sync is disabled, not sending Blockers update")
+            else
+                TrackerModelOptions.DebugConfig.Log("[Sync] Skipped sending Blockers update — no change")
+        with ex ->
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send Blockers update: %s" ex.Message)
+    }
+
+let subscribeToBlockersChanges (myConsoleId: string) =
+    TrackerModel.DungeonBlockersContainer.AnyBlockerChanged.Add(fun _ ->
+        async {
+            do! sendBlockersUpdate myConsoleId
+        } |> Async.StartImmediate
+    )
 
 
 
@@ -384,7 +414,7 @@ let sendDungeonTriforceUpdate (myConsoleId: string) =
             else
                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped sending DungeonTriforce update — no change")
         with ex ->
-            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send DungeonTriforce update: %s" ex.Message)
+            printf "[Sync] Failed to send DungeonTriforce update: %s" ex.Message
     }
 
 let subscribeToDungeonTriforceChanges (myConsoleId: string) =

@@ -671,7 +671,10 @@ type DungeonTrackerInstanceKind =
     | DEFAULT
 
 type DungeonTrackerInstance(kind) =
-    static let mutable theInstance = None
+    //RPT adjusted this below
+    static let mutable theInstance = None : DungeonTrackerInstance option
+
+
     let finalBoxOf1Or4 = new Box(StairKind.Always, BoxOwner.Dungeon1or4)  // only relevant in DEFAULT
     let makeDungeons() = 
         match kind with
@@ -723,6 +726,11 @@ type DungeonTrackerInstance(kind) =
             member this.Value = pct
             member this.Changed = any().Changed
         }
+
+    
+    static member TheDungeonTrackerInstanceOption
+        with get() = theInstance
+
     member _this.Kind = kind
     member _this.Dungeons(i) = getDungeons().[i]
     member _this.FinalBoxOf1Or4 =
@@ -731,9 +739,14 @@ type DungeonTrackerInstance(kind) =
         | DungeonTrackerInstanceKind.DEFAULT -> finalBoxOf1Or4
     member _this.AllBoxes() = all()
     member this.AllBoxProgress = allBoxProgress
+    //RPT updating
     static member TheDungeonTrackerInstance 
         with get() = 
-            match theInstance with | Some i -> i | _ -> failwith "uninitialized TheDungeonTrackerInstance" 
+            match theInstance with 
+            | Some i -> i 
+            | None -> 
+                TrackerModelOptions.DebugConfig.Log("[ERROR] Accessed TheDungeonTrackerInstance before initialization")
+                failwith "uninitialized TheDungeonTrackerInstance" 
         and set(x:DungeonTrackerInstance) = theInstance <- Some(x)
 
 and Dungeon(id,numBoxes) =
