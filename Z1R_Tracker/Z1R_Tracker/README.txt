@@ -4,4 +4,4 @@ https://github.com/brianmcn/Zelda1RandoTools/blob/v1.3/doc/TOC.md
 
 See the documentation for the beta v2.0.2 of Z-Tracker online at
 
-https://github.com/neononane/Zelda1RandoTools/blob/v2.0.2/doc/TOC.md
+https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/doc/TOC.md
