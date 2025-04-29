@@ -384,7 +384,7 @@ type MyWindow() as this =
                 true
         
         let mutable lastDungeonMapsJson = ""
-        let dungeonMapsDebouncer = Debouncer.Debouncer(150)
+        let dungeonMapsDebouncer = Debouncer.Debouncer(1000)
 
         let handleRemoteTileChange (tileId: string, iconId: string, senderId: string) =
             let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
@@ -604,7 +604,7 @@ type MyWindow() as this =
                                         Application.Current.Dispatcher.Invoke(fun () ->
                                             for level = 0 to 8 do
                                                 let dm = dungeonModels.[level]
-                                                if not (System.Object.ReferenceEquals(dm, null)) then
+                                                if (not (System.Object.ReferenceEquals(dm, null))) && (not (System.Object.ReferenceEquals(dm.RoomIsCircled, null))) then
                                                     DungeonUI.importFunctions.[level](dm)
                                         )
                                     with ex ->

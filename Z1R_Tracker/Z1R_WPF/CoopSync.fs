@@ -463,7 +463,7 @@ let cloneAndFixDungeonModel (dm: DungeonSaveAndLoad.DungeonModel) : DungeonSaveA
 
 // Create a mutable to debounce updates
 let mutable lastDungeonMapsPayload = ""
-let dungeonMapsDebouncer = Debouncer.Debouncer(200)
+let dungeonMapsDebouncer = Debouncer.Debouncer(1000)
 
 let sendDungeonMapsUpdate (myConsoleId: string) =
     dungeonMapsDebouncer.Trigger(fun() ->
