@@ -597,8 +597,8 @@ type MyWindow() as this =
                                     Application.Current.Dispatcher.Invoke(fun () ->
                                         for level = 0 to 8 do
                                             let dm = dungeonModels.[level]
-                                            //if dm <> null then
-                                            DungeonUI.importFunctions.[level](dm)
+                                            if not (System.Object.ReferenceEquals(dm, null)) then
+                                                DungeonUI.importFunctions.[level](dm)
                                     )
                                 with ex ->
                                     printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message
