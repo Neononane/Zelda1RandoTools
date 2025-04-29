@@ -382,6 +382,9 @@ type MyWindow() as this =
                 lastOverworldSyncSource <- senderId
                 lastOverworldSyncTime <- now
                 true
+        
+        let mutable lastDungeonMapsJson = ""
+        let dungeonMapsDebouncer = Debouncer.Debouncer(150)
 
         let handleRemoteTileChange (tileId: string, iconId: string, senderId: string) =
             let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
@@ -591,17 +594,22 @@ type MyWindow() as this =
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update — no change")
                             elif TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update from %s — TrackerModel not initialized" senderId)
+                            elif payloadJson = lastDungeonMapsJson then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update from %s — duplicate payload" senderId)
                             else
-                                try
-                                    let dungeonModels = JsonConvert.DeserializeObject<DungeonSaveAndLoad.DungeonModel[]>(payloadJson)
-                                    Application.Current.Dispatcher.Invoke(fun () ->
-                                        for level = 0 to 8 do
-                                            let dm = dungeonModels.[level]
-                                            if not (System.Object.ReferenceEquals(dm, null)) then
-                                                DungeonUI.importFunctions.[level](dm)
-                                    )
-                                with ex ->
-                                    printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message
+                                lastDungeonMapsJson <- payloadJson
+                                dungeonMapsDebouncer.Trigger(fun () ->
+                                    try
+                                        let dungeonModels = JsonConvert.DeserializeObject<DungeonSaveAndLoad.DungeonModel[]>(payloadJson)
+                                        Application.Current.Dispatcher.Invoke(fun () ->
+                                            for level = 0 to 8 do
+                                                let dm = dungeonModels.[level]
+                                                if not (System.Object.ReferenceEquals(dm, null)) then
+                                                    DungeonUI.importFunctions.[level](dm)
+                                        )
+                                    with ex ->
+                                        printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message
+                                )
                         | _ ->
                             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Unknown messageType: %s" msgType)
                 else

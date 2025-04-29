@@ -323,22 +323,26 @@ let createSerializableOverworldModel () =
 //            printfn "[Sync] Failed to send Overworld update: %s" ex.Message
 //    }
 let mutable debounceOverworldSend: System.Threading.CancellationTokenSource option = None
+let overworldDebouncer = Debouncer.Debouncer(200)
 
 let sendOverworldUpdateDebounced (myConsoleId: string) =
-    async {
-        try
-            let model = createSerializableOverworldModel()
-            let jsonPayload = JsonConvert.SerializeObject(model)
-            if jsonPayload <> lastSentOverworldJson then
-                lastSentOverworldJson <- jsonPayload
-                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending Overworld update: %s" jsonPayload)
-                if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
-                    do! SyncManager.Send("Overworld", jsonPayload, myConsoleId) |> Async.AwaitTask
-                else
-                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Coop sync is disabled, not sending Overworld update")
-        with ex ->
-            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send Overworld update: %s" ex.Message)
-    }
+    overworldDebouncer.Trigger(fun() ->
+        async {
+            try
+                let model = createSerializableOverworldModel()
+                let jsonPayload = JsonConvert.SerializeObject(model)
+                if jsonPayload <> lastSentOverworldJson then
+                    lastSentOverworldJson <- jsonPayload
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending Overworld update: %s" jsonPayload)
+                    if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
+                        do! SyncManager.Send("Overworld", jsonPayload, myConsoleId) |> Async.AwaitTask
+                    else
+                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Coop sync is disabled, not sending Overworld update")
+            with ex ->
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send Overworld update: %s" ex.Message)
+        }
+        |> Async.Start
+    )
 
 
 
@@ -351,7 +355,7 @@ let subscribeToOverworldChanges (myConsoleId: string) =
             let currentTime = TrackerModel.mapLastChangedTime.Time
             if currentTime > lastSentTime then
                 lastSentTime <- currentTime
-                do! sendOverworldUpdateDebounced myConsoleId
+                sendOverworldUpdateDebounced myConsoleId
             return! loop ()
         }
     Async.StartImmediate(loop ())
