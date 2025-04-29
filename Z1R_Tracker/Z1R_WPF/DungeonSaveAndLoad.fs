@@ -44,6 +44,7 @@ type DungeonModel() =  // these are serialized in j,i order, to be more human-re
 let SaveDungeonModel(prefix, model:DungeonModel) =
     let lines = ResizeArray()
     lines.Add(""""HorizontalDoors": [""")
+    if isNull model.HorizontalDoors then failwith "HorizontalDoors is null"
     for j = 0 to 7 do
         let sb = new System.Text.StringBuilder("    [ ")
         for i = 0 to 6 do

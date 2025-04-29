@@ -430,3 +430,65 @@ let subscribeToDungeonTriforceChanges (myConsoleId: string) =
         }
     Async.StartImmediate(loop())
 
+let transposeHorizontalDoors (input: int[][]) : int[][] =
+    if isNull input then
+        [||]
+    else
+        [| for i in 0 .. 7 -> [| for j in 0 .. 6 -> input.[j].[i] |] |]
+
+let transposeVerticalDoors (input: int[][]) : int[][] =
+    if isNull input then
+        [||]
+    else
+        [| for i in 0 .. 6 -> [| for j in 0 .. 7 -> input.[j].[i] |] |]
+
+
+
+let cloneAndFixDungeonModel (dm: DungeonSaveAndLoad.DungeonModel) : DungeonSaveAndLoad.DungeonModel =
+    let newDM = new DungeonSaveAndLoad.DungeonModel()
+    newDM.HorizontalDoors <- transposeHorizontalDoors dm.HorizontalDoors
+    newDM.VerticalDoors <- transposeVerticalDoors dm.VerticalDoors
+    newDM.RoomIsCircled <- dm.RoomIsCircled
+    newDM.RoomStates <- dm.RoomStates
+    newDM.VanillaMapOverlay <- dm.VanillaMapOverlay
+    newDM
+
+let sendDungeonMapsUpdate (myConsoleId: string) =
+    async {
+        if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
+            TrackerModelOptions.DebugConfig.Log("[Sync] Skipping DungeonMaps update: TrackerModel not yet initialized.")
+            return ()
+        try
+            let dungeonModels = 
+                [|
+                    for i = 0 to 8 do
+                        let exportFunction = DungeonUI.exportFunctionsLarge.[i]
+                        let dm = exportFunction()
+                        yield cloneAndFixDungeonModel dm
+                |]
+            
+            let jsonPayload = JsonConvert.SerializeObject(dungeonModels, Formatting.None)
+
+            if shouldSend "DungeonMaps" jsonPayload then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] DungeonMaps update: %s" jsonPayload)
+                if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
+                    do! SyncManager.Send("DungeonMaps", jsonPayload, myConsoleId) |> Async.AwaitTask
+                else
+                    TrackerModelOptions.DebugConfig.Log("[Sync] Coop sync is disabled, not sending DungeonMaps update")
+            else
+                TrackerModelOptions.DebugConfig.Log("[Sync] Skipped sending DungeonMaps update — no change")
+        with ex ->
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send DungeonMaps update: %s" ex.Message)
+    }
+
+let subscribeToDungeonMapsChanges (myConsoleId: string) =
+    let mutable lastSent = System.DateTime.MinValue
+    let rec loop () =
+        async {
+            do! Async.Sleep(500)
+            if TrackerModel.dungeonRoomModelChanged.Time > lastSent then
+                lastSent <- System.DateTime.Now
+                do! sendDungeonMapsUpdate myConsoleId
+            return! loop ()
+        }
+    Async.StartImmediate(loop())

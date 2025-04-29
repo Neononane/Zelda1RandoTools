@@ -586,6 +586,22 @@ type MyWindow() as this =
                                     )
                                 with ex ->
                                     printfn "[Sync] Failed to apply DungeonTriforce update: %s" ex.Message
+                        | "DungeonMaps" ->
+                            if not (CoopSync.shouldApplyUpdate "DungeonMaps" payloadJson) then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update — no change")
+                            elif TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update from %s — TrackerModel not initialized" senderId)
+                            else
+                                try
+                                    let dungeonModels = JsonConvert.DeserializeObject<DungeonSaveAndLoad.DungeonModel[]>(payloadJson)
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        for level = 0 to 8 do
+                                            let dm = dungeonModels.[level]
+                                            //if dm <> null then
+                                            DungeonUI.importFunctions.[level](dm)
+                                    )
+                                with ex ->
+                                    printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message
                         | _ ->
                             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Unknown messageType: %s" msgType)
                 else

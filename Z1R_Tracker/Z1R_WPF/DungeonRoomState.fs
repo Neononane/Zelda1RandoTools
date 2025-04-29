@@ -466,13 +466,18 @@ let scale(bmp, scale) =
 let mutable isDoingDragPaintOffTheMap = false
 let veryDark = Graphics.freeze(new SolidColorBrush(Color.FromArgb(255uy, 60uy, 10uy, 20uy)))
 let fakeUsedTransports = Array.init 9 (fun _ -> 2)
-type DungeonRoomState private(isCompleted, roomType, monsterDetail, floorDropDetail, floorDropShouldAppearBright) =
+type DungeonRoomState private(isCompleted, roomType, monsterDetail, floorDropDetail, floorDropShouldAppearBright) as this =
     let mutable isCompleted = isCompleted
     let mutable roomType = roomType
     let mutable monsterDetail = monsterDetail
     let mutable floorDropDetail = floorDropDetail
     let mutable floorDropShouldAppearBright = floorDropShouldAppearBright
+    
     let DARKEN = 0.5
+
+    let changedEvent = new Event<DungeonRoomState>()
+    let raiseChanged() = changedEvent.Trigger(this)
+
     new() = DungeonRoomState(false, RoomType.Unmarked, MonsterDetail.Unmarked, FloorDropDetail.Unmarked, true)
     override this.Equals(other) =
         match other with
@@ -480,13 +485,38 @@ type DungeonRoomState private(isCompleted, roomType, monsterDetail, floorDropDet
                                             drs.FloorDropDetail = this.FloorDropDetail && drs.FloorDropAppearsBright = this.FloorDropAppearsBright
         | _ -> false
     override this.GetHashCode() = roomType.GetHashCode()
+    member this.Changed = changedEvent.Publish
     member this.Clone() = new DungeonRoomState(isCompleted, roomType, monsterDetail, floorDropDetail, floorDropShouldAppearBright)
-    member this.IsComplete with get() = isCompleted and set(x) = isCompleted <- x
-    member this.RoomType with get() = roomType and set(x) = roomType <- x
+    member this.IsComplete
+        with get() = isCompleted
+        and set(x) = 
+         if isCompleted <> x then
+            isCompleted <- x
+            changedEvent.Trigger(this)
+            TrackerModel.dungeonRoomModelChanged.SetNow()
+    member this.RoomType
+        with get() = roomType
+        and set(x) = 
+            if roomType <> x then
+                roomType <- x
+                changedEvent.Trigger(this)
+                TrackerModel.dungeonRoomModelChanged.SetNow()
     member this.IsEmpty = roomType.IsNotMarked || (roomType = RoomType.OffTheMap)
     member this.IsGannonOrZelda = (roomType = RoomType.Gannon) || (roomType = RoomType.Zelda)
-    member this.MonsterDetail with get() = monsterDetail and set(x) = monsterDetail <- x
-    member this.FloorDropDetail with get() = floorDropDetail and set(x) = floorDropDetail <- x
+    member this.MonsterDetail
+        with get() = monsterDetail
+        and set(x) =
+            if monsterDetail <> x then
+                monsterDetail <- x
+                changedEvent.Trigger(this)
+                TrackerModel.dungeonRoomModelChanged.SetNow()
+    member this.FloorDropDetail
+        with get() = floorDropDetail
+            and set(x) =
+                if floorDropDetail <> x then
+                    floorDropDetail <- x
+                    changedEvent.Trigger(this)
+                    TrackerModel.dungeonRoomModelChanged.SetNow()
     member this.FloorDropAppearsBright with get() = floorDropShouldAppearBright
     member this.ToggleFloorDropBrightness() = floorDropShouldAppearBright <- not floorDropShouldAppearBright
     member this.CurrentDisplay() = this.CurrentDisplayEx(fakeUsedTransports)

@@ -288,6 +288,10 @@ let makeOutlineShapesImpl(quest:string[]) =
 let makeFirstQuestOutlineShapes(dungeonNumber) = makeOutlineShapesImpl(DungeonData.firstQuest.[dungeonNumber])
 let makeSecondQuestOutlineShapes(dungeonNumber) = makeOutlineShapesImpl(DungeonData.secondQuest.[dungeonNumber])
 
+let exportFunctionsLarge = Array.create 9 (fun () -> new DungeonSaveAndLoad.DungeonModel())
+let importFunctions = Array.create 9 (fun _ -> ())
+let exportDungeonModelsJsonLines() = DungeonSaveAndLoad.SaveAllDungeons [| for f in exportFunctionsLarge do yield f() |]
+
 ////////////////////////
 
 let defaultRoom() = if TrackerModelOptions.DefaultRoomPreferNonDescriptToMaybePushBlock.Value then RoomType.NonDescript else RoomType.MaybePushBlock
@@ -496,8 +500,8 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
     let contentCanvases = Array.zeroCreate 9
     let dummyCanvas = new Canvas(Opacity=0.0001, IsHitTestVisible=false)  // a kludge to help work around TabControl unloading tabs when not selected
     let localDungeonTrackerPanelWidth = 42.
-    let exportFunctions = Array.create 9 (fun () -> new DungeonSaveAndLoad.DungeonModel())
-    let importFunctions = Array.create 9 (fun _ -> ())
+    //let exportFunctions = Array.create 9 (fun () -> new DungeonSaveAndLoad.DungeonModel())
+    //let importFunctions = Array.create 9 (fun _ -> ())
     let isFirstTimeClickingAnyRoom = Array.init 9 (fun _ -> new TrackerModel.EventingBool(true))
     let makeNumeral(labelChar) =
         new TextBox(Foreground=Brushes.Magenta, Background=Brushes.Transparent, Text=sprintf "%c" labelChar, IsReadOnly=true, IsHitTestVisible=false, FontSize=200., Opacity=0.25,
@@ -1510,7 +1514,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         DungeonHighlightsUI.makeHighlights(level, dungeonTabs, dungeonBodyHighlightCanvas, rightwardCanvas, roomStates, usedTransports, 
                                             currentOutlineDisplayState, horizontalDoors, verticalDoors, blockersHoverEvent)
         // save and load
-        exportFunctions.[level-1] <- (fun () ->
+        exportFunctionsLarge.[level-1] <- (fun () ->
             let r = new DungeonSaveAndLoad.DungeonModel()
             r.HorizontalDoors <- Array.init 7 (fun i -> Array.init 8 (fun j -> horizontalDoors.[i,j].State.AsInt()))
             r.VerticalDoors <-   Array.init 8 (fun i -> Array.init 7 (fun j -> verticalDoors.[i,j].State.AsInt()))
@@ -1831,7 +1835,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
     dungeonTabs.SelectedIndex <- 9
     selectDungeonTabEvent.Publish.Add(fun i -> dungeonTabs.SelectedIndex <- i)
 
-    let exportDungeonModelsJsonLines() = DungeonSaveAndLoad.SaveAllDungeons [| for f in exportFunctions do yield f() |]
+    let exportDungeonModelsJsonLines() = DungeonSaveAndLoad.SaveAllDungeons [| for f in exportFunctionsLarge do yield f() |]
     let importDungeonModels(showProgress, dma : DungeonSaveAndLoad.DungeonModel[]) = async {
         do! showProgress("starting dungeon load")
         for i = 0 to 8 do

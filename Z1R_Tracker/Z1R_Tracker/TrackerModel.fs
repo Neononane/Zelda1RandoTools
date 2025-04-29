@@ -452,6 +452,7 @@ type LastChangedTime(intervalHowFarInThePast) as this =
             | None -> stamp + (System.DateTime.Now - whenPaused)
 
 let theStartTime = new LastChangedTime()
+let dungeonRoomModelChanged = new LastChangedTime()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
