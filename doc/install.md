@@ -13,7 +13,7 @@ or from the z1r discord server, in the 'Randomizer Tracker' section, as a pinned
 Here's an invite link to the z1r discord: https://www.discord.me/z1randomizer
 and here is a direct link to the message in the z1r discord with the Z-Tracker download: https://discord.com/channels/368763663986982912/920498784142774332/1141698547960528958
 
-The current beta release for Windows is version 2.0.0, and currently can be downloaded here: https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/UserCustomAssets/ZTracker_v2.0.0Beta.zip
+The current beta release for Windows is version 2.0.3, and currently can be downloaded here: https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/UserCustomAssets/ZTracker_v2.0.3Beta.zip
 
 ### <a id="defender"></a> Windows Defender
 
