@@ -2,7 +2,7 @@
 
 ### A tracker for Zelda 1 Randomizer
 
-The most recent release is v2.0.1 as a beta, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/v1.3/doc/TOC.md), which includes links for 
+The most recent production release is v1.3.1, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/master/doc/TOC.md), which includes links for 
 downloading and installing Z-Tracker.
 
 Sample screenshots:
@@ -12,9 +12,12 @@ Sample screenshots:
 
 ![sample tracker screenshot](doc/screenshots/full-tracker-example1.png)
 
+The most recent beta release is v2.0.3, and you can find the [documentation here](https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/doc/TOC.md), which includes links for
+downloading and installing Z-Tracker.
+
 ## Motivation
 
-This is a tracking tool for those play seeds of fcouglin's Zelda 1 Randomizer ([z1r discord](https://discord.gg/BEwVJUxxrW), [z1r wiki](https://z1r.wiki), [old z1r site](https://sites.google.com/site/zeldarandomizer/)).
+This is a tracking tool for those play seeds of fcouglin's Zelda 1 Randomizer ([z1r discord](https://discord.gg/BEwVJUxxrW), [z1r wiki](https://z1r.fandom.com/wiki/Zelda_1_Randomizer_Wiki), [old z1r site](https://sites.google.com/site/zeldarandomizer/)).
 
 This tool is inspired by [ZHelper](http://questwizard.net/zhelper/), a tool commonly used by z1r racers.  (Other alternatives for tracking z1r include using an EmoTracker pack,
 using pen & paper, or using electronic notetaking in spreadsheets/Notepad.)
