@@ -384,7 +384,7 @@ type MyWindow() as this =
                 true
         
         let mutable lastDungeonMapsJson = ""
-        let dungeonMapsDebouncer = Debouncer.Debouncer(1000)
+        let dungeonMapsDebouncer = Debouncer.Debouncer(500)
 
         let handleRemoteTileChange (tileId: string, iconId: string, senderId: string) =
             let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
@@ -598,14 +598,23 @@ type MyWindow() as this =
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update from %s — duplicate payload" senderId)
                             else
                                 lastDungeonMapsJson <- payloadJson
+                                CoopSync.dungeonMapsSyncOrigin.MarkSyncedNow()
                                 dungeonMapsDebouncer.Trigger(fun () ->
                                     try
                                         let dungeonModels = JsonConvert.DeserializeObject<DungeonSaveAndLoad.DungeonModel[]>(payloadJson)
+                                        CoopSync.dungeonMapsSyncOrigin.MarkSyncStart()
                                         Application.Current.Dispatcher.Invoke(fun () ->
                                             for level = 0 to 8 do
                                                 let dm = dungeonModels.[level]
                                                 if (not (System.Object.ReferenceEquals(dm, null))) && (not (System.Object.ReferenceEquals(dm.RoomIsCircled, null))) then
-                                                    DungeonUI.importFunctions.[level](dm)
+                                                    try
+                                                        DungeonUI.importFunctions.[level](dm)
+                                                        CoopSync.dungeonMapsSyncOrigin.MarkSyncedNow()
+                                                        let hash = CoopSync.computeHash payloadJson
+                                                        CoopSync.lastAppliedHashes.["DungeonMaps"] <- hash
+                                                        CoopSync.lastSentHashes.["DungeonMaps"] <- hash
+                                                    finally
+                                                        CoopSync.dungeonMapsSyncOrigin.MarkSyncEnd()
                                         )
                                     with ex ->
                                         printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message

@@ -150,7 +150,8 @@
     <Compile Include="Reminders.fs" />
     <Compile Include="MainTrackerTriforcesAndItems.fs" />
     <Compile Include="Debouncer.fs" />
-	<Compile Include="DungeonModelSync.fs" />
+	<Compile Include="SyncOriginTracker.fs" />
+    <Compile Include="DungeonModelSync.fs" />
     <Compile Include="CoopSync.fs" />
     <Compile Include="WPFUI.fs" />
     <Compile Include="Program.fs" />
@@ -168,6 +169,7 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="packages.config" />
+    
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.AspNetCore.Connections.Abstractions">

@@ -7,6 +7,7 @@ open System.Security.Cryptography
 open System.Text
 open System
 open System.Collections.Concurrent
+open SyncOriginTracker
 
 let mutable lastSentPlayerProgressJson = ""
 let mutable lastSentStartingItemsJson = ""
@@ -20,6 +21,8 @@ let mutable lastReceivedHashes = System.Collections.Concurrent.ConcurrentDiction
 let mutable lastAppliedHashes = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
 let mutable lastSentHashes = ConcurrentDictionary<string, string>()
 let mutable lastSentBlockersJson = ""
+let dungeonMapsSyncOrigin = SyncOriginTracker.SyncOriginTracker()
+
 
 
 let computeHash (s: string) =
@@ -463,7 +466,7 @@ let cloneAndFixDungeonModel (dm: DungeonSaveAndLoad.DungeonModel) : DungeonSaveA
 
 // Create a mutable to debounce updates
 let mutable lastDungeonMapsPayload = ""
-let dungeonMapsDebouncer = Debouncer.Debouncer(1000)
+let dungeonMapsDebouncer = Debouncer.Debouncer(500)
 
 let sendDungeonMapsUpdate (myConsoleId: string) =
     dungeonMapsDebouncer.Trigger(fun() ->
@@ -501,12 +504,18 @@ let sendDungeonMapsUpdate (myConsoleId: string) =
 
 let subscribeToDungeonMapsChanges (myConsoleId: string) =
     let mutable lastSent = System.DateTime.MinValue
+
+    // This function is invoked in a loop
     let rec loop () =
         async {
-            do! Async.Sleep(500)
-            if TrackerModel.dungeonRoomModelChanged.Time > lastSent then
+            do! Async.Sleep(150)
+            let currentChangeTime = TrackerModel.dungeonRoomModelChanged.Time
+
+            // Only proceed if model changed and the change did NOT come from a sync update
+            if currentChangeTime > lastSent && not dungeonMapsSyncOrigin.IsApplyingSync then
                 lastSent <- System.DateTime.Now
                 sendDungeonMapsUpdate myConsoleId
             return! loop ()
         }
-    Async.StartImmediate(loop())
+
+    Async.StartImmediate(loop ())
