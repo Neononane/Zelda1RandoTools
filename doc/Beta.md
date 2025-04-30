@@ -48,7 +48,8 @@ Of note: all Co-op Settings will be saved to the settings file except Debug Logg
 
 # **Known Issues/Limitations**
 
-* The timeline tracker at the bottom show incorrect timings for some item acquisitions
+* The timeline tracker at the bottom shows incorrect timings for some item acquisitions
+* When marking two item shops the second item is only synchronized if the first item is the Wood Arrow
 * The middle-click option on a Dungeon Map room will synchronize to the wrong place on the connected tracker
 
 ### Should issues be identified please file an Issue in Github, post in the ZTracker channel in Discord, or contact Neononane directly. 
