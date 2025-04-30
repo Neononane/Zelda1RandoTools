@@ -2,7 +2,7 @@
 
 ### A tracker for Zelda 1 Randomizer
 
-The most recent release is v1.3.1, and you can find the [documentation here](https://github.com/brianmcn/Zelda1RandoTools/blob/v1.3/doc/TOC.md), which includes links for 
+The most recent production release is v1.3.1, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/master/doc/TOC.md), which includes links for 
 downloading and installing Z-Tracker.
 
 Sample screenshots:
@@ -11,6 +11,9 @@ Sample screenshots:
 
 
 ![sample tracker screenshot](doc/screenshots/full-tracker-example1.png)
+
+The most recent beta release is v2.0.3, and you can find the [documentation here](https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/doc/TOC.md), which includes links for
+downloading and installing Z-Tracker.
 
 ## Motivation
 
@@ -34,3 +37,9 @@ I wanted to create my own tool that I thought was better suited to certain audie
 Z-Tracker is still in active development as I write this (August 2023).  The current release is suitable both for casual seed runners as well as z1r racers.
 
 Enjoy! - _Dr. Brian Lorgon111_
+
+## Z-Tracker Future
+
+Dr. Brian Lorgon111 has passed the torch on this project to others who are willing to contribute to the structure, goals, and outcomes. Currently the process is slow, but new features and functionality are being added with version 2.0.0 adding the long desired co-op options. Please add any additional requests into the Issues list for future review and prioritization.
+
+Regards - _Neononane_
