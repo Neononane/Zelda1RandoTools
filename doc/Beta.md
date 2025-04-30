@@ -2,6 +2,8 @@
 
 The main feature of the Version 2.0.3 Beta release of ZTracker is the introduction of co-op synchronization between consoles. The intent is for one user to update data within their ZTracker console and see that same update propogate to another player's console. 
 
+You can find the latest copy of the Beta release [here](https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/UserCustomAssets/ZTracker_v2.0.3Beta.zip)
+
 Co-op synchronization in this version occurs via Azure SignalR for queueing and distribution of messages as well as an Azure Function in the front end to provide synchronization front-end validation and management as well as a negotiation function that will allow flexibility in determining the Signal R source. 
 
 # **What Is Synchronized**
