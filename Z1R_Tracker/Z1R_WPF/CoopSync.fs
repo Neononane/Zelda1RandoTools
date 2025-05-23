@@ -22,6 +22,14 @@ let mutable lastAppliedHashes = System.Collections.Concurrent.ConcurrentDictiona
 let mutable lastSentHashes = ConcurrentDictionary<string, string>()
 let mutable lastSentBlockersJson = ""
 let dungeonMapsSyncOrigin = SyncOriginTracker.SyncOriginTracker()
+let private hashRetentionLimit = 20
+let private recentReceivedHashes = ConcurrentDictionary<string, ResizeArray<string>>()
+
+let syncBurstTimestamps = ConcurrentQueue<DateTime>()
+let syncBurstWindowMs = 2000
+let syncBurstLimit = 5
+let syncPauseDurationMs = 5000
+let mutable autoMutedUntil = DateTime.MinValue
 
 
 
@@ -33,12 +41,21 @@ let computeHash (s: string) =
     )
 
 let alreadyReceived (messageType: string) (payloadJson: string) =
-    let newHash = computeHash payloadJson
-    match lastReceivedHashes.TryGetValue(messageType) with
-    | true, oldHash when oldHash = newHash -> true
-    | _ ->
-        lastReceivedHashes.[messageType] <- newHash
-        false
+    let hash = computeHash payloadJson
+
+    let queue =
+        recentReceivedHashes.GetOrAdd(messageType, fun _ -> ResizeArray<string>())
+
+    lock queue (fun () ->
+        if queue.Contains(hash) then
+            true
+        else
+            queue.Add(hash)
+            // Trim oldest if over limit
+            if queue.Count > hashRetentionLimit then
+                queue.RemoveAt(0)
+            false
+    )
 
 let shouldSend (messageType: string) (payloadJson: string) =
     let newHash = computeHash payloadJson
@@ -56,6 +73,28 @@ let shouldApplyUpdate (messageType: string) (payloadJson: string) =
         lastAppliedHashes.[messageType] <- newHash
         true
 
+let shouldSendUpdate (messageType: string) (payloadJson: string) =
+    let now = DateTime.UtcNow
+
+    if now < autoMutedUntil then
+        TrackerModelOptions.DebugConfig.Log("[Sync] Auto-muted — update skipped")
+        false
+    else
+        syncBurstTimestamps.Enqueue(now)
+
+        let mutable peekValue = DateTime.MinValue
+        while syncBurstTimestamps.TryPeek(&peekValue) && (now - peekValue).TotalMilliseconds > float syncBurstWindowMs do
+            let mutable _ = Unchecked.defaultof<DateTime>
+            let mutable dummy = Unchecked.defaultof<DateTime>
+            syncBurstTimestamps.TryDequeue(&dummy) |> ignore
+            ()
+
+        if syncBurstTimestamps.Count >= syncBurstLimit then
+            autoMutedUntil <- now.AddMilliseconds(float syncPauseDurationMs)
+            TrackerModelOptions.DebugConfig.Log("[Sync] Auto-muted due to excessive chatter")
+            false
+        else
+            shouldSend messageType payloadJson
 
 [<AllowNullLiteral>]
 type DungeonsTriforceState() =
@@ -466,56 +505,89 @@ let cloneAndFixDungeonModel (dm: DungeonSaveAndLoad.DungeonModel) : DungeonSaveA
 
 // Create a mutable to debounce updates
 let mutable lastDungeonMapsPayload = ""
-let dungeonMapsDebouncer = Debouncer.Debouncer(500)
+let dungeonMapsDebouncer = Debouncer.Debouncer(1000)
+let mutable lastSentDungeonMapsPayload = ""
 
 let sendDungeonMapsUpdate (myConsoleId: string) =
-    dungeonMapsDebouncer.Trigger(fun() ->
+    dungeonMapsDebouncer.Trigger(fun () ->
         async {
             if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
                 TrackerModelOptions.DebugConfig.Log("[Sync] Skipping DungeonMaps update: TrackerModel not yet initialized.")
                 return ()
+
             try
-                let dungeonModels = 
+                let dungeonModels =
                     [|
                         for i = 0 to 8 do
                             let exportFunction = DungeonUI.exportFunctionsLarge.[i]
                             let dm = exportFunction()
                             yield cloneAndFixDungeonModel dm
                     |]
-            
+
                 let jsonPayload = JsonConvert.SerializeObject(dungeonModels, Formatting.None)
-                if jsonPayload <> lastDungeonMapsPayload then
-                    lastDungeonMapsPayload <- jsonPayload
-                    if shouldSend "DungeonMaps" jsonPayload then
-                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] DungeonMaps update: %s" jsonPayload)
-                        if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
-                            do! SyncManager.Send("DungeonMaps", jsonPayload, myConsoleId) |> Async.AwaitTask
-                        else
-                            TrackerModelOptions.DebugConfig.Log("[Sync] Coop sync is disabled, not sending DungeonMaps update")
+
+                if jsonPayload <> lastSentDungeonMapsPayload && shouldSendUpdate "DungeonMaps" jsonPayload then
+                    lastSentDungeonMapsPayload <- jsonPayload
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] DungeonMaps update: %s" jsonPayload)
+
+                    if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
+                        do! SyncManager.Send("DungeonMaps", jsonPayload, myConsoleId) |> Async.AwaitTask
                     else
-                        TrackerModelOptions.DebugConfig.Log("[Sync] Skipped sending DungeonMaps update — no change")
+                        TrackerModelOptions.DebugConfig.Log("[Sync] Coop sync is disabled, not sending DungeonMaps update")
                 else
-                    TrackerModelOptions.DebugConfig.Log("[Sync] Skipped sending DungeonMaps update — no change")
+                    TrackerModelOptions.DebugConfig.Log("[Sync] Skipped DungeonMaps update — no change")
             with ex ->
                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send DungeonMaps update: %s" ex.Message)
-        }
-        |> Async.Start
+        } |> Async.Start
     )
 
-let subscribeToDungeonMapsChanges (myConsoleId: string) =
-    let mutable lastSent = System.DateTime.MinValue
+let mutable lastSentTime = System.DateTime.MinValue
 
-    // This function is invoked in a loop
+let subscribeToDungeonMapsChanges (myConsoleId: string) =
     let rec loop () =
         async {
             do! Async.Sleep(150)
             let currentChangeTime = TrackerModel.dungeonRoomModelChanged.Time
-
-            // Only proceed if model changed and the change did NOT come from a sync update
-            if currentChangeTime > lastSent && not dungeonMapsSyncOrigin.IsApplyingSync then
-                lastSent <- System.DateTime.Now
+            if currentChangeTime > lastSentTime && not dungeonMapsSyncOrigin.IsApplyingSync then
+                lastSentTime <- DateTime.Now
                 sendDungeonMapsUpdate myConsoleId
             return! loop ()
         }
+    Async.StartImmediate(loop())
 
-    Async.StartImmediate(loop ())
+// Create a mutable to debounce updates
+let mutable lastHiddenDungeonColorLabelPayload = ""
+let hiddenDungeonColorLabelDebouncer = Debouncer.Debouncer(200)
+
+let subscribeToHiddenDungeonColorLabelChanges (myConsoleId: string) =
+    if TrackerModel.IsHiddenDungeonNumbers()
+    && TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
+        for i = 0 to 8 do
+            let dungeon = TrackerModel.GetDungeon(i)
+            dungeon.HiddenDungeonColorOrLabelChanged.Add(fun (color, labelChar) ->
+                async {
+                    try
+                        let payload =
+                            dict [
+                                "Model", box "HiddenDungeonColorLabel"
+                                "Index", box i
+                                "Color", box color
+                                "LabelChar", box labelChar
+                                "Source", box TrackerModelOptions.CoopSyncOptions.MyConsoleId
+                            ]
+
+                        let jsonPayload = JsonConvert.SerializeObject(payload)
+
+                        if shouldSend "HiddenDungeonColorLabel" jsonPayload then
+                            hiddenDungeonColorLabelDebouncer.Trigger(fun () ->
+                                async {
+                                    if jsonPayload <> lastHiddenDungeonColorLabelPayload then
+                                        lastHiddenDungeonColorLabelPayload <- jsonPayload
+                                        do! SyncManager.Send("HiddenDungeonColorLabel", jsonPayload, myConsoleId) |> Async.AwaitTask
+                                } |> Async.Start
+                            )
+                    with ex ->
+                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send HiddenDungeonColorLabel update: %s" ex.Message)
+                } |> Async.StartImmediate
+            )
+

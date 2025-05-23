@@ -596,6 +596,8 @@ type MyWindow() as this =
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update from %s — TrackerModel not initialized" senderId)
                             elif payloadJson = lastDungeonMapsJson then
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update from %s — duplicate payload" senderId)
+                            elif senderId = TrackerModelOptions.CoopSyncOptions.MyConsoleId then
+                                TrackerModelOptions.DebugConfig.Log("[Sync] Skipped DungeonMaps update — echo from self")
                             else
                                 lastDungeonMapsJson <- payloadJson
                                 CoopSync.dungeonMapsSyncOrigin.MarkSyncedNow()
@@ -619,6 +621,23 @@ type MyWindow() as this =
                                     with ex ->
                                         printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message
                                 )
+                        | "HiddenDungeonColorLabel" ->
+                           try
+                               if TrackerModel.IsHiddenDungeonNumbers()
+                               && TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome then
+                                   let data = JsonConvert.DeserializeObject<Newtonsoft.Json.Linq.JObject>(payloadJson)
+                                   let i = data.["Index"].ToObject<int>()
+                                   let color = data.["Color"].ToObject<int>()
+                                   let labelChar = data.["LabelChar"].ToObject<string>()
+                                   Application.Current.Dispatcher.Invoke(fun () ->
+                                       let dungeon = TrackerModel.GetDungeon(i)
+                                       dungeon.Color <- color
+                                       dungeon.LabelChar <- if not (String.IsNullOrEmpty(labelChar)) then labelChar.[0] else '?'
+                                       TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied HiddenDungeonColorLabel update to dungeon %d from %s" i senderId)
+                                   )
+                           with ex ->
+                               TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply HiddenDungeonColorLabel update: %s" ex.Message)
+
                         | _ ->
                             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Unknown messageType: %s" msgType)
                 else

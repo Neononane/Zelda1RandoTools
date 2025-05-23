@@ -120,6 +120,7 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
     CoopSync.subscribeToDungeonTriforceChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
     CoopSync.subscribeToBlockersChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
     CoopSync.subscribeToDungeonMapsChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+    CoopSync.subscribeToHiddenDungeonColorLabelChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
 
     if not heartShuffle then
         for i = 0 to 7 do
