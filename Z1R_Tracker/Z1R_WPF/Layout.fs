@@ -311,7 +311,7 @@ type ShorterApplicationLayout(cm:CustomComboBoxes.CanvasManager) =
             canvasAdd(upper, logoBorder, 16.*OMTW - ztlogo.Width - 2., THRU_MAIN_MAP_H + kitty.Height - ztlogo.Height - 6.)
             // WANT!
             let kitty = new Image()
-            let imageStream = Graphics.GetResourceStream("CroppedBrianKitty.png")
+            let imageStream = Graphics.GetResourceStream("CatBird.png")
             kitty.Source <- System.Windows.Media.Imaging.BitmapFrame.Create(imageStream)
             kitty.Width <- 45.
             kitty.Height <- 45.
