@@ -21,6 +21,10 @@ let mutable lastReceivedHashes = System.Collections.Concurrent.ConcurrentDiction
 let mutable lastAppliedHashes = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
 let mutable lastSentHashes = ConcurrentDictionary<string, string>()
 let mutable lastSentBlockersJson = ""
+let isDoorSyncReady () =
+    TrackerModelOptions.CoopSyncOptions.GetEnableCoop() &&
+    TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome
+
 let dungeonMapsSyncOrigin = SyncOriginTracker.SyncOriginTracker()
 let private hashRetentionLimit = 20
 let private recentReceivedHashes = ConcurrentDictionary<string, ResizeArray<string>>()
@@ -30,6 +34,40 @@ let syncBurstWindowMs = 2000
 let syncBurstLimit = 5
 let syncPauseDurationMs = 5000
 let mutable autoMutedUntil = DateTime.MinValue
+
+type RoomChangePayload = {
+    Level: int
+    X: int
+    Y: int
+    IsComplete: bool
+    RoomType: string
+    MonsterDetail: string
+    FloorDropDetail: string
+    FloorDropAppearsBright: bool
+}
+
+let serializeRoomChange (level: int) (x: int) (y: int) (room: Z1R_Tracker.Models.CDungeonRoomState) : string =
+    let payload = {
+        Level = level
+        X = x
+        Y = y
+        IsComplete = room.IsComplete
+        RoomType = room.RoomType.ToString()
+        MonsterDetail = room.MonsterDetail.ToString()
+        FloorDropDetail = room.FloorDropDetail.ToString()
+        FloorDropAppearsBright = room.FloorDropAppearsBright
+    }
+    JsonConvert.SerializeObject(payload)
+
+
+
+type DoorChangePayload = {
+    Level: int
+    X: int
+    Y: int
+    IsHorizontal: bool
+    NewState: {| Case: string |} // will contain "UNKNOWN", "NO", "YES", etc.
+}
 
 
 
@@ -590,4 +628,86 @@ let subscribeToHiddenDungeonColorLabelChanges (myConsoleId: string) =
                         TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send HiddenDungeonColorLabel update: %s" ex.Message)
                 } |> Async.StartImmediate
             )
+
+let sendDoorChangeUpdate (info: DungeonUI.DoorChangeInfo) (myConsoleId: string) =
+    async {
+        try
+            let jsonPayload = JsonConvert.SerializeObject(info)
+            if shouldSend "DoorChange" jsonPayload then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending DoorChange update: %s" jsonPayload)
+
+                // Echo suppression marker
+                SyncManager.MarkLastSentDoorChange(jsonPayload)
+
+                if isDoorSyncReady() then
+                    if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
+                        do! SyncManager.Send("DoorChange", jsonPayload, myConsoleId) |> Async.AwaitTask
+                    else
+                        TrackerModelOptions.DebugConfig.Log("[Sync] Coop sync is disabled, not sending DoorChange update")
+                else
+                    TrackerModelOptions.DebugConfig.Log("[Sync] Door sync not ready, skipping DoorChange update")              
+            else
+                TrackerModelOptions.DebugConfig.Log("[Sync] Skipped sending DoorChange update — no change")
+        with ex ->
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send DoorChange update: %s" ex.Message)
+    }
+
+
+let subscribeToDoorChanges (myConsoleId: string) =
+    System.Diagnostics.Debug.WriteLine("[Sync] Subscribing to door changes...")
+    DungeonUI.doorChangedEvent.Publish.Add(fun info ->
+        async {
+            do! sendDoorChangeUpdate info myConsoleId
+        } |> Async.StartImmediate
+    )
+
+let sendRoomChangeUpdate (level: int) (x: int) (y: int) (room: Z1R_Tracker.Models.CDungeonRoomState) (myConsoleId: string)=
+    async {
+        // Convert room to serializable JSON format
+        if (level <> 0) then
+            let json = serializeRoomChange level x y room
+            if shouldSend "RoomChange" json then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending RoomChange: %s" json)
+                do! SyncManager.Send("RoomChange", json, myConsoleId) |> Async.AwaitTask
+            }
+
+let subscribeToRoomChanges (myConsoleId: string) =
+    printfn "[RoomSync] Starting to subscribe to room changes"
+    let mutable isInternalUpdate = false
+
+    Z1R_Tracker.Models.RoomSyncBridge.OnRoomChanged <-
+        Action<int, int, int, Z1R_Tracker.Models.CDungeonRoomState>(fun level x y room ->
+            if not isInternalUpdate then
+                Async.StartImmediate(
+                    async {
+                        isInternalUpdate <- true
+                        try
+                            TrackerModelOptions.DebugConfig.Log(sprintf "[RoomSync] OnRoomChanged triggered for L%d (%d,%d) - ID %O" level x y (room.DebugId.ToString()))
+                            do! sendRoomChangeUpdate level x y room myConsoleId
+                        with ex ->
+                            TrackerModelOptions.DebugConfig.Log(sprintf "[RoomSync] ERROR in RoomChanged handler: %s" ex.Message)
+                        do isInternalUpdate <- false
+                    }
+                )
+        )
+
+let handleRoomChange (json: string) =
+    try
+        let data = JsonConvert.DeserializeObject<RoomChangePayload>(json)
+        TrackerModelOptions.DebugConfig.Log(sprintf "[RoomSync] Received RoomChange for L%d (%d,%d): %s" data.Level data.X data.Y json)
+
+        if data.Level < 1 || data.Level > 9 || data.X < 0 || data.X > 7 || data.Y < 0 || data.Y > 7 then
+            TrackerModelOptions.DebugConfig.Log("[RoomSync] Ignored RoomChange — invalid coordinates")
+        else
+            Z1R_Tracker.Models.RoomSyncBridge.ApplyRoomChangeFromSync(
+                data.Level, data.X, data.Y,
+                data.IsComplete,
+                data.RoomType,
+                data.MonsterDetail,
+                data.FloorDropDetail,
+                data.FloorDropAppearsBright
+            )
+    with ex ->
+        TrackerModelOptions.DebugConfig.Log(sprintf "[RoomSync] ERROR handling RoomChange: %s" ex.Message)
+
 

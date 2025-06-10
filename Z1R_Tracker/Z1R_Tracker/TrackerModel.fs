@@ -450,6 +450,9 @@ type LastChangedTime(intervalHowFarInThePast) as this =
             match isFuture with
             | Some(interval) -> System.DateTime.Now - interval
             | None -> stamp + (System.DateTime.Now - whenPaused)
+    member this.SetNowIfLocal(isRemote: bool) =
+        if not isRemote then this.SetNow()
+
 
 let theStartTime = new LastChangedTime()
 let dungeonRoomModelChanged = new LastChangedTime()
@@ -834,6 +837,9 @@ and Dungeon(id,numBoxes) =
 let GetDungeon(i) = DungeonTrackerInstance.TheDungeonTrackerInstance.Dungeons(i)
 do IsHiddenDungeonNumbers <- fun() -> DungeonTrackerInstance.TheDungeonTrackerInstance.Kind = DungeonTrackerInstanceKind.HIDE_DUNGEON_NUMBERS
 do GetDungeonLabelChar <- fun i -> GetDungeon(i).LabelChar
+
+
+
 let GetTriforceHaves() =
     if IsHiddenDungeonNumbers() then
         let haves = Array.zeroCreate 8

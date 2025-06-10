@@ -297,6 +297,11 @@ type MyWindow() as this =
         let mutable settingsWereSuccessfullyRead = false
         TrackerModelOptions.readSettings()
         settingsWereSuccessfullyRead <- true
+        Z1R_SharedInterop.TrackerOptionsBridge.Initialize(
+            (fun () -> TrackerModelOptions.BookForHelpfulHints.Value),
+            (fun () -> TrackerModelOptions.DoDoorInference.Value)
+        ) 
+
         //RPT try to initialize here for SyncManager
         SyncManager.Configure(TrackerModelOptions.CoopSyncOptions.SyncUpdateUrl())
         TrackerModelOptions.CoopSyncOptions.EnableCoopChanged.Publish.Add(fun isEnabled ->
@@ -637,6 +642,60 @@ type MyWindow() as this =
                                    )
                            with ex ->
                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply HiddenDungeonColorLabel update: %s" ex.Message)
+                        | "DoorChange" ->
+                            try
+                                let data = JsonConvert.DeserializeObject<CoopSync.DoorChangePayload>(payloadJson)
+                                if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome && CoopSync.shouldApplyUpdate "DoorChange" payloadJson && not (SyncManager.ShouldSuppressDoorChange payloadJson) then
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        try
+                                            let newState = Dungeon.DoorInterop.fromString data.NewState.Case
+                                            let door =
+                                                if data.IsHorizontal then
+                                                    DungeonUI.getHorizontalDoor data.Level data.X data.Y
+                                                else
+                                                    DungeonUI.getVerticalDoor data.Level data.X data.Y
+
+                                            if door.State <> newState then
+                                                door.State <- newState
+                                                TrackerModelOptions.DebugConfig.Log(
+                                                    sprintf "[Sync] Applied DoorChange at L%d %s (%d,%d) -> %s"
+                                                        data.Level
+                                                        (if data.IsHorizontal then "H" else "V")
+                                                        data.X
+                                                        data.Y
+                                                        data.NewState.Case
+                                                )
+                                        with ex2 ->
+                                            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] DoorChange internal error: %s" ex2.Message)
+                                    )
+                            with ex ->
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply DoorChange update: %s" ex.Message)
+
+                        | "RoomChange" ->
+                            try
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Raw RoomChange payload: %s" payloadJson)
+                                let data = JsonConvert.DeserializeObject<CoopSync.RoomChangePayload>(payloadJson)
+                                Application.Current.Dispatcher.Invoke(fun () ->
+                                    Z1R_Tracker.Models.RoomSyncBridge.ApplyRoomChangeFromSync(
+                                        data.Level,
+                                        data.X,
+                                        data.Y,
+                                        data.IsComplete,
+                                        data.RoomType,
+                                        data.MonsterDetail,
+                                        data.FloorDropDetail,
+                                        data.FloorDropAppearsBright
+                                    )
+
+                                    match DungeonUI.redrawAllRoomsPublic with
+                                    | Some f -> 
+                                        TrackerModelOptions.DebugConfig.Log("[Sync] Calling redrawAllRoomsPublic after room sync")
+                                        f()
+                                    | None -> 
+                                        TrackerModelOptions.DebugConfig.Log("[Sync] redrawAllRoomsPublic was None — cannot redraw")
+                                )
+                            with ex ->
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply RoomChange update: %s" ex.Message)
 
                         | _ ->
                             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Unknown messageType: %s" msgType)

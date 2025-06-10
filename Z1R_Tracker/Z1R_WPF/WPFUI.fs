@@ -112,6 +112,8 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
             drawRoutesToImpl(routeDestinationOption, point, i, j, drawRouteMarks, maxBoldGYR, (owGettableScreensCheckBox.IsChecked.HasValue && owGettableScreensCheckBox.IsChecked.Value), whatToCyan)
         else ()
     TrackerModel.initializeAll(owInstance, kind)
+    Z1R_Tracker.Models.RoomSyncBridge.WireRoomChangeEvents()
+    CoopSync.subscribeToRoomChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
     CoopSync.subscribeToPlayerProgressChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
     CoopSync.subscribeToStartingItemsAndExtrasChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
     CoopSync.subscribeToItemsChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
@@ -119,8 +121,13 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
     //CoopSync.subscribeToDungeonChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
     CoopSync.subscribeToDungeonTriforceChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
     CoopSync.subscribeToBlockersChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
-    CoopSync.subscribeToDungeonMapsChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+    //CoopSync.subscribeToDungeonMapsChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
     CoopSync.subscribeToHiddenDungeonColorLabelChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+    //just to test
+    CoopSync.subscribeToDoorChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+    
+
+
 
     if not heartShuffle then
         for i = 0 to 7 do

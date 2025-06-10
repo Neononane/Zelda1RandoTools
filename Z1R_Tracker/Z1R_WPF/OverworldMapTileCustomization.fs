@@ -3,6 +3,7 @@
 open System.Windows.Controls
 open System.Windows
 open System.Windows.Media
+open Z1R_Tracker.Models.Z1R_TrackerInterop
 
 let OMTW = Graphics.OMTW
 let canvasAdd = Graphics.canvasAdd
@@ -660,25 +661,44 @@ let MakeMappedHotKeysDisplay() =
     let blockerPanel = makePanel(TrackerModel.DungeonBlocker.All, HotKeys.BlockerHotKeyProcessor, (fun state -> 
         upcast Graphics.blockerCurrentDisplay(state)), 24, "BLOCKERS")
     let thingies = [| 
-        yield! DungeonRoomState.RoomType.All() |> Seq.map Choice1Of4
-        yield! DungeonRoomState.MonsterDetail.All() |> Seq.map Choice2Of4
-        yield! DungeonRoomState.FloorDropDetail.All() |> Seq.map Choice3Of4
+        yield! Z1R_Tracker.Models.Z1R_TrackerInterop.RoomTypeExtensions.All() |> Seq.map Choice1Of4
+        yield! Z1R_Tracker.Models.Z1R_TrackerInterop.MonsterDetailExtensions.All() |> Seq.map Choice2Of4
+        yield! Z1R_Tracker.Models.Z1R_TrackerInterop.FloorDropDetailExtensions.All() |> Seq.map Choice3Of4
         yield! HotKeys.AllDoors |> Seq.map snd |> Seq.map Choice4Of4
-        |]
+    |]
     let dungeonRoomPanel = makePanel(thingies, HotKeys.DungeonRoomHotKeyProcessor, (fun c ->
         match c with 
-        | Choice1Of4 rt -> upcast Graphics.BItoImage(rt.UncompletedBI())
-        | Choice2Of4 md -> (let i = md.Bmp() |> bmpElseSize(18,18) in (i.HorizontalAlignment <- HorizontalAlignment.Left; i))
-        | Choice3Of4 fd -> (let i = fd.Bmp() |> bmpElseSize(18,18) in (i.HorizontalAlignment <- HorizontalAlignment.Right; i))
+        | Choice1Of4 rt -> 
+            let bmp = Z1R_Tracker.Models.Z1R_TrackerInterop.RoomTypeExtensions.UncompletedBI(rt)
+            upcast Graphics.BMPtoImage(bmp)
+        | Choice2Of4 md -> 
+            let i = md.Bmp() |> bmpElseSize(18,18) 
+            i.HorizontalAlignment <- HorizontalAlignment.Left
+            upcast i
+        | Choice3Of4 fd -> 
+            let i = fd.Bmp() |> bmpElseSize(18,18) 
+            i.HorizontalAlignment <- HorizontalAlignment.Right
+            upcast i
         | Choice4Of4 dr -> 
-            let c = match dr.Action with DungeonRoomState.DoorAction.Increment -> Brushes.Green | _ -> Brushes.Purple
-            match dr.Direction with
-            | DungeonRoomState.DoorDirection.East -> new DockPanel(Background=c,Width=9.,Height=9.,HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center)
-            | DungeonRoomState.DoorDirection.West -> new DockPanel(Background=c,Width=9.,Height=9.,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center)
-            | DungeonRoomState.DoorDirection.North -> new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top)
-            | DungeonRoomState.DoorDirection.South -> new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Bottom)
-            |> (fun x -> let r = new DockPanel(Width=39., Height=27.) in r.Children.Add(x) |> ignore; upcast r)
-        ), 39, "DUNGEON")
+            let c = 
+                match dr.Action with 
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorAction.Increment -> Brushes.Green 
+                | _ -> Brushes.Purple
+            let panel = 
+                match dr.Direction with
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.East -> 
+                    new DockPanel(Background=c,Width=9.,Height=9.,HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center)
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.West -> 
+                    new DockPanel(Background=c,Width=9.,Height=9.,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center)
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.North -> 
+                    new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top)
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.South -> 
+                    new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Bottom)
+            let r = new DockPanel(Width=39., Height=27.)
+            r.Children.Add(panel) |> ignore
+            upcast r
+    ), 39, "DUNGEON")
+
     let globalPanel = makePanel(HotKeys.GlobalHotkeyTargets.All, HotKeys.GlobalHotKeyProcessor, (fun state -> state.AsHotKeyDisplay()), 30, "GLOBALS")
     let all = new StackPanel(Orientation=Orientation.Horizontal)
     all.Children.Add(itemPanel) |> ignore

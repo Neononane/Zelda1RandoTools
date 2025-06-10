@@ -1,6 +1,8 @@
 ﻿module DungeonSaveAndLoad
 
 open DungeonRoomState
+open Z1R_Tracker.Models.Z1R_TrackerInterop
+
 
 [<AllowNullLiteral>]
 type DungeonRoomModel() =
@@ -16,13 +18,13 @@ type DungeonRoomModel() =
             this.FloorDropDetail=FloorDropDetail.Unmarked.AsHotKeyName() &&
             this.FloorDropShouldAppearBright
     member this.AsDungeonRoomState() =
-        let r = new DungeonRoomState()
+        let r = DungeonRoomState()
         r.IsComplete <- this.IsCompleted
-        r.RoomType <- RoomType.FromHotKeyName this.RoomType
-        r.MonsterDetail <- MonsterDetail.FromHotKeyName this.MonsterDetail
-        r.FloorDropDetail <- FloorDropDetail.FromHotKeyName this.FloorDropDetail
+        r.RoomType <- RoomTypeExtensions.FromHotKeyName this.RoomType
+        r.MonsterDetail <- MonsterDetailExtensions.FromHotKeyName this.MonsterDetail
+        r.FloorDropDetail <- FloorDropDetailExtensions.FromHotKeyName this.FloorDropDetail
         if this.FloorDropShouldAppearBright <> r.FloorDropAppearsBright then
-            r.ToggleFloorDropBrightness()
+            r.FloorDropAppearsBright <- not r.FloorDropAppearsBright
         r
 
 let DungeonRoomStateAsModel(state : DungeonRoomState) =

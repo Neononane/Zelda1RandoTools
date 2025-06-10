@@ -84,6 +84,11 @@ module DebugConfig =
         if DebugMode then
             printfn "%s" message
 
+let mutable currentSyncSource : string option = None
+
+let isCurrentlyApplyingRemoteUpdate () =
+    currentSyncSource.IsSome
+
 //RPT added this to check if the CoopSyncOptions module is enabled.
 let isCoopEnabled () = CoopSyncOptions.GetEnableCoop()
 let mutable UseBlurEffects = Bool(true)
@@ -96,6 +101,7 @@ let mutable ListenForSpeech = Bool(false)
 let mutable RequirePTTForSpeech = Bool(false)
 let mutable PlaySoundWhenUseSpeech = Bool(true)
 let mutable BOARDInsteadOfLEVEL = Bool(false)
+let mutable DisplayIconsInDungeonMap = Bool(false)
 let mutable ShowBasementInfo = Bool(true)
 let mutable DoDoorInference = Bool(false)
 let mutable DefaultRoomPreferNonDescriptToMaybePushBlock = Bool(false)
@@ -181,6 +187,7 @@ type ReadWrite() =
     member val RequirePTTForSpeech = false with get,set
     member val PlaySoundWhenUseSpeech = true with get,set
     member val BOARDInsteadOfLEVEL = false with get,set
+    member val DisplayIconsInDungeonMap = false with get,set
     member val IsSecondQuestDungeons = false with get,set
     member val ShowBasementInfo = true with get,set
     member val DoDoorInference = false with get,set
@@ -278,6 +285,7 @@ let private writeImpl(filename) =
     data.RequirePTTForSpeech <- RequirePTTForSpeech.Value
     data.PlaySoundWhenUseSpeech <- PlaySoundWhenUseSpeech.Value
     data.BOARDInsteadOfLEVEL <- BOARDInsteadOfLEVEL.Value
+    data.DisplayIconsInDungeonMap <- DisplayIconsInDungeonMap.Value
     data.ShowBasementInfo <- ShowBasementInfo.Value
     data.DoDoorInference <- DoDoorInference.Value
     data.DefaultRoomPreferNonDescriptToMaybePushBlock <- DefaultRoomPreferNonDescriptToMaybePushBlock.Value
@@ -382,6 +390,7 @@ let private read(filename) =
         RequirePTTForSpeech.Value <- data.RequirePTTForSpeech
         PlaySoundWhenUseSpeech.Value <- data.PlaySoundWhenUseSpeech
         BOARDInsteadOfLEVEL.Value <- data.BOARDInsteadOfLEVEL
+        DisplayIconsInDungeonMap.Value <- data.DisplayIconsInDungeonMap
         ShowBasementInfo.Value <- data.ShowBasementInfo
         DoDoorInference.Value <- data.DoDoorInference
         DefaultRoomPreferNonDescriptToMaybePushBlock.Value <- data.DefaultRoomPreferNonDescriptToMaybePushBlock

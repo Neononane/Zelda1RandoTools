@@ -4,10 +4,18 @@ open System
 open System.Windows
 open System.Windows.Controls 
 open System.Windows.Media
+open Z1R_Tracker.Models.Z1R_TrackerInterop
+
 
 let canvasAdd = Graphics.canvasAdd
 
 ////////////////////////
+
+let inline choice1 v : Choice<RoomType, MonsterDetail, FloorDropDetail, DoorHotKeyResponse> = Choice1Of4 v
+let inline choice2 v : Choice<RoomType, MonsterDetail, FloorDropDetail, DoorHotKeyResponse> = Choice2Of4 v
+let inline choice3 v : Choice<RoomType, MonsterDetail, FloorDropDetail, DoorHotKeyResponse> = Choice3Of4 v
+let inline choice4 v : Choice<RoomType, MonsterDetail, FloorDropDetail, DoorHotKeyResponse> = Choice4Of4 v
+
 
 module AhhGlobalVariables =
     let mutable showShopLocatorInstanceFunc = fun(_item:int) -> ()
@@ -24,6 +32,157 @@ module FloatHelper =
 open FloatHelper
 open DungeonRoomState
 open CustomComboBoxes.GlobalFlag
+open Z1R_Sync
+open Z1R_Tracker.Models.Z1R_TrackerInterop
+open Z1R_Tracker.Models
+
+open Z1R_Tracker.Models.Z1R_TrackerInterop
+
+//new code here
+type DoorPosition =
+    | Horizontal of level:int * x:int * y:int
+    | Vertical of level:int * x:int * y:int
+
+type DoorChangeInfo =
+    {
+        Level: int
+        X: int
+        Y: int
+        IsHorizontal: bool
+        NewState: Dungeon.DoorState
+    }
+
+let doorChangedEvent = new Event<DoorChangeInfo>()
+let triggerDoorChanged args = doorChangedEvent.Trigger args
+
+let AddDoorChangedListener (callback: DoorChangeInfo -> unit) =
+    doorChangedEvent.Publish.Add callback
+
+type RoomChangeInfo =
+    {
+        Level: int
+        X: int
+        Y: int
+        NewState: CDungeonRoomState
+    }
+
+let roomChangedEvent = new Event<RoomChangeInfo>()
+let triggerRoomChanged args = roomChangedEvent.Trigger args
+
+let AddRoomChangedListener (callback: RoomChangeInfo -> unit) =
+    roomChangedEvent.Publish.Add callback
+
+
+let horizontalDoorsPerLevel : Dungeon.Door[,] array =
+    Array.init 9 (fun _ -> Array2D.zeroCreate 7 8)  // [X, Y]
+
+let verticalDoorsPerLevel : Dungeon.Door[,] array =
+    Array.init 9 (fun _ -> Array2D.zeroCreate 8 7)  // [X, Y]
+
+let roomStatesPerLevel : DungeonRoomState[,] array =
+    Array.init 9 (fun _ -> Array2D.init 8 8 (fun _ _ -> DungeonRoomState()))
+
+
+let getHorizontalDoor level x y = horizontalDoorsPerLevel.[level - 1].[x, y]
+let getVerticalDoor level x y = verticalDoorsPerLevel.[level - 1].[x, y]
+
+let getSyncedRoom level x y = roomStatesPerLevel.[level - 1].[x, y]
+
+let mutable redrawAllRoomsPublic : (unit -> unit) option = None
+
+let setNewValueFunctions : (DungeonRoomState -> unit)[,] array =
+            Array.init 9 (fun _ -> Array2D.zeroCreate 8 8)
+
+let isFirstTimeClickingAnyRoom = Array.init 9 (fun _ -> new TrackerModel.EventingBool(true))
+
+
+
+let createSizedCenteredIcon (bmp: System.Drawing.Bitmap) (xOffset: int) (yOffset: int) (height: int) (scale: int) (shiftRight: int) =
+    let width = 8
+    let iconW, iconH = width * scale, height * scale
+    let targetW, targetH = 39, 27  // tile size
+    let dx = (targetW - iconW) / 2 + shiftRight
+    let dy = (targetH - iconH) / 2
+    let result = new System.Drawing.Bitmap(targetW, targetH)
+    for x = 0 to targetW - 1 do
+        for y = 0 to targetH - 1 do
+            result.SetPixel(x, y, System.Drawing.Color.Transparent)
+    for sx = 0 to width - 1 do
+        for sy = 0 to height - 1 do
+            let color = bmp.GetPixel(xOffset + sx, yOffset + sy)
+            for mx = 0 to scale - 1 do
+                for my = 0 to scale - 1 do
+                    let x = dx + sx * scale + mx
+                    let y = dy + sy * scale + my
+                    if x >= 0 && x < targetW && y >= 0 && y < targetH then
+                        result.SetPixel(x, y, color)
+    result
+
+
+let rowBmp =
+    let full = Dungeon.MakeLoZMinimapDisplayBmp(Array2D.zeroCreate 8 8, '?') // dummy data
+    let scale = 3  // Scale each icon to 16x8 → 32x16 (approx. 75% of 39x27 tile)
+    [|
+        // Rupee top/bottom (Y: 8–15)
+        createSizedCenteredIcon full 72 8 4 scale 2
+        createSizedCenteredIcon full 72 12 4 scale 2
+        // Empty rows
+        new System.Drawing.Bitmap(39, 27)
+        new System.Drawing.Bitmap(39, 27)
+        // Bomb top/bottom (Y: 24–31) — NOW rows 4/5
+        createSizedCenteredIcon full 72 24 4 scale 2
+        createSizedCenteredIcon full 72 28 4 scale 2
+        // Key top/bottom (Y: 32–39) — NOW rows 6/7
+        createSizedCenteredIcon full 72 32 4 scale 2
+        createSizedCenteredIcon full 72 36 4 scale 2
+    |]
+
+
+
+let placeholder_row0_bmp = rowBmp.[0]
+let placeholder_row1_bmp = rowBmp.[1]
+let placeholder_row2_bmp = rowBmp.[2]
+let placeholder_row3_bmp = rowBmp.[3]
+let placeholder_row4_bmp = rowBmp.[4]
+let placeholder_row5_bmp = rowBmp.[5]
+let placeholder_row6_bmp = rowBmp.[6]
+let placeholder_row7_bmp = rowBmp.[7]
+
+
+
+//will adjust this to represent different icons based on the location
+let placeholderIcon = Graphics.BMPtoImage(Graphics.zi_alt_bomb_bmp)
+let placeholderIconsByRow : System.Windows.Controls.Image[] = 
+    [| 
+        Graphics.BMPtoImage(placeholder_row0_bmp)
+        Graphics.BMPtoImage(placeholder_row1_bmp)
+        Graphics.BMPtoImage(placeholder_row2_bmp)  // Unused, optional dummy
+        Graphics.BMPtoImage(placeholder_row3_bmp)  // Unused, optional dummy
+        Graphics.BMPtoImage(placeholder_row4_bmp)
+        Graphics.BMPtoImage(placeholder_row5_bmp)
+        Graphics.BMPtoImage(placeholder_row6_bmp)
+        Graphics.BMPtoImage(placeholder_row7_bmp)
+    |]
+placeholderIcon.Stretch <- Stretch.Uniform
+placeholderIcon.Opacity <- 0.3  // Adjust as needed
+
+let wireRoomChangeEventsForSync (gridArray: DungeonRoomState[,][] ) =
+    printfn "[RoomSync] Starting to wire room change events"
+    for level = 0 to 8 do
+        let grid = gridArray.[level]
+        for x = 0 to 7 do
+            for y = 0 to 7 do
+                let room = grid.[x, y]
+                let csharpId = room.CSharp.DebugId
+                printfn "[WireCheck] Wiring room wrapper whose C# ID is %s" (csharpId.ToString())
+
+                room.Changed.Add(fun _ ->
+                    printfn "[RoomSync] Changed triggered for L%d (%d,%d)" (level + 1) x y
+                    if not (TrackerModelOptions.isCurrentlyApplyingRemoteUpdate()) then
+                        printfn "[RoomSync] Sending RoomChange for L%d (%d,%d)" (level + 1) x y
+                        RoomSyncBridge.OnRoomChanged.Invoke(level + 1, x, y, room.CSharp)
+                )
+
 
 let unmarkRemarkBehavior(cm:CustomComboBoxes.CanvasManager, (_i,_j,hk), boxViewsAndActivations:(Canvas*((int*CustomComboBoxes.GridClickDismissalWarpReturn)->unit))[], dungeonIndex, returnPos) =
     let dungeon = TrackerModel.GetDungeon(dungeonIndex)
@@ -338,10 +497,41 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         )
     let dungeonTabs = new TabControl(FontSize=12., Background=Brushes.Black)
     theDungeonTabControl <- dungeonTabs
-    let masterRoomStates = Array.init 9 (fun _ -> Array2D.init 8 8 (fun _ _ -> new DungeonRoomState()))
-    let masterRedrawAllRooms = Array.init 9 (fun _ -> fun() -> ())
+    //let masterRoomStates = Array.init 9 (fun _ -> Array2D.init 8 8 (fun _ _ -> DungeonRoomState()))
+    let masterRoomStates =
+        let arr =
+            Array.init 9 (fun level ->
+                Array2D.init 8 8 (fun x y ->
+                    let room = DungeonRoomState()
+                    room.CSharp.X <- x
+                    room.CSharp.Y <- y
+                    room.CSharp.Level <- level + 1 // 1-based Level
+                    room
+                )
+            )
 
     
+        // Sync event hook for every room
+        for level = 0 to 8 do
+            for x = 0 to 7 do
+                for y = 0 to 7 do
+                    let room = arr.[level].[x, y]
+                    let id = room.CSharp.DebugId
+                    printfn "[WireCheck] Wiring DungeonRoomState wrapper for L%d (%d,%d) with ID %s" (level + 1) x y (id.ToString())
+                    room.CSharp.Changed.Add(fun _ ->
+                        printfn "[RoomSync] Changed triggered for L%d (%d,%d) — ID %s" (level + 1) x y (id.ToString())
+                    )
+
+    
+        arr
+
+    let masterRedrawAllRooms = Array.init 9 (fun _ -> fun() -> ())
+
+    OptionsMenu.displayIconsInDungeonMapOptionChanged.Publish.Add(fun _ ->
+        for i = 0 to 8 do
+            masterRedrawAllRooms.[i]()
+    )
+
     // make the whole canvas
     canvasAdd(dungeonTabsWholeCanvas, dungeonTabs, 0., 0.) 
 
@@ -502,13 +692,18 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
     let localDungeonTrackerPanelWidth = 42.
     //let exportFunctions = Array.create 9 (fun () -> new DungeonSaveAndLoad.DungeonModel())
     //let importFunctions = Array.create 9 (fun _ -> ())
-    let isFirstTimeClickingAnyRoom = Array.init 9 (fun _ -> new TrackerModel.EventingBool(true))
+    //let isFirstTimeClickingAnyRoom = Array.init 9 (fun _ -> new TrackerModel.EventingBool(true))
     let makeNumeral(labelChar) =
         new TextBox(Foreground=Brushes.Magenta, Background=Brushes.Transparent, Text=sprintf "%c" labelChar, IsReadOnly=true, IsHitTestVisible=false, FontSize=200., Opacity=0.25,
                         Height=float(27*8 + 12*7), Width=float(39*8 + 12*7), VerticalAlignment=VerticalAlignment.Center, FontWeight=FontWeights.Bold,
                         HorizontalContentAlignment=HorizontalAlignment.Center, HorizontalAlignment=HorizontalAlignment.Center, BorderThickness=Thickness(0.), Padding=Thickness(0.))
     let getLabelChar(level) = if level = 9 then '9' else if TrackerModel.IsHiddenDungeonNumbers() then (char(int 'A' - 1 + level)) else (char(int '0' + level))
-    let mutable justUnmarked = None
+    //let mutable justUnmarked = None
+    let mutable justUnmarked : (int * int * Choice<RoomType, MonsterDetail, FloorDropDetail, 'a>) option = None
+    let choice1 (v: RoomType) = Choice1Of4(v) : Choice<RoomType, MonsterDetail, FloorDropDetail, obj>
+    let choice2 (v: MonsterDetail) = Choice2Of4(v) : Choice<RoomType, MonsterDetail, FloorDropDetail, obj>
+    let choice3 (v: FloorDropDetail) = Choice3Of4(v) : Choice<RoomType, MonsterDetail, FloorDropDetail, obj>
+    let choice4 (v: DoorHotKeyResponse) = Choice4Of4(v :> obj) : Choice<RoomType, MonsterDetail, FloorDropDetail, obj>
     for level = 1 to 9 do
         let levelTab = new TabItem(Background=Brushes.Black, Foreground=Brushes.Black)
         dungeonTabs.Items.Add(levelTab) |> ignore
@@ -672,6 +867,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         let redrawAllDoors() = if not skipRedrawInsideCurrentImport then for f in redrawAllDoorFuncs do f()
         let roomRedrawFuncs = ResizeArray(64)
         let redrawAllRooms() = if not skipRedrawInsideCurrentImport then for f in roomRedrawFuncs do f()
+        redrawAllRoomsPublic <- Some redrawAllRooms
         let roomCanvas = new Canvas()
         let centerOf(x,y) = // center of room at x,y; but can be floats so e.g. x+0.5,y is an adjacent door
             roomCanvas.TranslatePoint(Point(x*51.+13.*3./2.,y*39.+9.*3./2.), cm.AppMainCanvas)
@@ -778,7 +974,27 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         let yes = Dungeon.yes
         let yellow = Dungeon.yellow
         let purple = Dungeon.purple
-        let horizontalDoors = Array2D.zeroCreate 7 8
+        //RPT Test change
+        //let horizontalDoors = Array2D.zeroCreate 7 8
+        let horizontalDoors =
+            Array2D.init 7 8 (fun i j ->
+                let currentState = Dungeon.DoorInterop.fromCSharp (CDungeonModelStore.HorizontalDoors.[level - 1].[j, i])
+                let redraw state =
+                    triggerDoorChanged {
+                        Level = level
+                        X = i
+                        Y = j
+                        IsHorizontal = true
+                        NewState = state
+                    }
+                new Dungeon.Door(currentState, redraw, level, i, j, true)
+            )
+
+
+
+
+
+
         let hDoorHighlightOutline = new Shapes.Rectangle(Width=12., Height=16., Stroke=highlight, StrokeThickness=2., Fill=Brushes.Transparent, IsHitTestVisible=false, Opacity=0.)
         let hDoorCanvas = new Canvas()  // nesting canvases improves perf
         dungeonBodyCanvas.Children.Add(hDoorCanvas) |> ignore
@@ -788,18 +1004,31 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                 let rect = new Shapes.Rectangle(Width=12., Height=15., Stroke=unknown, StrokeThickness=2., Fill=unknown)
                 let line = new Shapes.Line(X1 = 6., Y1 = -12., X2 = 6., Y2 = 28., StrokeThickness=3., Stroke=no, Opacity=0.)
                 d.Children.Add(rect) |> ignore
-                let door = new Dungeon.Door(Dungeon.DoorState.UNKNOWN, (function 
+                let door = new Dungeon.Door(Dungeon.DoorState.UNKNOWN, (fun newState ->
+                    // Redraw UI
+                    match newState with
                     | Dungeon.DoorState.YES        -> rect.Stroke <- yes; rect.Fill <- yes; rect.Opacity <- 1.; line.Opacity <- 0.
-                    | Dungeon.DoorState.NO         -> rect.Opacity <- 0.; line.Opacity <- 1.; if line.Parent = null then d.Children.Add(line) |> ignore  // only add lines to tree on-demand
+                    | Dungeon.DoorState.NO         -> rect.Opacity <- 0.; line.Opacity <- 1.; if line.Parent = null then d.Children.Add(line) |> ignore
                     | Dungeon.DoorState.YELLOW     -> rect.Stroke <- yellow; rect.Fill <- yellow; rect.Opacity <- 1.; line.Opacity <- 0.
                     | Dungeon.DoorState.PURPLE     -> rect.Stroke <- purple; rect.Fill <- purple; rect.Opacity <- 1.; line.Opacity <- 0.
-                    | Dungeon.DoorState.UNKNOWN    -> 
+                    | Dungeon.DoorState.UNKNOWN    ->
                         rect.Stroke <- unknown; rect.Fill <- unknown; rect.Opacity <- 1.; line.Opacity <- 0.
-                        if masterRoomStates.[level-1].[i,j].RoomType.IsOffMap || masterRoomStates.[level-1].[i+1,j].RoomType.IsOffMap then
+                        if (masterRoomStates.[level-1].[i,j].RoomType.IsOffMap()) || (masterRoomStates.[level-1].[i+1,j].RoomType.IsOffMap()) then
                             rect.Stroke <- Brushes.Black
                             rect.Fill <- Brushes.Black
-                        ))
+
+                    // Fire door change event
+                    triggerDoorChanged {
+                        Level = level
+                        X = i
+                        Y = j
+                        IsHorizontal = true
+                        NewState = newState
+                    }
+                ), level, i, j, true)
+        
                 horizontalDoors.[i,j] <- door
+                horizontalDoorsPerLevel.[level-1].[i,j] <- door
                 canvasAdd(hDoorCanvas, d, float(i*(39+12)+39), float(j*(27+12)+6))
                 installDoorBehavior(door, d, (i,j,RR), (i+1,j,LL))
                 d.MouseEnter.Add(fun _ -> if not popupIsActive && not grabHelper.IsGrabMode then 
@@ -808,10 +1037,28 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                                 hDoorHighlightOutline.Opacity <- Dungeon.highlightOpacity)
                 d.MouseLeave.Add(fun _ -> hDoorHighlightOutline.Opacity <- 0.0)
                 redrawAllDoorFuncs.Add(fun () -> door.Redraw())
+
         canvasAdd(dungeonBodyCanvas, hDoorHighlightOutline, 0., 0.)
         // vertical doors
         let vDoorHighlightOutline = new Shapes.Rectangle(Width=24., Height=12., Stroke=highlight, StrokeThickness=2., Fill=Brushes.Transparent, IsHitTestVisible=false, Opacity=0.)
-        let verticalDoors = Array2D.zeroCreate 8 7
+        //RPT replacing below
+        let verticalDoors =
+            Array2D.init 8 7 (fun i j ->
+                let currentState = Dungeon.DoorInterop.fromCSharp (CDungeonModelStore.VerticalDoors.[level - 1].[j, i])
+                let redraw state =
+                    triggerDoorChanged {
+                        Level = level
+                        X = i
+                        Y = j
+                        IsHorizontal = false
+                        NewState = state
+                    }
+
+                new Dungeon.Door(currentState, redraw, level, i, j, false)
+            )
+
+
+
         let vDoorCanvas = new Canvas()  // nesting canvases improves perf
         dungeonBodyCanvas.Children.Add(vDoorCanvas) |> ignore
         for i = 0 to 7 do
@@ -820,18 +1067,31 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                 let rect = new Shapes.Rectangle(Width=21., Height=12., Stroke=unknown, StrokeThickness=2., Fill=unknown)
                 let line = new Shapes.Line(X1 = -14., Y1 = 6., X2 = 38., Y2 = 6., StrokeThickness=3., Stroke=no, Opacity=0.)
                 d.Children.Add(rect) |> ignore
-                let door = new Dungeon.Door(Dungeon.DoorState.UNKNOWN, (function 
-                    | Dungeon.DoorState.YES        -> rect.Stroke <- yes; rect.Fill <- yes; rect.Opacity <- 1.; line.Opacity <- 0.
-                    | Dungeon.DoorState.NO         -> rect.Opacity <- 0.; line.Opacity <- 1.; if line.Parent = null then d.Children.Add(line) |> ignore  // only add lines to tree on-demand
-                    | Dungeon.DoorState.YELLOW     -> rect.Stroke <- yellow; rect.Fill <- yellow; rect.Opacity <- 1.; line.Opacity <- 0.
-                    | Dungeon.DoorState.PURPLE     -> rect.Stroke <- purple; rect.Fill <- purple; rect.Opacity <- 1.; line.Opacity <- 0.
-                    | Dungeon.DoorState.UNKNOWN    -> 
+                let door = new Dungeon.Door(Dungeon.DoorState.UNKNOWN, (fun newState ->
+                    // Redraw UI
+                    match newState with
+                    | Dungeon.DoorState.YES -> rect.Stroke <- yes; rect.Fill <- yes; rect.Opacity <- 1.; line.Opacity <- 0.
+                    | Dungeon.DoorState.NO -> rect.Opacity <- 0.; line.Opacity <- 1.; if line.Parent = null then d.Children.Add(line) |> ignore
+                    | Dungeon.DoorState.YELLOW -> rect.Stroke <- yellow; rect.Fill <- yellow; rect.Opacity <- 1.; line.Opacity <- 0.
+                    | Dungeon.DoorState.PURPLE -> rect.Stroke <- purple; rect.Fill <- purple; rect.Opacity <- 1.; line.Opacity <- 0.
+                    | Dungeon.DoorState.UNKNOWN ->
                         rect.Stroke <- unknown; rect.Fill <- unknown; rect.Opacity <- 1.; line.Opacity <- 0.
-                        if masterRoomStates.[level-1].[i,j].RoomType.IsOffMap || masterRoomStates.[level-1].[i,j+1].RoomType.IsOffMap then
+                        if masterRoomStates.[level-1].[i,j].RoomType.IsOffMap() || masterRoomStates.[level-1].[i,j+1].RoomType.IsOffMap() then
                             rect.Stroke <- Brushes.Black
                             rect.Fill <- Brushes.Black
-                        ))
+
+                    // 🔁 Fire event here
+                    triggerDoorChanged {
+                        Level = level
+                        X = i
+                        Y = j
+                        IsHorizontal = false
+                        NewState = newState
+                    }
+                ), level, i, j, false)
+
                 verticalDoors.[i,j] <- door
+                verticalDoorsPerLevel.[level - 1].[i,j] <- door
                 canvasAdd(vDoorCanvas, d, float(i*(39+12)+9), float(j*(27+12)+27))
                 installDoorBehavior(door, d, (i,j,DD), (i,j+1,UU))
                 d.MouseEnter.Add(fun _ -> if not popupIsActive && not grabHelper.IsGrabMode then 
@@ -943,10 +1203,10 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         // toggler to invert Unmarked versus OffTheMap rooms
         do
             let dp = new DockPanel(LastChildFill=true, Background=Brushes.Black)
-            let i1 = RoomType.OffTheMap.CompletedBI() |> Graphics.BItoImage
+            let i1 = (Z1R_Tracker.Models.Z1R_TrackerInterop.RoomType.OffTheMap).CompletedBI() |> Graphics.BMPtoImage
             i1.Stretch <- Stretch.Uniform; i1.StretchDirection <- StretchDirection.Both; i1.Width <- 13.; i1.Height <- System.Double.NaN
             dp.Children.Add(i1) |> ignore
-            let i2 = RoomType.Unmarked.CompletedBI() |> Graphics.BItoImage
+            let i2 = RoomType.Unmarked.CompletedBI() |> Graphics.BMPtoImage
             i2.Stretch <- Stretch.Uniform; i2.StretchDirection <- StretchDirection.Both; i2.Width <- 13.; i2.Height <- System.Double.NaN
             dp.Children.Add(i2) |> ignore
             DockPanel.SetDock(i1, Dock.Left)
@@ -964,7 +1224,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                 hasEverInvertedOrDragged <- true
                 for x=0 to 7 do
                     for y=0 to 7 do
-                        if roomStates.[x,y].RoomType.IsNotMarked then
+                        if roomStates.[x,y].RoomType.IsNotMarked() then
                             roomStates.[x,y].RoomType <- RoomType.OffTheMap
                         elif roomStates.[x,y].RoomType = RoomType.OffTheMap then
                             roomStates.[x,y].RoomType <- RoomType.Unmarked
@@ -1019,7 +1279,28 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
             grabRedraw()
             )
 
-        let setNewValueFunctions = Array2D.create 8 8 (fun _ -> ())
+
+
+
+        Z1R_SharedInterop.RoomInteropBridge.applyRoomStateFromSync <- 
+            Z1R_SharedInterop.RoomInteropBridge.ApplyRoomStateFromSyncDelegate(fun level x y isComplete roomTypeStr monsterDetailStr floorDropDetailStr floorDropAppearsBright ->
+                if level >= 1 && level <= 9 && x >= 0 && x <= 7 && y >= 0 && y <= 7 then
+                    let newRoom = new DungeonRoomState()
+                    newRoom.IsComplete <- isComplete
+                    newRoom.RoomType <- RoomTypeExtensions.Parse(roomTypeStr)
+                    newRoom.MonsterDetail <- MonsterDetailExtensions.Parse(monsterDetailStr)
+                    newRoom.FloorDropDetail <- FloorDropDetailExtensions.Parse(floorDropDetailStr)
+                    newRoom.FloorDropAppearsBright <- floorDropAppearsBright
+                    newRoom.X <- x
+                    newRoom.Y <- y
+                    newRoom.Level <- level
+                    // This will also trigger redraw for that cell
+                    setNewValueFunctions.[level - 1].[x, y](newRoom)
+                    isFirstTimeClickingAnyRoom.[level-1].Value <- false
+
+            )
+
+
         let backgroundColorCanvas = new Canvas(Width=float(51*6+12), Height=float(TH))
         canvasAdd(dungeonHeaderCanvas, backgroundColorCanvas, 0., 0.)
         TrackerModel.GetDungeon(level-1).HiddenDungeonColorOrLabelChanged.Add(fun (color,_) ->
@@ -1112,71 +1393,145 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                         let image = roomStates.[i,j].CurrentDisplayEx(usedTransports)
                         image.IsHitTestVisible <- false
                         canvasAdd(c, image, -BUFFER, -BUFFER)
+
+                        let rowsWithPlaceholders = Set.ofList [0; 1; 4; 5; 6; 7]
+                        if TrackerModelOptions.DisplayIconsInDungeonMap.Value && roomStates.[i,j].IsEmpty && rowsWithPlaceholders.Contains(j) then
+                            let src = placeholderIconsByRow.[j].Source.Clone()
+                            let ph = new System.Windows.Controls.Image()
+                            ph.Source <- src
+                            ph.Opacity <- 0.3  // set how faint it should be
+                            ph.Stretch <- Stretch.Uniform
+                            ph.Width <- float(13*3)
+                            ph.Height <- float(9*3)
+                            RenderOptions.SetBitmapScalingMode(ph, BitmapScalingMode.NearestNeighbor)
+                            canvasAdd(c, ph, -BUFFER, -BUFFER)
+
                         if roomIsCircled.[i,j] then
                             let ellipse = new Shapes.Ellipse(Width=float(13*3+12), Height=float(9*3+12), Stroke=Brushes.Yellow, StrokeThickness=3., IsHitTestVisible=false)
                             //ellipse.StrokeDashArray <- new DoubleCollection( seq[0.;2.5;6.;5.;6.;5.;6.;5.;6.;5.] )
                             ellipse.StrokeDashArray <- new DoubleCollection( seq[0.;12.5;8.;15.;8.;15.;] )
                             roomCircles.[i,j] <- ellipse
                             canvasAdd(roomCirclesCanvas, ellipse, ROOM_X-6.-BUFFER, ROOM_Y-6.-BUFFER)
+                //RPT new. Order unsure
                 redraw()
                 roomRedrawFuncs.Add(fun () -> redraw())
+                roomStates.[i,j].Changed.Add(fun _ -> 
+                    System.Diagnostics.Debug.WriteLine(sprintf "[Changed] triggered for (%d,%d)" i j)
+                    redraw())
+
                 let usedTransportsRemoveState(roomState:DungeonRoomState) =
                     // track transport being changed away from
-                    match roomState.RoomType.KnownTransportNumber with
-                    | None -> false
-                    | Some n -> usedTransports.[n] <- usedTransports.[n] - 1; true
-                let usedTransportsAddState(roomState:DungeonRoomState) =
-                    // note any new transports
-                    match roomState.RoomType.KnownTransportNumber with
-                    | None -> false
-                    | Some n -> usedTransports.[n] <- usedTransports.[n] + 1; true
-                let SetNewValue(newState:DungeonRoomState) =
-                    let originalState = roomStates.[i,j]
-                    if not(originalState.Equals(newState)) then   // don't do work if nothing changed
+                    let ktn = roomState.RoomType.KnownTransportNumber()
+                    if ktn.HasValue then
+                        usedTransports.[ktn.Value] <- usedTransports.[ktn.Value] - 1
+                        true
+                    else
+                        false
+                let usedTransportsAddState (roomState: DungeonRoomState) =
+                    let ktn = roomState.RoomType.KnownTransportNumber()
+                    if ktn.HasValue then
+                        usedTransports.[ktn.Value] <- usedTransports.[ktn.Value] + 1
+                        true
+                    else
+                        false
+
+                let SetNewValue(newState: DungeonRoomState) =
+                    let originalState = roomStates.[i,j].Clone()
+                    System.Diagnostics.Debug.WriteLine(sprintf "SetNewValue called for (%d,%d) - New ID: %O - Current ID: %O"
+                        i j newState.DebugId (roomStates.[i,j].DebugId.ToString()))
+
+
+                    if
+                        //originalState.IsComplete <> newState.IsComplete ||
+                        //originalState.RoomType <> newState.RoomType ||
+                        //originalState.MonsterDetail <> newState.MonsterDetail ||
+                        //originalState.FloorDropDetail <> newState.FloorDropDetail ||
+                        //originalState.FloorDropAppearsBright <> newState.FloorDropAppearsBright
+                        1 <> 2 // RPT: this is a hack to avoid the above checks, which are not needed for the current use case
+                    then
                         let originallyWasNotMarked = originalState.RoomType.IsNotMarked
-                        let isLegal = newState.RoomType = originalState.RoomType || 
-                                        (match newState.RoomType.KnownTransportNumber with
-                                            | None -> true
-                                            | Some n -> usedTransports.[n]<>2)
+
+                        // Determine if this room change is legal
+                        let isLegal =
+                            let newKtn = newState.RoomType.KnownTransportNumber()
+                            let oldKtn = originalState.RoomType.KnownTransportNumber()
+                            if newKtn.HasValue && (not oldKtn.HasValue || newKtn.Value <> oldKtn.Value) then
+                                usedTransports.[newKtn.Value] < 2
+                            else
+                                true
+
+
                         if isLegal then
-                            let removedTransport = usedTransportsRemoveState(roomStates.[i,j])
-                            if roomStates.[i,j].RoomType.IsOldMan then
+                            let removedTransport =
+                                match originalState.RoomType.KnownTransportNumber() with
+                                | v when v.HasValue ->
+                                    usedTransports.[v.Value] <- usedTransports.[v.Value] - 1
+                                    true
+                                | _ -> false
+
+                            if originalState.RoomType.IsOldMan() then
                                 oldManCount <- oldManCount - 1
-                            roomStates.[i,j] <- newState
-                            if roomStates.[i,j].RoomType.IsOldMan then
+
+                            roomStates.[i,j].CSharp.CopyFrom(newState.CSharp)
+                            //roomStates.[i,j].Changed.Add(fun _ -> redraw())
+                            //RPT maybe flip this
+                            if TrackerModelOptions.isCurrentlyApplyingRemoteUpdate() then
+                                redraw()
+
+
+                            if newState.RoomType.IsOldMan() then
                                 oldManCount <- oldManCount + 1
                             updateOldManCountText()
-                            let addedTransport = usedTransportsAddState(roomStates.[i,j])
+
+                            let addedTransport =
+                                match newState.RoomType.KnownTransportNumber() with
+                                | v when v.HasValue ->
+                                    usedTransports.[v.Value] <- usedTransports.[v.Value] + 1
+                                    true
+                                | _ -> false
+
                             if removedTransport || addedTransport then
-                                redrawAllRooms()   // to change numeral colors
-                            // conservative door inference
-                            let secondTransport = newState.RoomType.KnownTransportNumber.IsSome && usedTransports.[newState.RoomType.KnownTransportNumber.Value] = 2
-                            if TrackerModelOptions.DoDoorInference.Value && originallyWasNotMarked && not newState.IsEmpty && not secondTransport && not newState.IsGannonOrZelda then
-                                // they appear to have walked into this room from an adjacent room
+                                redrawAllRooms()
+
+                            // Determine if this is a second transport being added
+                            let ktn = newState.RoomType.KnownTransportNumber()
+                            let secondTransport = ktn.HasValue && usedTransports.[ktn.Value] = 2
+
+                            if TrackerModelOptions.DoDoorInference.Value && originallyWasNotMarked() && not newState.IsEmpty && not secondTransport && not newState.IsGannonOrZelda then
                                 let possibleEntries = ResizeArray()
-                                let maybeAdd(door:Dungeon.Door) =
+                                let maybeAdd (door: Dungeon.Door) =
                                     if door.State <> Dungeon.DoorState.NO then
                                         possibleEntries.Add(door)
-                                if i > 0 && not(roomStates.[i-1,j].IsEmpty) then
-                                    maybeAdd(horizontalDoors.[i-1,j])
-                                if i < 7 && not(roomStates.[i+1,j].IsEmpty) then
-                                    maybeAdd(horizontalDoors.[i,j])
-                                if j > 0 && not(roomStates.[i,j-1].IsEmpty) then
-                                    maybeAdd(verticalDoors.[i,j-1])
-                                if j < 7 && not(roomStates.[i,j+1].IsEmpty) then
-                                    maybeAdd(verticalDoors.[i,j])
+                                if i > 0 && not roomStates.[i-1,j].IsEmpty then maybeAdd(horizontalDoors.[i-1,j])
+                                if i < 7 && not roomStates.[i+1,j].IsEmpty then maybeAdd(horizontalDoors.[i,j])
+                                if j > 0 && not roomStates.[i,j-1].IsEmpty then maybeAdd(verticalDoors.[i,j-1])
+                                if j < 7 && not roomStates.[i,j+1].IsEmpty then maybeAdd(verticalDoors.[i,j])
+
                                 if possibleEntries.Count = 1 then
                                     let door = possibleEntries.[0]
                                     if door.State = Dungeon.DoorState.UNKNOWN then
                                         door.State <- Dungeon.DoorState.YES
+
+                            //let rendered = roomStates.[i,j].CurrentDisplayEx(usedTransports)
+                            //System.Diagnostics.Debug.WriteLine(sprintf "[SetNewValue] Render preview: IsComplete = %b" newState.IsComplete)
+
                             updateHeaderCanvases()
                             redraw()
-                            redrawAllDoors()   // in case off-the-map changed, this adjusts adjacent doors; TODO probably expensive during Load of a save file
+                            redrawAllDoors()
                             animateDungeonRoomTile(i,j)
+                            triggerRoomChanged {
+                                Level = level  // You need to capture this value earlier!
+                                X = i
+                                Y = j
+                                NewState = roomStates.[i,j].CSharp
+                            }
+
+
                         else
-                            // e.g. they tried to set this room to transport4, but two transport4s already exist
                             Graphics.ErrorBeepWithReminderLogText("Cannot mark a third copy of transport-stair pair")
-                setNewValueFunctions.[i,j] <- SetNewValue
+
+
+                setNewValueFunctions.[level-1].[i,j] <- SetNewValue
                 let activatePopup(positionAtEntranceRoomIcons) = async {
                     popupIsActive <- true
                     let roomPos = c.TranslatePoint(Point(), cm.AppMainCanvas)
@@ -1203,89 +1558,109 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                     if not popupIsActive then
                         if not grabHelper.IsGrabMode then
                             match HotKeys.GlobalHotKeyProcessor.TryGetValue(ea.Key) with
-                            | Some(HotKeys.GlobalHotkeyTargets.MoveCursorRight) -> 
+                            | Some(HotKeys.GlobalHotkeyTargets.MoveCursorRight) ->
                                 ea.Handled <- true
-                                if i<7 then
-                                    Graphics.NavigationallyWarpMouseCursorTo(centerOf(float i+1.0, float j))
-                                    //Graphics.WarpMouseCursorTo(centerOf(float i+0.5, float j))
-                                    //roomWeJustCursorNavigatedFrom <- Some(i,j)
+                                if i < 7 then
+                                    Graphics.NavigationallyWarpMouseCursorTo(centerOf(float i + 1.0, float j))
                                 else
                                     Graphics.NavigationallyWarpMouseCursorTo(localDungeonTrackerPanelPosToCursorRightToF())
-                            | Some(HotKeys.GlobalHotkeyTargets.MoveCursorLeft) -> 
+                            | Some(HotKeys.GlobalHotkeyTargets.MoveCursorLeft) ->
                                 ea.Handled <- true
-                                if i>0 then
-                                    Graphics.NavigationallyWarpMouseCursorTo(centerOf(float i-1.0, float j))
-                                    //Graphics.WarpMouseCursorTo(centerOf(float i-0.5, float j))
-                                    //roomWeJustCursorNavigatedFrom <- Some(i,j)
-                            | Some(HotKeys.GlobalHotkeyTargets.MoveCursorUp) -> 
+                                if i > 0 then
+                                    Graphics.NavigationallyWarpMouseCursorTo(centerOf(float i - 1.0, float j))
+                            | Some(HotKeys.GlobalHotkeyTargets.MoveCursorUp) ->
                                 ea.Handled <- true
-                                if j>0 then
-                                    Graphics.NavigationallyWarpMouseCursorTo(centerOf(float i,float j-1.0))
-                                    //Graphics.WarpMouseCursorTo(centerOf(float i,float j-0.5))
-                                    //roomWeJustCursorNavigatedFrom <- Some(i,j)
-                            | Some(HotKeys.GlobalHotkeyTargets.MoveCursorDown) -> 
+                                if j > 0 then
+                                    Graphics.NavigationallyWarpMouseCursorTo(centerOf(float i, float j - 1.0))
+                            | Some(HotKeys.GlobalHotkeyTargets.MoveCursorDown) ->
                                 ea.Handled <- true
-                                if j<7 then
-                                    Graphics.NavigationallyWarpMouseCursorTo(centerOf(float i,float j+1.0))
-                                    //Graphics.WarpMouseCursorTo(centerOf(float i,float j+0.5))
-                                    //roomWeJustCursorNavigatedFrom <- Some(i,j)
+                                if j < 7 then
+                                    Graphics.NavigationallyWarpMouseCursorTo(centerOf(float i, float j + 1.0))
                             | _ -> ()
-                            if ea.Handled then ()
-                            else
-                            let urb(hk) =   // Unmark-Remark behavior
-                                match justUnmarked with
-                                | Some(x,y,phk) when x=i && y=j && phk=hk -> unmarkRemarkBehavior(cm, justUnmarked.Value, boxViewsAndActivations, level-1, centerOf(float i, float j))
-                                | _ -> justUnmarked <- None
-                            // idempotent action on marked part toggles to Unmarked; user can left click to toggle completed-ness
-                            let hk = HotKeys.DungeonRoomHotKeyProcessor.TryGetValue(ea.Key)
-                            match hk with
-                            | Some(Choice1Of4(roomType)) -> 
-                                ea.Handled <- true
-                                let workingCopy = roomStates.[i,j].Clone()
-                                if workingCopy.RoomType = roomType then
-                                    workingCopy.RoomType <- RoomType.Unmarked
-                                    justUnmarked <- Some(i,j,hk)
-                                else
-                                    workingCopy.RoomType <- roomType
-                                    urb(hk)
-                                SetNewValue(workingCopy)
-                            | Some(Choice2Of4(monsterDetail)) -> 
-                                ea.Handled <- true
-                                let workingCopy = roomStates.[i,j].Clone()
-                                if workingCopy.MonsterDetail = monsterDetail then
-                                    workingCopy.MonsterDetail <- MonsterDetail.Unmarked
-                                    justUnmarked <- Some(i,j,hk)
-                                else
-                                    workingCopy.MonsterDetail <- monsterDetail
-                                    urb(hk)
-                                SetNewValue(workingCopy)
-                            | Some(Choice3Of4(floorDropDetail)) -> 
-                                ea.Handled <- true
-                                let workingCopy = roomStates.[i,j].Clone()
-                                if workingCopy.FloorDropDetail = floorDropDetail then
-                                    workingCopy.FloorDropDetail <- FloorDropDetail.Unmarked
-                                    justUnmarked <- Some(i,j,hk)
-                                else
-                                    workingCopy.FloorDropDetail <- floorDropDetail
-                                    urb(hk)
-                                SetNewValue(workingCopy)
-                            | Some(Choice4Of4(doorHotKeyResponse)) -> 
-                                ea.Handled <- true
-                                justUnmarked <- None
-                                match doorHotKeyResponse.Direction, doorHotKeyResponse.Action with
-                                | DoorDirection.West, DoorAction.Increment -> if i>0 then horizontalDoors.[i-1,j].Next()
-                                | DoorDirection.West, DoorAction.Decrement -> if i>0 then horizontalDoors.[i-1,j].Prev()
-                                | DoorDirection.East, DoorAction.Increment -> if i<7 then horizontalDoors.[i,j].Next()
-                                | DoorDirection.East, DoorAction.Decrement -> if i<7 then horizontalDoors.[i,j].Prev()
-                                | DoorDirection.North, DoorAction.Increment -> if j>0 then verticalDoors.[i,j-1].Next()
-                                | DoorDirection.North, DoorAction.Decrement -> if j>0 then verticalDoors.[i,j-1].Prev()
-                                | DoorDirection.South, DoorAction.Increment -> if j<7 then verticalDoors.[i,j].Next()
-                                | DoorDirection.South, DoorAction.Decrement -> if j<7 then verticalDoors.[i,j].Prev()
-                            | None -> ()
-                            if ea.Handled then  // if they pressed an actual hotkey
-                                isFirstTimeClickingAnyRoom.[level-1].Value <- false  // hotkey cancels first-time click accelerator, so not to interfere with all-hotkey folks
-                                numeral.Opacity <- 0.0
-                    )
+
+                            if not ea.Handled then
+                                let urb(hkOpt: Choice<RoomType, MonsterDetail, FloorDropDetail, 'a> option) =
+                                    match justUnmarked, hkOpt with
+                                    | Some(x, y, phk), Some(hk) when x = i && y = j && phk = hk ->
+                                        unmarkRemarkBehavior(
+                                            cm,
+                                            (x, y, Some hk),  // pass the unwrapped Choice value
+                                            boxViewsAndActivations,
+                                            level - 1,
+                                            centerOf(float i, float j)
+                                        )
+                                    | _ ->
+                                        justUnmarked <- None
+
+
+                                let hk = HotKeys.DungeonRoomHotKeyProcessor.TryGetValue(ea.Key)
+
+                                match hk with
+                                | Some(Choice1Of4 rtObj) ->
+                                    try
+                                        let roomType = unbox<RoomType> rtObj
+                                        ea.Handled <- true
+                                        let room = roomStates.[i, j]
+                                        if room.RoomType = roomType then
+                                            room.RoomType <- RoomType.Unmarked
+                                            justUnmarked <- Some(i, j, choice1 roomType)
+                                        else
+                                            room.RoomType <- roomType
+                                            urb(Some(choice1 roomType))
+                                        SetNewValue(room)
+                                    with :? System.InvalidCastException -> ()
+
+                                | Some(Choice2Of4 mdObj) ->
+                                    try
+                                        let monsterDetail = unbox<MonsterDetail> mdObj
+                                        ea.Handled <- true
+                                        let room = roomStates.[i, j]
+                                        if room.MonsterDetail = monsterDetail then
+                                            room.MonsterDetail <- MonsterDetail.Unmarked
+                                            justUnmarked <- Some(i, j, choice2 monsterDetail)
+                                        else
+                                            room.MonsterDetail <- monsterDetail
+                                            urb(Some(choice2 monsterDetail))
+                                        SetNewValue(room)
+                                    with :? System.InvalidCastException -> ()
+
+                                | Some(Choice3Of4 fdObj) ->
+                                    try
+                                        let floorDropDetail = unbox<FloorDropDetail> fdObj
+                                        ea.Handled <- true
+                                        let room = roomStates.[i, j]
+                                        if room.FloorDropDetail = floorDropDetail then
+                                            room.FloorDropDetail <- FloorDropDetail.Unmarked
+                                            justUnmarked <- Some(i, j, choice3 floorDropDetail)
+                                        else
+                                            room.FloorDropDetail <- floorDropDetail
+                                            urb(Some(choice3 floorDropDetail))
+                                        SetNewValue(room)
+                                    with :? System.InvalidCastException -> ()
+
+                                | Some(Choice4Of4 dhkrObj) ->
+                                    match dhkrObj with
+                                    | :? DoorHotKeyResponse as doorHotKeyResponse ->
+                                        ea.Handled <- true
+                                        justUnmarked <- Some(i, j, choice4 doorHotKeyResponse)
+                                        match doorHotKeyResponse.Direction, doorHotKeyResponse.Action with
+                                        | DoorDirection.West, DoorAction.Increment   -> if i > 0 then horizontalDoors.[i - 1, j].Next()
+                                        | DoorDirection.West, DoorAction.Decrement   -> if i > 0 then horizontalDoors.[i - 1, j].Prev()
+                                        | DoorDirection.East, DoorAction.Increment   -> if i < 7 then horizontalDoors.[i, j].Next()
+                                        | DoorDirection.East, DoorAction.Decrement   -> if i < 7 then horizontalDoors.[i, j].Prev()
+                                        | DoorDirection.North, DoorAction.Increment  -> if j > 0 then verticalDoors.[i, j - 1].Next()
+                                        | DoorDirection.North, DoorAction.Decrement  -> if j > 0 then verticalDoors.[i, j - 1].Prev()
+                                        | DoorDirection.South, DoorAction.Increment  -> if j < 7 then verticalDoors.[i, j].Next()
+                                        | DoorDirection.South, DoorAction.Decrement  -> if j < 7 then verticalDoors.[i, j].Prev()
+                                    | _ ->
+                                        justUnmarked <- None
+
+                                | None -> ()
+
+                                if ea.Handled then
+                                    isFirstTimeClickingAnyRoom.[level - 1].Value <- false
+                                    numeral.Opacity <- 0.0
+                )
                 let mutable justHighlightedMeatShop = false
                 c.MouseEnter.Add(fun _ ->
                     if not popupIsActive then
@@ -1329,9 +1704,9 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                         let! mdOpt = DungeonPopups.DoMonsterDetailPopup(cm, pos.X, pos.Y, roomStates.[i,j].MonsterDetail)
                         match mdOpt with
                         | Some(md) ->
-                            let workingCopy = roomStates.[i,j].Clone()
-                            workingCopy.MonsterDetail <- md
-                            SetNewValue(workingCopy)
+                            let room = roomStates.[i,j]
+                            room.MonsterDetail <- md
+                            SetNewValue(room)
                         | None -> ()
                         justUnmarked <- None
                         popupIsActive <- false
@@ -1342,9 +1717,9 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                         let! fdOpt = DungeonPopups.DoFloorDropDetailPopup(cm, pos.X, pos.Y, roomStates.[i,j].FloorDropDetail)
                         match fdOpt with
                         | Some(fd) ->
-                            let workingCopy = roomStates.[i,j].Clone()
-                            workingCopy.FloorDropDetail <- fd
-                            SetNewValue(workingCopy)
+                            let room = roomStates.[i,j]
+                            room.FloorDropDetail <- fd
+                            SetNewValue(room)
                         | None -> ()
                         justUnmarked <- None
                         popupIsActive <- false
@@ -1376,7 +1751,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                             redraw()
                             redrawAllDoors()
                             showMinimaps()
-                        elif whichButtonStr = "M" && roomStates.[i,j].RoomType.IsNotMarked then
+                        elif whichButtonStr = "M" && roomStates.[i,j].RoomType.IsNotMarked() then
                             isFirstTimeClickingAnyRoom.[level-1].Value <- false  // originally painting cancels the first time accelerator (for 'play half dungeon, then start maybe-marking' scenario)
                             numeral.Opacity <- 0.0
                             roomStates.[i,j].RoomType <- defaultRoom()
@@ -1387,6 +1762,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                 roomDragDrop.RegisterClickable(c, (fun ea ->
                     if not popupIsActive then
                         async {
+                            if ea.Handled then return ()
                             if ea.ChangedButton = Input.MouseButton.Left then
                                 if grabHelper.IsGrabMode then
                                     if not grabHelper.HasGrab then
@@ -1396,11 +1772,27 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                             highlightImpl(dungeonSourceHighlightCanvas, contiguous, Brushes.Pink)  // this highlight stays around until completed/aborted
                                             highlight(contiguous, Brushes.Lime)
                                     else
-                                        let backupRoomStates = roomStates |> Array2D.map (fun x -> x.Clone())
+                                        //let backupRoomStates = roomStates |> Array2D.map (fun x -> x.Clone())
+                                        let backupRoomValues =
+                                            roomStates |> Array2D.map (fun r ->
+                                                r.RoomType, r.MonsterDetail, r.FloorDropDetail, r.FloorDropAppearsBright, r.IsComplete)
+
                                         let backupRoomIsCircled = roomIsCircled.Clone() :?> bool[,]
                                         let backupHorizontalDoors = horizontalDoors |> Array2D.map (fun c -> c.State)
                                         let backupVerticalDoors = verticalDoors |> Array2D.map (fun c -> c.State)
+
                                         grabHelper.DoDrop(i,j,roomStates,roomIsCircled,horizontalDoors,verticalDoors)
+                                        for x = 0 to 7 do
+                                            for y = 0 to 7 do
+                                                if not roomStates.[x,y].IsEmpty then
+                                                    triggerRoomChanged {
+                                                        Level = level
+                                                        X = x
+                                                        Y = y
+                                                        NewState = roomStates.[x, y].CSharp
+                                                    }
+
+
                                         redrawAllRooms()  // make updated changes visual
                                         let cmb = new CustomMessageBox.CustomMessageBox("Verify changes", System.Drawing.SystemIcons.Question, "You moved a dungeon segment. Keep this change?", ["Keep changes"; "Undo"])
                                         cmb.Owner <- Window.GetWindow(c)
@@ -1408,7 +1800,15 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                         grabRedraw()  // DoDrop completes the grab, neeed to update the visual
                                         if cmb.MessageBoxResult = null || cmb.MessageBoxResult = "Undo" then
                                             // copy back from old state
-                                            backupRoomStates |> Array2D.iteri (fun x y v -> roomStates.[x,y] <- v)
+                                            backupRoomValues |> Array2D.iteri (fun x y (rt, md, fd, bright, complete) ->
+                                                let r = roomStates.[x,y]
+                                                r.RoomType <- rt
+                                                r.MonsterDetail <- md
+                                                r.FloorDropDetail <- fd
+                                                r.FloorDropAppearsBright <- bright
+                                                r.IsComplete <- complete
+                                            )
+
                                             backupRoomIsCircled |> Array2D.iteri (fun x y v -> roomIsCircled.[x,y] <- v)
                                             redrawAllRooms()  // make reverted changes visual
                                             horizontalDoors |> Array2D.iteri (fun x y c -> c.State <- backupHorizontalDoors.[x,y])
@@ -1419,38 +1819,82 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                         doMonsterDetailPopup()
                                     else
                                         // plain left click
-                                        let workingCopy = roomStates.[i,j].Clone()
-                                        if not(isFirstTimeClickingAnyRoom.[level-1].Value) && roomStates.[i,j].RoomType.IsNotMarked then
-                                            // ad hoc useful gesture for clicking unknown room - it moves it to explored & completed state
-                                            workingCopy.RoomType <- defaultRoom()
-                                            workingCopy.IsComplete <- true
-                                            SetNewValue(workingCopy)
+                                        //let workingCopy = roomStates.[i,j].Clone()
+                                        let room = roomStates.[i,j]
+
+                                        if not(isFirstTimeClickingAnyRoom.[level-1].Value) && roomStates.[i,j].RoomType.IsNotMarked() then
+                                            let room = roomStates.[i,j]
+                                            let original = room.Clone()
+                                            room.RoomType <- defaultRoom()
+                                            room.IsComplete <- true
+                                            roomStates.[i,j] <- original
+                                            SetNewValue(room)
+                                            roomStates.[i,j] <- room
                                             justUnmarked <- None
+                                            ea.Handled <- true
+
                                         else
                                             if isFirstTimeClickingAnyRoom.[level-1].Value then
-                                                workingCopy.RoomType <- RoomType.StartEnterFromS
-                                                workingCopy.IsComplete <- true
-                                                SetNewValue(workingCopy)
+                                                let room = roomStates.[i,j]
+                                                printf "Room X at %d and y at %d" room.X room.Y
+                                                let original = room.Clone()
+                                                room.RoomType <- RoomType.StartEnterFromS
+                                                room.IsComplete <- true
+                                                roomStates.[i,j] <- original
+                                                SetNewValue(room)
+                                                roomStates.[i,j] <- room
                                                 isFirstTimeClickingAnyRoom.[level-1].Value <- false
                                                 numeral.Opacity <- 0.0
                                                 justUnmarked <- None
+                                                ea.Handled <- true
+
                                             else
-                                                match roomStates.[i,j].RoomType.NextEntranceRoom() with
-                                                | Some(next) -> 
-                                                    workingCopy.RoomType <- next  // cycle the entrance arrow around cardinal positions
-                                                    SetNewValue(workingCopy)
+                                                let room = roomStates.[i,j]
+                                                let next = RoomTypeExtensions.NextEntranceRoom(room.RoomType)
+                                                if room.RoomType.IsEntranceRoom() then
+                                                    let original = room.Clone()
+                                                    room.RoomType <- next.Value
+                                                    roomStates.[i,j] <- original
+                                                    SetNewValue(room)
+                                                    roomStates.[i,j] <- room
                                                     justUnmarked <- None
-                                                | None ->
-                                                    if roomStates.[i,j].RoomType = RoomType.OffTheMap then
-                                                        // left clicking an off the map paints it back on; helps recover people who accidentally toggle all OffTheMap
-                                                        workingCopy.RoomType <- RoomType.Unmarked
-                                                        SetNewValue(workingCopy)
+                                                    ea.Handled <- true
+
+                                                else
+                                                    if room.RoomType = RoomType.OffTheMap then
+                                                        let original = room.Clone()
+                                                        room.RoomType <- RoomType.Unmarked
+                                                        roomStates.[i,j] <- original
+                                                        SetNewValue(room)
+                                                        roomStates.[i,j] <- room
                                                         justUnmarked <- None
+                                                        ea.Handled <- true
                                                     else
-                                                        // toggle completedness
-                                                        workingCopy.IsComplete <- not roomStates.[i,j].IsComplete
-                                                        SetNewValue(workingCopy)
+                                                        let original = room.Clone()
+                                                        room.IsComplete <- not room.IsComplete
+                                                        roomStates.[i,j] <- original
+                                                        SetNewValue(room)
+                                                        roomStates.[i,j] <- room
                                                         justUnmarked <- None
+                                                        ea.Handled <- true
+
+                                                    if room.RoomType = RoomType.OffTheMap then
+                                                        let original = room.Clone()
+                                                        room.RoomType <- RoomType.Unmarked
+                                                        roomStates.[i,j] <- original
+                                                        SetNewValue(room)
+                                                        roomStates.[i,j] <- room
+                                                        justUnmarked <- None
+                                                        ea.Handled <- true
+                                                    else
+                                                        let original = room.Clone()
+                                                        room.IsComplete <- not room.IsComplete
+                                                        roomStates.[i,j] <- original
+                                                        SetNewValue(room)
+                                                        roomStates.[i,j] <- room
+                                                        justUnmarked <- None
+                                                        ea.Handled <- true
+
                                         redraw()
                                     ea.Handled <- true
                             elif ea.ChangedButton = Input.MouseButton.Right then
@@ -1468,7 +1912,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                             elif ea.ChangedButton = Input.MouseButton.Middle then
                                 if not grabHelper.IsGrabMode then  // cannot middle click rooms in grab mode
                                     // middle click toggles floor drops, or if none, toggle circles
-                                    if roomStates.[i,j].FloorDropDetail.IsNotMarked then
+                                    if roomStates.[i,j].FloorDropDetail.IsNotMarked() then
                                         roomIsCircled.[i,j] <- not roomIsCircled.[i,j]
                                     else
                                         roomStates.[i,j].ToggleFloorDropBrightness()
@@ -1534,14 +1978,16 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                         if rs.RoomType <> RoomType.Unmarked then
                             isFirstTimeClickingAnyRoom.[level-1].Value <- false
                             numeral.Opacity <- 0.0 
-                        setNewValueFunctions.[i,j](rs)
+                        setNewValueFunctions.[level-1].[i,j](rs)
             // we set the door after the rooms, because DoDoorInference may have inferred some values during the setNewValueFunctions calls, and want to overwrite
             for i = 0 to 6 do
                 for j = 0 to 7 do
                     horizontalDoors.[i,j].State <- Dungeon.DoorState.FromInt dm.HorizontalDoors.[j].[i]
+                    horizontalDoorsPerLevel.[level-1].[i,j].State <- horizontalDoors.[i,j].State
             for i = 0 to 7 do
                 for j = 0 to 6 do
                     verticalDoors.[i,j].State <- Dungeon.DoorState.FromInt dm.VerticalDoors.[j].[i]
+                    verticalDoorsPerLevel.[level-1].[i,j].State <- verticalDoors.[i,j].State
             currentOutlineDisplayState.[level-1] <- dm.VanillaMapOverlay
             doVanillaOutlineRedraw(outlineDrawingCanvases.[level-1], currentOutlineDisplayState.[level-1])
             // just redraw everything once at the end
@@ -1577,7 +2023,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                MonsterDetail.Other; MonsterDetail.RedBubble; MonsterDetail.BlueBubble; MonsterDetail.Aquamentus; MonsterDetail.BlueLanmola;              // other notables, rest of bosses
                MonsterDetail.Moldorm; MonsterDetail.RupeeBoss; MonsterDetail.Other2; MonsterDetail.Traps;                                                // all the
                MonsterDetail.Wallmaster; MonsterDetail.Likelike; MonsterDetail.Gibdo; MonsterDetail.Vire; MonsterDetail.Unmarked |]                      // rest
-        if monsterPriority.Length <> MonsterDetail.All().Length then
+        if monsterPriority.Length <> MonsterDetailExtensions.All().Length then
             failwith "design-time bug, not all monsters prioritized"
         let findAnyMarkedMonsters(dunIdx) = 
             let rs = masterRoomStates.[dunIdx]
@@ -1588,7 +2034,8 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                 for j = 0 to 7 do
                     let monster = rs.[i,j].MonsterDetail
                     hasMonster.[ monster ] <- true
-                    if rs.[i,j].RoomType.NextEntranceRoom().IsSome && monster<>MonsterDetail.Unmarked then
+                    let maybeNext = Z1R_Tracker.Models.Z1R_TrackerInterop.RoomTypeExtensions.NextEntranceRoom(rs.[i,j].RoomType)
+                    if maybeNext.HasValue && monster <> MonsterDetail.Unmarked then
                         lobbyMonster <- Some(monster)
             [|
                 match lobbyMonster with
@@ -1628,7 +2075,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                 let e = 
                                     match room.RoomType with
                                     | RoomType.OffTheMap -> null
-                                    | roomType -> Graphics.BItoImage (if room.IsComplete then roomType.TinyCompletedBI() else roomType.TinyUncompletedBI())
+                                    | roomType -> Graphics.BMPtoImage (if room.IsComplete then roomType.TinyCompletedBI() else roomType.TinyUncompletedBI())
                                 canvasAdd(tinyMaps.[i], e, float(13*x), float(9*y))
                     levelTabSelected.Trigger(10)
             with _ -> ()

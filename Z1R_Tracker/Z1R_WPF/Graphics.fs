@@ -591,6 +591,26 @@ let (zi_triforce_bmp, zi_heart_bmp, zi_bomb_bmp, zi_key_bmp, zi_fiver_bmp, zi_ma
             yield r
     |]
     (a.[0], a.[1], a.[2], a.[3], a.[4], a.[5], a.[6], a.[7], a.[8], a.[9], a.[10], a.[11], a.[12])
+
+//let (placeholder_row0_bmp, placeholder_row1_bmp, placeholder_row2_bmp, placeholder_row3_bmp, placeholder_row4_bmp, placeholder_row5_bmp, placeholder_row6_bmp, placeholder_row7_bmp) =
+//    let imageStream = GetResourceStream("zelda_items16x16.png")
+//    let bmp = new System.Drawing.Bitmap(imageStream)
+//    let a = [|  
+//        for i = 0 to bmp.Width/16 - 1 do
+//            let r = new System.Drawing.Bitmap(18,18)  // border around it
+//            for px = 0 to 17 do
+//                for py = 0 to 17 do
+//                    if px=0 || px=17 || py=0 || py=17 then
+//                        r.SetPixel(px, py, bg16x16)
+//                    else
+//                        r.SetPixel(px, py, System.Drawing.Color.Black)
+//            for px = 0 to 15 do
+//                for py = 0 to 15 do
+//                    let color = bmp.GetPixel(px + i*16, py)
+//                    if color.ToArgb() = System.Drawing.Color.Black.ToArgb() then () else r.SetPixel(px+1, py+1, color)
+//            yield r
+//    |]
+//    (a.[0], a.[1], a.[2], a.[3], a.[4], a.[5], a.[6], a.[7])
 let unborder(bmp:System.Drawing.Bitmap) =
     let r = new System.Drawing.Bitmap(bmp.Width-2, bmp.Height-2)
     for i = 0 to r.Width-1 do

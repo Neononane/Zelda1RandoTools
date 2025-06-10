@@ -14,6 +14,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Z1R_Tracker_NETCoreApp31", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Z1R_Sync", "Z1R_Sync\Z1R_Sync.csproj", "{29A0F848-0E20-424B-8AE0-715AB2719E45}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Z1R_SharedInterop", "Z1R_SharedInterop\Z1R_SharedInterop.fsproj", "{16923CD2-E5D0-428C-66A0-0F8E1505302D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,6 +38,10 @@ Global
 		{29A0F848-0E20-424B-8AE0-715AB2719E45}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{29A0F848-0E20-424B-8AE0-715AB2719E45}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{29A0F848-0E20-424B-8AE0-715AB2719E45}.Release|Any CPU.Build.0 = Release|Any CPU
+		{16923CD2-E5D0-428C-66A0-0F8E1505302D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{16923CD2-E5D0-428C-66A0-0F8E1505302D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{16923CD2-E5D0-428C-66A0-0F8E1505302D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{16923CD2-E5D0-428C-66A0-0F8E1505302D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

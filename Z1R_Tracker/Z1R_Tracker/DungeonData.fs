@@ -55,7 +55,7 @@ module Factoids =
         "In Z-Tracker, you can edit HotKeys.txt in the application folder to set up various keyboard shortcuts.  You can create a Notes.txt file to pre-populate the Notes text in the app, as well."
         "In Z-Tracker, the overworld map highlights various tiles with a green rectangle if you can uncover a location there, a yellow rectangle if the screen may or may not yield a location and you can uncover it, or a red rectangle if you don't have the item to uncover a location there."
         "In Z-Tracker, you can middle-click an overworld tile to circle it, shift-left-click to label the circle, or shift-right-click/scroll a circle to change its color. Use these optional arbitrary marks in any way you find useful."
-        "Dr. Brian Lorgon111 made Z-Tracker.  Send him some love on twitch (lorgon) or on YouTube (lorgon111)."
+        "Dr. Brian Lorgon111 made Z-Tracker and it is now maintained by Neononane.  Send Brian some love on twitch (lorgon) or on YouTube (lorgon111) and Neon love on twitch (Neononane)"
         |]
     let allTips = [|
         yield! noviceTips

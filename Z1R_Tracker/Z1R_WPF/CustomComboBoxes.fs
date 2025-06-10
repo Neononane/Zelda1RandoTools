@@ -446,9 +446,9 @@ let DoModalGridSelect<'State,'Result>
         | Some(HotKeys.GlobalHotkeyTargets.RightClick) -> Graphics.Win32.RightMouseClick()
         | _ -> ()                    
     // grid of choices
-    for x = 0 to gnc-1 do
-        for y = 0 to gnr-1 do
-            let n = y*gnc + x
+    for y = 0 to gnr - 1 do
+        for x = 0 to gnc - 1 do
+            let n = y * gnc + x
             let icon,isSelectable,_ = if n < gridElementsSelectablesAndIDs.Length then gridElementsSelectablesAndIDs.[n] else null,false,Unchecked.defaultof<_>
             if icon <> null then
                 let b = new Border(BorderThickness=Thickness(ST), Background=Brushes.Black)

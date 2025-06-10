@@ -3,6 +3,8 @@
 open SaveAndLoad
 open DungeonRoomState
 open DungeonSaveAndLoad
+open Newtonsoft.Json
+open Newtonsoft.Json.Linq
 
 // Helper: Compare two DungeonRoomModels
 let shouldUpdateRoom (current: DungeonRoomModel) (incoming: DungeonRoomModel) =
@@ -44,4 +46,32 @@ let applyAllDungeonModels (incomingModels: DungeonModel[]) =
     else
         printfn "[Sync] Skipping dungeon sync: TrackerModel not yet initialized."
 
+/// Applies a single CDungeonRoomState update from a JSON payload.
+/// The payload must include DungeonIndex (0-8), X, Y, and the room object.
+//let applySingleRoomStateFromJson (payloadJson: string) =
+//    let jo = JObject.Parse(payloadJson)
+//    let dungeonIndex = jo.["DungeonIndex"].ToObject<int>()
+//    let x = jo.["X"].ToObject<int>()
+//    let y = jo.["Y"].ToObject<int>()
+//    let roomModelJson = jo.["Room"].ToString()
 
+//    if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome then
+//        let exportFn = DungeonUI.exportFunctions.[dungeonIndex]
+//        let importFn = DungeonUI.importFunctions.[dungeonIndex]
+//        let currentModel = exportFn()
+
+//        let incomingRoom = JsonConvert.DeserializeObject<DungeonRoomModel>(roomModelJson)
+
+//        // Apply if different
+//        let mutable changed = false
+//        if shouldUpdateRoom currentModel.RoomStates.[x, y] incomingRoom then
+//            applyRoomModel currentModel.RoomStates.[x, y] incomingRoom
+//            changed <- true
+
+//        if changed then
+//            CoopSync.dungeonMapsSyncOrigin.MarkSyncStart()
+//            try
+//                importFn currentModel
+//                TrackerModel.dungeonRoomModelChanged.SetNow()
+//            finally
+//                CoopSync.dungeonMapsSyncOrigin.MarkSyncEnd()

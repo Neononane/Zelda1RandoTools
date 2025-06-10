@@ -22,6 +22,47 @@ namespace Z1R_Sync
         private static Action<string, string, string> _onTileChange;
         private static Action<string, string, string> _onSyncMessage;
 
+        private static string lastSentDoorChangePayload = null;
+
+        public static void MarkLastSentDoorChange(string payload)
+        {
+            lastSentDoorChangePayload = payload;
+        }
+
+        public static bool ShouldSuppressDoorChange(string payload)
+        {
+            return lastSentDoorChangePayload == payload;
+        }
+
+        private static string lastSentRoomChangePayload = null;
+
+        public static void MarkLastSentRoomChange(string payload)
+        {
+            lastSentRoomChangePayload = payload;
+        }
+
+        public static bool ShouldSuppressRoomChange(string payload)
+        {
+            return lastSentRoomChangePayload == payload;
+        }
+        private static bool _suppressRoomChange = false;
+
+        public static void BeginSuppressingRoomChanges()
+        {
+            _suppressRoomChange = true;
+        }
+
+        public static void EndSuppressingRoomChanges()
+        {
+            _suppressRoomChange = false;
+        }
+
+        public static bool IsSuppressingRoomChanges()
+        {
+            return _suppressRoomChange;
+        }
+
+
         public static void Configure(string azureFunctionUrl)
         {
             _AzureFunctionUrl = azureFunctionUrl;

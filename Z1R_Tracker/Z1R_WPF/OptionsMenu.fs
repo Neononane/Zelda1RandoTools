@@ -20,6 +20,7 @@ let mutable gamepadFailedToInitialize = false
 let broadcastWindowOptionChanged = new Event<unit>()
 let mouseMagnifierWindowOptionChanged = new Event<unit>()
 let BOARDInsteadOfLEVELOptionChanged = new Event<unit>()
+let displayIconsInDungeonMapOptionChanged = new Event<unit>()
 let secondQuestDungeonsOptionChanged = new Event<unit>()
 let showBasementInfoOptionChanged = new Event<unit>()
 let bookForHelpfulHintsOptionChanged = new Event<unit>()
@@ -55,6 +56,7 @@ let data1o(isStandardHyrule) =
 
 let data1d = [|
     "BOARD instead of LEVEL", "Check this to change the dungeon column labels to BOARD-N instead of LEVEL-N", TrackerModelOptions.BOARDInsteadOfLEVEL, false, BOARDInsteadOfLEVELOptionChanged.Trigger
+    "Dungeon Map Location Hint", "Check this box to add a transparent icon to the dungeon map rooms in order to better guess where that room is", TrackerModelOptions.DisplayIconsInDungeonMap, false, displayIconsInDungeonMapOptionChanged.Trigger
 // now a clickable feature of top tracker area
 //    "Second quest dungeons", "Check this if dungeon 4, rather than dungeon 1, has 3 items (no effect when Hidden Dungeon Numbers)", TrackerModelOptions.IsSecondQuestDungeons, false, secondQuestDungeonsOptionChanged.Trigger
     "Show basement info", "Check this if empty dungeon item boxes should suggest whether they are found as\nbasement items rather than floor drops (no effect when Hidden Dungeon Numbers)", TrackerModelOptions.ShowBasementInfo, false, showBasementInfoOptionChanged.Trigger

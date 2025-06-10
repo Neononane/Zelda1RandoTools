@@ -71,11 +71,15 @@
     <Content Include="App.config" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="FSharp.Core">
+      <HintPath>..\packages\FSharp.Core.6.0.4\lib\netstandard2.0\FSharp.Core.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces">
       <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.5.0.0\lib\net461\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+    <Reference Include="FSharp.Core, Version=4.4.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -109,9 +113,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Z1R_Sync\Z1R_Sync.csproj">
-      <Name>Z1R_Sync</Name>
-      <Project>{29a0f848-0e20-424b-8ae0-715ab2719e45}</Project>
+    <ProjectReference Include="..\Z1R_SharedInterop\Z1R_SharedInterop.fsproj">
+      <Name>Z1R_SharedInterop</Name>
+      <Project>{16923cd2-e5d0-428c-66a0-0f8e1505302d}</Project>
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>
