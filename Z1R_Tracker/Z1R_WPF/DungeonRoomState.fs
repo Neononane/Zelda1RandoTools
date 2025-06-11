@@ -201,8 +201,9 @@ type DungeonRoomState(csharpModel: CDungeonRoomState) as this =
                 let bmp =
                     match spriteOverride with
                     | Some idx ->
-                        let pair = cachedTilePairs.[idx]
-                        if isCompleted then pair.Item2 else pair.Item1
+                        let (uncompleted, completed) = cachedTilePairs.[idx]
+                        if isCompleted then completed else uncompleted
+
                     | None ->
                         if isCompleted then rt.CompletedBI() else rt.UncompletedBI()
 

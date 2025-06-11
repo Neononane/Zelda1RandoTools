@@ -433,8 +433,8 @@ let subscribeToOverworldChanges (myConsoleId: string) =
         async {
             do! Async.Sleep(500)  // check every 500ms
             let currentTime = TrackerModel.mapLastChangedTime.Time
-            if currentTime > lastSentTime then
-                lastSentTime <- currentTime
+            if currentTime.Ticks > lastSentTime.Ticks then
+                lastSentTime <- currentTime.AddMilliseconds(1.0)
                 sendOverworldUpdateDebounced myConsoleId
             return! loop ()
         }

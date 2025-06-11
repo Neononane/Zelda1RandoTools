@@ -400,8 +400,8 @@ type MyWindow() as this =
             let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
             if senderId <> me && senderId = target then
                 try
-                    let tileInt = int tileId
-                    let iconInt = int iconId
+                    //let tileInt = int tileId
+                    //let iconInt = int iconId
                     //TileCustomization.assignIcon cm tileInt iconInt
                     TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Received tile change from %s: tileId=%s, iconId=%s" senderId tileId iconId)
                  with ex ->

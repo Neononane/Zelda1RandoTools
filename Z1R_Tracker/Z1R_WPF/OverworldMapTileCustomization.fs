@@ -374,6 +374,7 @@ let DoLeftClick(cm:CustomComboBoxes.CanvasManager,msp:MapStateProxy,i,j,pos:Poin
             match g with
             | Some(currentState) ->
                 TrackerModel.setOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP,currentState+1)  // extraData is 1-based
+                TrackerModel.mapLastChangedTime.SetNow()
                 true, (originalState = -1 && currentState <> -1)
             | None -> false, false
         popupIsActive <- false
@@ -674,11 +675,11 @@ let MakeMappedHotKeysDisplay() =
         | Choice2Of4 md -> 
             let i = md.Bmp() |> bmpElseSize(18,18) 
             i.HorizontalAlignment <- HorizontalAlignment.Left
-            upcast i
+            i
         | Choice3Of4 fd -> 
             let i = fd.Bmp() |> bmpElseSize(18,18) 
             i.HorizontalAlignment <- HorizontalAlignment.Right
-            upcast i
+            i
         | Choice4Of4 dr -> 
             let c = 
                 match dr.Action with 
@@ -694,6 +695,8 @@ let MakeMappedHotKeysDisplay() =
                     new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top)
                 | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.South -> 
                     new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Bottom)
+                | _ -> // Handle unknown values
+                    new DockPanel(Background=Brushes.Red,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center)
             let r = new DockPanel(Width=39., Height=27.)
             r.Children.Add(panel) |> ignore
             upcast r
