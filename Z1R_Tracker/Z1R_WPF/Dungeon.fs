@@ -128,7 +128,7 @@ let startLocalSignalRHost (port: string) =
         if System.IO.File.Exists(exePath) then
             let psi = new System.Diagnostics.ProcessStartInfo()
             psi.FileName <- exePath
-            psi.Arguments <- "--urls http://0.0.0.0:" + port
+            psi.Arguments <- port
             psi.UseShellExecute <- false
             psi.CreateNoWindow <- true
             let proc = System.Diagnostics.Process.Start(psi)

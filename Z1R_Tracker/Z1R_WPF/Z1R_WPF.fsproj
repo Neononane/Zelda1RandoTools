@@ -326,6 +326,7 @@
       <Name>Z1R_Tracker</Name>
       <Project>{6b605496-ea45-4694-90f5-a3953d338bec}</Project>
       <Private>True</Private>
+	  
     </ProjectReference>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -335,4 +336,18 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+<Target Name="PublishSignalRHost" BeforeTargets="BeforeBuild">
+  <Exec Command="dotnet publish ../Z1R_SignalRHost/Z1R_SignalRHost.csproj -c $(Configuration) -r win-x86 --self-contained true -p:PublishSingleFile=true -o ../Z1R_SignalRHost/bin/$(Configuration)/netcoreapp3.1/win-x86/publish" />
+</Target>
+
+
+<Target Name="CopySignalRHostExe" AfterTargets="Build">
+  <Copy 
+    SourceFiles="../Z1R_SignalRHost/bin/$(Configuration)/netcoreapp3.1/win-x86/publish/Z1R_SignalRHost.exe" 
+    DestinationFolder="$(OutputPath)" 
+    SkipUnchangedFiles="true" />
+</Target>
+
+
+
 </Project>

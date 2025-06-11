@@ -71,10 +71,13 @@ module CoopSyncOptions =
     let mutable private enableCoop = false
 
     let GetEnableCoop () = enableCoop
-    let SetEnableCoop value =
-        if enableCoop <> value then
-            enableCoop <- value
-            EnableCoopChanged.Trigger(value)
+    //let SetEnableCoop value =
+    //    if enableCoop <> value then
+    //        enableCoop <- value
+    //        EnableCoopChanged.Trigger(value)
+    let SetEnableCoop(v: bool) =
+        enableCoop <- v
+        EnableCoopChanged.Trigger(v)
 
 //RPT added this to support debugging for coop purposes
 module DebugConfig =
@@ -425,7 +428,7 @@ let private read(filename) =
 
         CoopSyncOptions.MyConsoleId <- data.MyConsoleId
         CoopSyncOptions.TargetConsoleId <- data.TargetConsoleId
-        CoopSyncOptions.SetEnableCoop(data.EnableCoop)
+        //CoopSyncOptions.SetEnableCoop(data.EnableCoop)
         CoopSyncOptions.FunctionAppBase <- data.FunctionAppBase
         CoopSyncOptions.baseNegotiateUrl <- data.baseNegotiateUrl
         CoopSyncOptions.baseSyncUpdateUrl <- data.baseSyncUpdateUrl

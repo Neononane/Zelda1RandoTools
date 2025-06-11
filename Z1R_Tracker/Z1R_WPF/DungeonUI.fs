@@ -167,19 +167,15 @@ placeholderIcon.Stretch <- Stretch.Uniform
 placeholderIcon.Opacity <- 0.3  // Adjust as needed
 
 let wireRoomChangeEventsForSync (gridArray: DungeonRoomState[,][] ) =
-    printfn "[RoomSync] Starting to wire room change events"
     for level = 0 to 8 do
         let grid = gridArray.[level]
         for x = 0 to 7 do
             for y = 0 to 7 do
                 let room = grid.[x, y]
                 let csharpId = room.CSharp.DebugId
-                printfn "[WireCheck] Wiring room wrapper whose C# ID is %s" (csharpId.ToString())
 
                 room.Changed.Add(fun _ ->
-                    printfn "[RoomSync] Changed triggered for L%d (%d,%d)" (level + 1) x y
                     if not (TrackerModelOptions.isCurrentlyApplyingRemoteUpdate()) then
-                        printfn "[RoomSync] Sending RoomChange for L%d (%d,%d)" (level + 1) x y
                         RoomSyncBridge.OnRoomChanged.Invoke(level + 1, x, y, room.CSharp)
                 )
 
@@ -517,9 +513,8 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                 for y = 0 to 7 do
                     let room = arr.[level].[x, y]
                     let id = room.CSharp.DebugId
-                    printfn "[WireCheck] Wiring DungeonRoomState wrapper for L%d (%d,%d) with ID %s" (level + 1) x y (id.ToString())
                     room.CSharp.Changed.Add(fun _ ->
-                        printfn "[RoomSync] Changed triggered for L%d (%d,%d) — ID %s" (level + 1) x y (id.ToString())
+                        TrackerModelOptions.DebugConfig.Log("[RoomSync] Changed triggered for L%d (%d,%d) — ID %s")
                     )
 
     

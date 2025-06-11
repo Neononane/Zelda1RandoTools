@@ -148,6 +148,7 @@ let showCoopHostSettingsWindow(cm: CustomComboBoxes.CanvasManager) =
             isSessionEnabled <- true
             enableCheck.IsChecked <- System.Nullable.op_Implicit true
         TrackerModelOptions.CoopHostSession <- true
+        TrackerModelOptions.CoopSyncOptions.SetEnableCoop(true)
         Dungeon.startLocalSignalRHost port
         wh.Set() |> ignore
         window.Close()
