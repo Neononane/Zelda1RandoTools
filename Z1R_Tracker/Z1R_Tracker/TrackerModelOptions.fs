@@ -130,6 +130,8 @@ let mutable SpotSummaryPopout_DisplayedLT = ""
 let mutable InventoryAndHeartsPopout_DisplayedLT = ""
 let mutable RemainingItemsPoput_DisplayedLT = ""
 let mutable DungeonSummaryTabMode = 0
+let mutable PortNumber = "5000"
+let mutable CoopHostSession = false
 
 
 type ReadWrite() =
@@ -226,6 +228,8 @@ type ReadWrite() =
     member val NegotiateUrl = (CoopSyncOptions.FunctionAppBase + CoopSyncOptions.baseNegotiateUrl) with get
     member val SyncUpdateUrl = (CoopSyncOptions.FunctionAppBase + CoopSyncOptions.baseSyncUpdateUrl) with get
 
+    member val PortNumber = "5000" with get,set
+
 let mutable private cachedSettingJson = null
 
 //I don't want to write the settings file every time a setting changes, so I'll cache the json string and only write it when it changes.
@@ -318,6 +322,7 @@ let private writeImpl(filename) =
     data.FunctionAppBase <- CoopSyncOptions.FunctionAppBase
     data.baseNegotiateUrl <- CoopSyncOptions.baseNegotiateUrl
     data.baseSyncUpdateUrl <- CoopSyncOptions.baseSyncUpdateUrl
+    data.PortNumber <- PortNumber
 
 
     let json = JsonSerializer.Serialize<ReadWrite>(data, new JsonSerializerOptions(WriteIndented=true))

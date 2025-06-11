@@ -120,6 +120,36 @@ let mutable roomChangedCallback : (int -> int -> int -> unit) = fun _ _ _ -> ()
 let SetRoomChangedCallback(cb: int -> int -> int -> unit) =
     roomChangedCallback <- cb
 
+let mutable signalRHostProcess : System.Diagnostics.Process option = None
+
+let startLocalSignalRHost (port: string) =
+    try
+        let exePath = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "Z1R_SignalRHost.exe")
+        if System.IO.File.Exists(exePath) then
+            let psi = new System.Diagnostics.ProcessStartInfo()
+            psi.FileName <- exePath
+            psi.Arguments <- "--urls http://0.0.0.0:" + port
+            psi.UseShellExecute <- false
+            psi.CreateNoWindow <- true
+            let proc = System.Diagnostics.Process.Start(psi)
+            signalRHostProcess <- Some proc
+            printfn "[Sync] Launched SignalR host on port %s" port
+        else
+            printfn "[Sync] Host EXE not found at %s" exePath
+    with ex ->
+        printfn "[Sync] Launch error: %s" ex.Message
+
+
+
+let stopLocalSignalRHost() =
+    match signalRHostProcess with
+    | Some proc when not proc.HasExited ->
+        try
+            proc.Kill()
+            printfn "[Sync] Stopped Z1R_SignalRHost.exe"
+        with ex ->
+            printfn "[Sync] Error stopping host: %s" (ex.Message)
+    | _ -> ()
 
 type GrabHelper() =
     let mutable isGrabMode = false

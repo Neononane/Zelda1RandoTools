@@ -139,6 +139,7 @@
   <ItemGroup>
     <Compile Include="CDungeonRoomState.cs" />
     <Compile Include="DungeonDoorInterop.cs" />
+    <Compile Include="ManageContainer.cs" />
     <Compile Include="SyncManager.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

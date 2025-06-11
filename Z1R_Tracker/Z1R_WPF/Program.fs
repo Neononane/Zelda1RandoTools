@@ -195,6 +195,10 @@ let ApplyKonamiCodeEasterEgg(cm:CustomComboBoxes.CanvasManager, fe:FrameworkElem
                     } |> Async.StartImmediate
         )
 
+
+
+
+
 let mutable theDummyWindow : Window = null
 let waitForConsole = new System.Threading.ManualResetEvent(true)
 
@@ -1400,6 +1404,7 @@ let main _argv =
 #else
         try
 #endif
+            //startLocalSignalRHost()
             theDummyWindow <- DummyWindow()
             app.Run(theDummyWindow) |> ignore
 #if DEBUG
@@ -1426,5 +1431,6 @@ let main _argv =
         printfn "(Press a key to dismiss this console window)"
         System.Console.ReadKey() |> ignore
 
+    Dungeon.stopLocalSignalRHost()
     Async.RunSynchronously(Async.AwaitWaitHandle(waitForConsole)) |> ignore
     0

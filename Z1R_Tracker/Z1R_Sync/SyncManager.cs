@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.Http;
 using System.Net.NetworkInformation;
@@ -12,7 +13,6 @@ namespace Z1R_Sync
 {
     public static class SyncManager
     {
-        //private static string AzureFunctionUrl = "https://ztrackersync.azurewebsites.net/api/SyncUpdate";
         private static string _AzureFunctionUrl;
 
         private static readonly HttpClient _httpClient = new HttpClient();
@@ -85,51 +85,78 @@ namespace Z1R_Sync
             if (string.IsNullOrEmpty(AzureFunctionUrl))
                 throw new InvalidOperationException("AzureFunctionUrl is not set");
 
-            var client = new HttpClient();
             var request = new
             {
                 messageType = msgType,
                 payload = payload,
                 senderId = senderId
             };
+
             var json = JsonConvert.SerializeObject(request);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             try
             {
-                var response = await client.PostAsync(AzureFunctionUrl, content);
+                var stopwatch = Stopwatch.StartNew();
+                Console.WriteLine($"[Sync] Sending message {msgType} from {senderId} with payload length {json.Length}");
+
+                var response = await _httpClient.PostAsync(AzureFunctionUrl, content);
+
+                stopwatch.Stop();
+                Console.WriteLine($"[Sync] Response for {msgType}: {(int)response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms");
+
                 if (!response.IsSuccessStatusCode)
                 {
                     var responseText = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[Sync] Azure Function call failed: {response.StatusCode} - {responseText}");
-                }
-                else
-                {
-                    Console.WriteLine($"[Sync] Azure Function POST succeeded for msgType={msgType}");
+                    Console.WriteLine($"[Sync] Response content: {responseText}");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Sync] Failed to send message via Azure Function: {ex.Message}");
+                Console.WriteLine($"[Sync] ERROR sending message {msgType}: {ex.Message}");
             }
         }
 
 
 
+
+
+
+        private static Dictionary<string, string> _pendingMessages = new Dictionary<string, string>();
+        private static System.Timers.Timer _debounceTimer;
 
         public static void SendModelUpdate(string msgType, object model, string senderId)
         {
-            try
+            var payload = JsonConvert.SerializeObject(model);
+            lock (_pendingMessages)
             {
-                var payload = JsonConvert.SerializeObject(model);
-                _ = Send(msgType, payload, senderId);  // Fire and forget
-                Debug.WriteLine($"[Sync] Sent {msgType} update: {payload}");
+                _pendingMessages[msgType] = payload;
             }
-            catch (Exception ex)
+
+            if (_debounceTimer == null)
             {
-                Debug.WriteLine($"[Sync] Failed to send {msgType} update: {ex.Message}");
+                _debounceTimer = new System.Timers.Timer(250); // 250 ms
+                _debounceTimer.Elapsed += async (sender, e) =>
+                {
+                    Dictionary<string, string> toSend;
+                    lock (_pendingMessages)
+                    {
+                        toSend = new Dictionary<string, string>(_pendingMessages);
+                        _pendingMessages.Clear();
+                    }
+
+                    foreach (var kvp in toSend)
+                    {
+                        await Send(kvp.Key, kvp.Value, senderId);
+                    }
+                };
+                _debounceTimer.AutoReset = false;
             }
+
+            _debounceTimer.Stop();
+            _debounceTimer.Start();
         }
+
 
 
 
@@ -138,7 +165,8 @@ namespace Z1R_Sync
             try
             {
                 // Step 1: Get SignalR connection info from Azure Function
-                var response = await _httpClient.PostAsync(negotiateUrl, null);
+                //RPT I changed this from Post to Get. We will see
+                var response = await _httpClient.GetAsync(negotiateUrl);
                 response.EnsureSuccessStatusCode();
                 var json = await response.Content.ReadAsStringAsync();
                 var info = JsonConvert.DeserializeObject<SignalRNegotiation>(json);

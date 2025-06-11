@@ -86,6 +86,125 @@ let data2 = [|
         TrackerModelOptions.VoiceReminders.OverworldOverwrites, TrackerModelOptions.VisualReminders.OverworldOverwrites
     |]
 
+let showCoopHostSettingsWindow(cm: CustomComboBoxes.CanvasManager) =
+    let wh = new System.Threading.ManualResetEvent(false)
+    let window = new Window(Title = "Co-op Host Settings", Width = 400.0, Height = 300.0)
+    let sp = new StackPanel(Orientation = Orientation.Vertical, Margin = Thickness(10.))
+
+    // Apply modal style
+    let AddStyle(e:FrameworkElement) =
+        let textboxStyle = new Style(typeof<TextBox>)
+        textboxStyle.Setters.Add(new Setter(TextBox.BorderThicknessProperty, Thickness(0.)))
+        textboxStyle.Setters.Add(new Setter(TextBox.BorderBrushProperty, Brushes.DarkGray))
+        textboxStyle.Setters.Add(new Setter(TextBox.FontSizeProperty, 16.))
+        textboxStyle.Setters.Add(new Setter(TextBox.ForegroundProperty, Brushes.Orange))
+        textboxStyle.Setters.Add(new Setter(TextBox.BackgroundProperty, Brushes.Black))
+        e.Resources.Add(typeof<TextBox>, textboxStyle)
+
+        let checkboxStyle = new Style(typeof<CheckBox>)
+        checkboxStyle.Setters.Add(new Setter(CheckBox.HeightProperty, 22.))
+        e.Resources.Add(typeof<CheckBox>, checkboxStyle)
+
+    AddStyle(sp)
+
+    let mutable isSessionEnabled = TrackerModelOptions.CoopHostSession
+
+    let enableCheck = new CheckBox(Content = new TextBox(Text="Enable Hosting", IsReadOnly=true))
+    enableCheck.IsChecked <- System.Nullable.op_Implicit(isSessionEnabled)
+    enableCheck.Checked.Add(fun _ -> isSessionEnabled <- true)
+    enableCheck.Unchecked.Add(fun _ -> isSessionEnabled <- false)
+    sp.Children.Add(enableCheck) |> ignore
+
+    let portLabel = new TextBox(Text = "Port Number:", IsReadOnly = true)
+    sp.Children.Add(portLabel) |> ignore
+
+    let portBox = new TextBox(Text = TrackerModelOptions.PortNumber)
+    portBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+    portBox.TextAlignment <- TextAlignment.Left
+
+    let portBoxBorder = new Border(
+        Child = portBox,
+        BorderBrush = Brushes.Orange,
+        BorderThickness = Thickness(2.),
+        Margin = Thickness(0., 2., 0., 6.)
+    )
+    sp.Children.Add(portBoxBorder) |> ignore
+
+    let portValidationMessage = new TextBlock(
+        Text = "Port must be a number between 1024 and 65535",
+        Foreground = Brushes.Red,
+        Visibility = Visibility.Collapsed,
+        Margin = Thickness(0., 0., 0., 6.)
+    )
+    sp.Children.Add(portValidationMessage) |> ignore
+
+    let launchButton = Graphics.makeButton("Launch", None, None)
+    launchButton.HorizontalAlignment <- HorizontalAlignment.Left
+
+    launchButton.Click.Add(fun _ ->
+        let port = portBox.Text.Trim()
+        TrackerModelOptions.PortNumber <- port
+        if not isSessionEnabled then
+            isSessionEnabled <- true
+            enableCheck.IsChecked <- System.Nullable.op_Implicit true
+        TrackerModelOptions.CoopHostSession <- true
+        Dungeon.startLocalSignalRHost port
+        wh.Set() |> ignore
+        window.Close()
+    )
+
+    let stopButton = Graphics.makeButton("Stop", None, None)
+    stopButton.HorizontalAlignment <- HorizontalAlignment.Left
+
+    stopButton.Click.Add(fun _ ->
+        Dungeon.stopLocalSignalRHost()
+        if isSessionEnabled then
+            isSessionEnabled <- false
+            enableCheck.IsChecked <- System.Nullable.op_Implicit false
+        TrackerModelOptions.CoopHostSession <- false
+        wh.Set() |> ignore
+        window.Close()
+    )
+
+    sp.Children.Add(launchButton) |> ignore
+    sp.Children.Add(stopButton) |> ignore
+
+    let stylePanel = new Border(
+        Child = sp,
+        BorderBrush = Brushes.Gray,
+        BorderThickness = Thickness(3.),
+        Background = Brushes.Black,
+        Width = 400.,
+        HorizontalAlignment = HorizontalAlignment.Center
+    )
+
+    let validatePort () =
+        let text = portBox.Text.Trim()
+        let mutable valid = false
+        match System.Int32.TryParse(text) with
+        | (true, port) when port >= 1024 && port <= 65535 -> valid <- true
+        | _ -> ()
+        portBoxBorder.BorderBrush <- if valid then Brushes.Orange else Brushes.Red
+        portValidationMessage.Visibility <- if valid then Visibility.Collapsed else Visibility.Visible
+        enableCheck.IsEnabled <- valid
+        launchButton.IsEnabled <- valid && (System.Nullable.op_Explicit(enableCheck.IsChecked) = true)
+
+    portBox.TextChanged.Add(fun _ -> validatePort())
+    enableCheck.Checked.Add(fun _ -> validatePort())
+    enableCheck.Unchecked.Add(fun _ -> validatePort())
+
+    validatePort()
+
+    async {
+        CustomComboBoxes.GlobalFlag.popupIsActive <- true
+        do! CustomComboBoxes.DoModalDocked(cm, wh, Dock.Bottom, stylePanel)
+        CustomComboBoxes.GlobalFlag.popupIsActive <- false
+    } |> Async.StartImmediate
+
+
+
+
+
 let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, isStandardHyrule) = 
     let width = cm.AppMainCanvas.Width
     let all = new Border(BorderThickness=Thickness(2.), BorderBrush=Brushes.DarkGray, Background=Brushes.Black)
@@ -338,7 +457,7 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 )
         options2sp.Children.Add(changeVoiceButton) |> ignore
 
-    let coopSettingsButton = Graphics.makeButton("Co-op Settings", None, None)
+    let coopSettingsButton = Graphics.makeButton("Co-op Client Settings", None, None)
     coopSettingsButton.HorizontalAlignment <- HorizontalAlignment.Left
     do
         let mutable popupIsActive = false
@@ -590,6 +709,11 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                 } |> Async.StartImmediate
         )
     options2sp.Children.Add(coopSettingsButton) |> ignore
+    let coopHostSettingsButton = Graphics.makeButton("Co-op Host Settings", None, None)
+    coopHostSettingsButton.HorizontalAlignment <- HorizontalAlignment.Left
+    coopHostSettingsButton.Click.Add(fun _ -> showCoopHostSettingsWindow(cm))
+    options2sp.Children.Add(coopHostSettingsButton) |> ignore
+
 
 
 
