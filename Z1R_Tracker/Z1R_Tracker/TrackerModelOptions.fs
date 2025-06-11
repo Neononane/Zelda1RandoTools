@@ -135,6 +135,7 @@ let mutable RemainingItemsPoput_DisplayedLT = ""
 let mutable DungeonSummaryTabMode = 0
 let mutable PortNumber = "5000"
 let mutable CoopHostSession = false
+let mutable RaceMode = Bool(false)
 
 
 type ReadWrite() =
@@ -232,6 +233,7 @@ type ReadWrite() =
     member val SyncUpdateUrl = (CoopSyncOptions.FunctionAppBase + CoopSyncOptions.baseSyncUpdateUrl) with get
 
     member val PortNumber = "5000" with get,set
+    member val RaceMode = false with get,set
 
 let mutable private cachedSettingJson = null
 
@@ -326,6 +328,7 @@ let private writeImpl(filename) =
     data.baseNegotiateUrl <- CoopSyncOptions.baseNegotiateUrl
     data.baseSyncUpdateUrl <- CoopSyncOptions.baseSyncUpdateUrl
     data.PortNumber <- PortNumber
+    data.RaceMode <- RaceMode.Value
 
 
     let json = JsonSerializer.Serialize<ReadWrite>(data, new JsonSerializerOptions(WriteIndented=true))

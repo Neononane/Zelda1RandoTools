@@ -188,11 +188,12 @@ Rooms that might contain un-taken transport stairs, or that you have not visited
     blockersHoverEvent.Publish.Add(fun b ->
         if level-1 = dungeonTabs.SelectedIndex then
             if b then
-                if not finishedSetup then
-                    finishedSetup <- true
-                    //printfn "finishing dungeon %d highlight setup" level
-                    dungeonBodyHighlightCanvas.Children.Add(setupCanvas) |> ignore   // this is a heavy thing, do it on-demand rather than during 'Loading UI' at start
-                highlight()
+                if not TrackerModelOptions.RaceMode.Value then
+                    if not finishedSetup then
+                        finishedSetup <- true
+                        dungeonBodyHighlightCanvas.Children.Add(setupCanvas) |> ignore
+                    highlight()
+
             else
                 unhighlight()
         )

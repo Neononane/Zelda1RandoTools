@@ -29,6 +29,9 @@ type RouteDestination = LinkRouting.RouteDestination
 
 let NoCyan(_i,_j) = false
 let drawRoutesToImpl(routeDestinationOption, point, i, j, drawRouteMarks, maxBoldGYR, showPale, whatToCyan) =
+    if TrackerModelOptions.RaceMode.Value then
+        ()
+    else
     let showPale = if owGettableScreensCheckBox.IsChecked.HasValue && owGettableScreensCheckBox.IsChecked.Value then true else showPale
     let unmarked = TrackerModel.overworldMapMarks |> Array2D.map (fun cell -> cell.Current() = -1)
     let interestingButInaccesible = ResizeArray()

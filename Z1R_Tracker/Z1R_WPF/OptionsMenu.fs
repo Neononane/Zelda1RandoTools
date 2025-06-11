@@ -17,6 +17,12 @@ let InitializeVoice() =
 let mutable microphoneFailedToInitialize = false
 let mutable gamepadFailedToInitialize = false
 
+let mutable userWantsMute = false
+let mutable raceModeMuted = false
+
+
+
+
 let broadcastWindowOptionChanged = new Event<unit>()
 let mouseMagnifierWindowOptionChanged = new Event<unit>()
 let BOARDInsteadOfLEVELOptionChanged = new Event<unit>()
@@ -27,6 +33,7 @@ let bookForHelpfulHintsOptionChanged = new Event<unit>()
 let requestRedrawOverworldEvent = new Event<unit>()
 let hideTimerChanged = new Event<unit>()
 let dungeonSunglassesChanged = new Event<unit>()
+let raceModeChanged = new Event<unit>()
 
 let isValidUrl (url: string) =
     System.Uri.TryCreate(url, System.UriKind.Absolute) |> fst
@@ -859,6 +866,14 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     ToolTipService.SetShowDuration(cb, 10000)
     options3sp.Children.Add(cb) |> ignore
 
+    let cb = new CheckBox(Content=new TextBox(Text="Race Mode",IsReadOnly=true))
+    cb.IsChecked <- System.Nullable.op_Implicit TrackerModelOptions.RaceMode.Value
+    cb.Checked.Add(fun _ -> TrackerModelOptions.RaceMode.Value <- true; raceModeChanged.Trigger())
+    cb.Unchecked.Add(fun _ -> TrackerModelOptions.RaceMode.Value <- false; raceModeChanged.Trigger())
+    cb.ToolTip <- "Disable many features that could be deemed an unfair advantage during a race."
+    ToolTipService.SetShowDuration(cb, 10000)
+    options3sp.Children.Add(cb) |> ignore
+
     optionsAllsp.Children.Add(options3sp) |> ignore
 
     let total = new StackPanel(Orientation=Orientation.Vertical)
@@ -873,4 +888,23 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     total.Children.Add(optionsAllsp) |> ignore
 
     all.Child <- total
+    
+    raceModeChanged.Publish.Add(fun () ->
+        if TrackerModelOptions.RaceMode.Value then
+            // Mute audio, same as checking the box
+            TrackerModelOptions.IsMuted <- true
+            voice.Volume <- 0
+            muteCB.IsChecked <- System.Nullable.op_Implicit true
+        else
+            // Restore checkbox to what user had previously selected
+            TrackerModelOptions.IsMuted <- false
+            voice.Volume <- TrackerModelOptions.Volume
+            muteCB.IsChecked <- System.Nullable.op_Implicit false
+    )
+
+
+
+
+
+
     all
