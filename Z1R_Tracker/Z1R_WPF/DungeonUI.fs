@@ -1414,21 +1414,21 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                     System.Diagnostics.Debug.WriteLine(sprintf "[Changed] triggered for (%d,%d)" i j)
                     redraw())
 
-                let usedTransportsRemoveState(roomState:DungeonRoomState) =
-                    // track transport being changed away from
-                    let ktn = roomState.RoomType.KnownTransportNumber()
-                    if ktn.HasValue then
-                        usedTransports.[ktn.Value] <- usedTransports.[ktn.Value] - 1
-                        true
-                    else
-                        false
-                let usedTransportsAddState (roomState: DungeonRoomState) =
-                    let ktn = roomState.RoomType.KnownTransportNumber()
-                    if ktn.HasValue then
-                        usedTransports.[ktn.Value] <- usedTransports.[ktn.Value] + 1
-                        true
-                    else
-                        false
+                //let usedTransportsRemoveState(roomState:DungeonRoomState) =
+                //    // track transport being changed away from
+                //    let ktn = roomState.RoomType.KnownTransportNumber()
+                //    if ktn.HasValue then
+                //        usedTransports.[ktn.Value] <- usedTransports.[ktn.Value] - 1
+                //        true
+                //    else
+                //        false
+                //let usedTransportsAddState (roomState: DungeonRoomState) =
+                //    let ktn = roomState.RoomType.KnownTransportNumber()
+                //    if ktn.HasValue then
+                //        usedTransports.[ktn.Value] <- usedTransports.[ktn.Value] + 1
+                //        true
+                //    else
+                //        false
 
                 let SetNewValue(newState: DungeonRoomState) =
                     let originalState = roomStates.[i,j].Clone()
@@ -1647,6 +1647,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                         | DoorDirection.North, DoorAction.Decrement  -> if j > 0 then verticalDoors.[i, j - 1].Prev()
                                         | DoorDirection.South, DoorAction.Increment  -> if j < 7 then verticalDoors.[i, j].Next()
                                         | DoorDirection.South, DoorAction.Decrement  -> if j < 7 then verticalDoors.[i, j].Prev()
+                                        | _ -> ()
                                     | _ ->
                                         justUnmarked <- None
 

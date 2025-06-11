@@ -118,8 +118,10 @@
     <Content Include="ShowRunCustomImages\rooms-that-never-drop-text.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Compile Include="..\GlobalAssemblyInfo.fs" />
-	<Compile Include="Gamepad.fs" />
+    <Compile Include="..\GlobalAssemblyInfo.fs">
+      <Link>GlobalAssemblyInfo.fs</Link>
+    </Compile>
+    <Compile Include="Gamepad.fs" />
     <Compile Include="Graphics.fs" />
     <Compile Include="CustomMessageBox.fs" />
     <Compile Include="OverworldRouteDrawing.fs" />
@@ -199,7 +201,7 @@
       <HintPath>..\packages\Microsoft.AspNetCore.SignalR.Protocols.Json.7.0.0\lib\net462\Microsoft.AspNetCore.SignalR.Protocols.Json.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Bcl.AsyncInterfaces">
-      <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.7.0.0\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+      <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.8.0.0\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Extensions.DependencyInjection">
       <HintPath>..\packages\Microsoft.Extensions.DependencyInjection.7.0.0\lib\net462\Microsoft.Extensions.DependencyInjection.dll</HintPath>
@@ -290,10 +292,10 @@
     </Reference>
     <Reference Include="System.Speech" />
     <Reference Include="System.Text.Encodings.Web">
-      <HintPath>..\packages\System.Text.Encodings.Web.7.0.0\lib\net462\System.Text.Encodings.Web.dll</HintPath>
+      <HintPath>..\packages\System.Text.Encodings.Web.8.0.0\lib\net462\System.Text.Encodings.Web.dll</HintPath>
     </Reference>
     <Reference Include="System.Text.Json">
-      <HintPath>..\packages\System.Text.Json.7.0.0\lib\net462\System.Text.Json.dll</HintPath>
+      <HintPath>..\packages\System.Text.Json.8.0.5\lib\net462\System.Text.Json.dll</HintPath>
     </Reference>
     <Reference Include="System.Threading.Channels">
       <HintPath>..\packages\System.Threading.Channels.7.0.0\lib\net462\System.Threading.Channels.dll</HintPath>
@@ -327,7 +329,6 @@
       <Name>Z1R_Tracker</Name>
       <Project>{6b605496-ea45-4694-90f5-a3953d338bec}</Project>
       <Private>True</Private>
-	  
     </ProjectReference>
   </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -337,17 +338,10 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-<Target Name="PublishSignalRHost" BeforeTargets="BeforeBuild">
-  <Exec Command="dotnet publish ../Z1R_SignalRHost/Z1R_SignalRHost.csproj -c $(Configuration) -r win-x86 --self-contained true -p:PublishSingleFile=true -o ../Z1R_SignalRHost/bin/$(Configuration)/netcoreapp3.1/win-x86/publish" />
-</Target>
-
-<Target Name="CopySignalRHostExe" AfterTargets="Build">
-  <Copy 
-    SourceFiles="../Z1R_SignalRHost/bin/$(Configuration)/netcoreapp3.1/win-x86/publish/Z1R_SignalRHost.exe"
-    DestinationFolder="$(OutputPath)"
-    SkipUnchangedFiles="true" />
-</Target>
-
-
-
+  <Target Name="PublishSignalRHost" BeforeTargets="BeforeBuild">
+    <Exec Command="dotnet publish ../Z1R_SignalRHost/Z1R_SignalRHost.csproj -c $(Configuration) -r win-x86 --self-contained true -p:PublishSingleFile=true -o ../Z1R_SignalRHost/bin/$(Configuration)/netcoreapp3.1/win-x86/publish" />
+  </Target>
+  <Target Name="CopySignalRHostExe" AfterTargets="Build">
+    <Copy SourceFiles="../Z1R_SignalRHost/bin/$(Configuration)/netcoreapp3.1/win-x86/publish/Z1R_SignalRHost.exe" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

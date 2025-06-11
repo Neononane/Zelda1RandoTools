@@ -57,6 +57,7 @@ module DoorInterop =
         | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Yes     -> DoorState.YES
         | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Yellow  -> DoorState.YELLOW
         | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Purple  -> DoorState.PURPLE
+        | _ -> failwith "Unrecognized DoorState from C# interop"
 
     let toCSharp (fs: DoorState) : Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState =
         match fs with
