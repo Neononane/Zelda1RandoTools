@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <Compile Include="TrackerOptionsBridge.fs" />
+    <Compile Include="..\GlobalAssemblyInfo.fs"/>
   </ItemGroup>
 
 </Project>

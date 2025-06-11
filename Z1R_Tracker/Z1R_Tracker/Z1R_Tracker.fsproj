@@ -61,6 +61,7 @@
   <ItemGroup>
     <None Include="TODOs.txt" />
     <None Include="README.txt" />
+	<Compile Include="..\GlobalAssemblyInfo.fs" />
     <Compile Include="OverworldData.fs" />
     <Compile Include="DungeonData.fs" />
     <Compile Include="TrackerModelOptions.fs" />

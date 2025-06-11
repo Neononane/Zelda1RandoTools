@@ -118,7 +118,8 @@
     <Content Include="ShowRunCustomImages\rooms-that-never-drop-text.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
-    <Compile Include="Gamepad.fs" />
+    <Compile Include="..\GlobalAssemblyInfo.fs" />
+	<Compile Include="Gamepad.fs" />
     <Compile Include="Graphics.fs" />
     <Compile Include="CustomMessageBox.fs" />
     <Compile Include="OverworldRouteDrawing.fs" />

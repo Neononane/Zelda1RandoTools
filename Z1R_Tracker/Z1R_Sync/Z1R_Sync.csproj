@@ -137,7 +137,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CDungeonRoomState.cs" />
+    <Compile Include="..\GlobalAssemblyInfo.cs" />
+	<Compile Include="CDungeonRoomState.cs" />
     <Compile Include="DungeonDoorInterop.cs" />
     <Compile Include="ManageContainer.cs" />
     <Compile Include="SyncManager.cs" />
