@@ -1397,7 +1397,22 @@ let main _argv =
     let thisExe = System.IO.Path.Combine(cwd, Graphics.ExeName)
     let thisExeName = thisExe.Replace('\\', '_')   // backslash is not allowed character in mutex name
     use mutex = new System.Threading.Mutex(false, thisExeName)
+    let killAnyZombieHosts () =
+        let procs = System.Diagnostics.Process.GetProcessesByName("Z1R_SignalRHost")
+        for p in procs do
+            try p.Kill() with _ -> ()
+
     let runTheApp() =
+        System.AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
+            match Dungeon.signalRHostProcess with
+            | Some p when not p.HasExited ->
+                try
+                    p.Kill()
+                    p.Dispose()
+                with _ -> ()
+            | _ -> ()
+        )
+        killAnyZombieHosts()
         let app = new Application()
 #if DEBUG
         do
@@ -1407,6 +1422,17 @@ let main _argv =
             //startLocalSignalRHost()
             theDummyWindow <- DummyWindow()
             app.Run(theDummyWindow) |> ignore
+            app.Exit.Add(fun _ ->
+                match Dungeon.signalRHostProcess with
+                | Some proc when not proc.HasExited ->
+                    try
+                        proc.Kill()
+                        proc.Dispose()
+                    with ex ->
+                        printfn "[Z1R] Failed to kill SignalR host on exit: %s" ex.Message
+                | _ -> ()
+            )
+
 #if DEBUG
 #else
         with e ->

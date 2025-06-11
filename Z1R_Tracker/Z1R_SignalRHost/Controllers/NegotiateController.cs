@@ -1,5 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using Z1RSignalRHost;
+using Microsoft.AspNetCore.Http.Extensions;
 
 namespace Z1R_SignalRHost.Controllers
 {
@@ -10,11 +10,22 @@ namespace Z1R_SignalRHost.Controllers
         [HttpGet]
         public IActionResult Get()
         {
-            // Dynamically return the Hub URL clients should connect to.
+            var request = HttpContext.Request;
+
+            // Use GetDisplayUrl() to infer exact inbound URL
+            var baseUrl = UriHelper.BuildAbsolute(
+                request.Scheme,
+                request.Host,
+                request.PathBase
+            );
+
+            // Replace path with `/hub`
+            var hubUrl = $"{request.Scheme}://{request.Host}/hub";
+
             var response = new
             {
-                url = $"http://{Startup.PublicHost}:5000/hub", // or https:// if behind reverse proxy
-                accessToken = "" // Optional: leave empty to match expected schema
+                url = hubUrl,
+                accessToken = ""
             };
 
             return Ok(response);

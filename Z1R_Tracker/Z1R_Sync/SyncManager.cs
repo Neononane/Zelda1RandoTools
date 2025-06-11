@@ -97,18 +97,18 @@ namespace Z1R_Sync
 
             try
             {
-                var stopwatch = Stopwatch.StartNew();
-                Console.WriteLine($"[Sync] Sending message {msgType} from {senderId} with payload length {json.Length}");
+                //var stopwatch = Stopwatch.StartNew();
+                //Console.WriteLine($"[Sync] Sending message {msgType} from {senderId} with payload length {json.Length}");
 
                 var response = await _httpClient.PostAsync(AzureFunctionUrl, content);
 
-                stopwatch.Stop();
-                Console.WriteLine($"[Sync] Response for {msgType}: {(int)response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms");
+                //stopwatch.Stop();
+                //Console.WriteLine($"[Sync] Response for {msgType}: {(int)response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms");
 
                 if (!response.IsSuccessStatusCode)
                 {
                     var responseText = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[Sync] Response content: {responseText}");
+                    //Console.WriteLine($"[Sync] Response content: {responseText}");
                 }
             }
             catch (Exception ex)
@@ -162,64 +162,79 @@ namespace Z1R_Sync
 
         public static async Task StartAsync(string negotiateUrl)
         {
-            try
+            const int maxAttempts = 2;
+            const int retryDelayMs = 5000;
+
+            Exception lastException = null;
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                // Step 1: Get SignalR connection info from Azure Function
-                //RPT I changed this from Post to Get. We will see
-                var response = await _httpClient.GetAsync(negotiateUrl);
-                response.EnsureSuccessStatusCode();
-                var json = await response.Content.ReadAsStringAsync();
-                var info = JsonConvert.DeserializeObject<SignalRNegotiation>(json);
-
-                // Step 2: Build SignalR connection
-                _connection = new HubConnectionBuilder()
-                    .WithUrl(info.url, options =>
-                    {
-                        options.AccessTokenProvider = () => Task.FromResult(info.accessToken);
-                    })
-                    .WithAutomaticReconnect()
-                    .Build();
-
-                // Step 3: Register tile change handler
-                _connection.On<object>("ReceiveMapUpdate", payload =>
+                try
                 {
-                    try
-                    {
-                        var jsonPayload = payload.ToString();
-                        var update = JsonConvert.DeserializeObject<MapUpdate>(jsonPayload);
-                        _onTileChange?.Invoke(update.tileId, update.iconId, update.senderId);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[SyncManager] Failed to parse tile update: {ex.Message}");
-                    }
-                });
+                    Console.WriteLine($"[SyncManager] Attempt {attempt} to start SignalR connection...");
 
-                // Step 4: Register structured message handler
-                _connection.On<SyncMessage>("ReceiveSyncMessage", message =>
+                    // Step 1: Get SignalR connection info
+                    var response = await _httpClient.GetAsync(negotiateUrl);
+                    response.EnsureSuccessStatusCode();
+                    var json = await response.Content.ReadAsStringAsync();
+                    var info = JsonConvert.DeserializeObject<SignalRNegotiation>(json);
+
+                    // Step 2: Build connection
+                    _connection = new HubConnectionBuilder()
+                        .WithUrl(info.url, options =>
+                        {
+                            options.AccessTokenProvider = () => Task.FromResult(info.accessToken);
+                        })
+                        .WithAutomaticReconnect()
+                        .Build();
+
+                    // Step 3: Register handlers
+                    _connection.On<object>("ReceiveMapUpdate", payload =>
+                    {
+                        try
+                        {
+                            var jsonPayload = payload.ToString();
+                            var update = JsonConvert.DeserializeObject<MapUpdate>(jsonPayload);
+                            _onTileChange?.Invoke(update.tileId, update.iconId, update.senderId);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[SyncManager] Failed to parse tile update: {ex.Message}");
+                        }
+                    });
+
+                    _connection.On<SyncMessage>("ReceiveSyncMessage", message =>
+                    {
+                        try
+                        {
+                            var payloadJson = message.payload.ToString();
+                            _onSyncMessage?.Invoke(message.messageType, payloadJson, message.senderId);
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine($"[SyncManager] Failed to process sync message: {ex.Message}");
+                        }
+                    });
+
+                    // Step 4: Start connection
+                    await _connection.StartAsync();
+                    Console.WriteLine("[SyncManager] Connected to SignalR hub");
+                    return; // SUCCESS
+                }
+                catch (Exception ex)
                 {
-                    try
-                    {
-                        //var payloadJson = JsonConvert.SerializeObject(message.payload);
-                        var payloadJson = message.payload.ToString();
-                        _onSyncMessage?.Invoke(message.messageType, payloadJson, message.senderId);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"[SyncManager] Failed to process sync message: {ex.Message}");
-                    }
-                });
+                    Console.WriteLine($"[SyncManager] Connection attempt {attempt} failed: {ex.Message}");
 
-                // Step 5: Connect
-                await _connection.StartAsync();
-                System.Diagnostics.Debug.WriteLine("[SyncManager] Connected to SignalR hub");
+                    lastException = ex;
+                    if (attempt < maxAttempts)
+                        await Task.Delay(retryDelayMs);
+                }
             }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[SyncManager] ERROR during startup: {ex.Message}");
-                throw;
-            }
+
+            // Final failure
+            throw new InvalidOperationException($"[SyncManager] All attempts to start connection failed", lastException);
         }
+
 
         // === Supporting Data Structures ===
 
