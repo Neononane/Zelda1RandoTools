@@ -29,6 +29,26 @@ let dungeonMapsSyncOrigin = SyncOriginTracker.SyncOriginTracker()
 let private hashRetentionLimit = 20
 let private recentReceivedHashes = ConcurrentDictionary<string, ResizeArray<string>>()
 
+let private MAX_ENTRIES = 500
+let private lastAppliedRoomPayloads = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
+let private lastAppliedDoorPayloads = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
+let private lastTimestamps = ConcurrentDictionary<string, int64>()
+
+let private pruneIfNeeded (dict: ConcurrentDictionary<string, 'T>) name =
+    if dict.Count > MAX_ENTRIES then
+        let oldestKeys =
+            lastTimestamps
+            |> Seq.sortBy (fun kvp -> kvp.Value)
+            |> Seq.map (fun kvp -> kvp.Key)
+            |> Seq.filter dict.ContainsKey
+            |> Seq.truncate (dict.Count - MAX_ENTRIES)
+            |> Seq.toList
+
+        for key in oldestKeys do
+            let removed = dict.TryRemove(key) |> fst
+            if removed then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Pruned stale entry %s from %s" key name)
+
 let syncBurstTimestamps = ConcurrentQueue<DateTime>()
 let syncBurstWindowMs = 2000
 let syncBurstLimit = 5
@@ -112,13 +132,77 @@ let shouldSend (messageType: string) (payloadJson: string) =
         lastSentHashes.[messageType] <- newHash
         true
 
-let shouldApplyUpdate (messageType: string) (payloadJson: string) =
+//let lastAppliedHashes = System.Collections.Concurrent.ConcurrentDictionary<string, string>()
+//let lastTimestamps = System.Collections.Concurrent.ConcurrentDictionary<string, int64>()
+
+let shouldApplyUpdate (messageType: string) (payloadJson: string) (timestamp: int64) : bool =
     let newHash = computeHash payloadJson
-    match lastAppliedHashes.TryGetValue(messageType) with
-    | true, oldHash when oldHash = newHash -> false
-    | _ ->
+
+    let updateHashAndTimestamp key =
         lastAppliedHashes.[messageType] <- newHash
-        true
+        lastTimestamps.[key] <- timestamp
+
+    match messageType with
+    | "RoomChange" ->
+        try
+            let r = JsonConvert.DeserializeObject<RoomChangePayload>(payloadJson)
+            let key = sprintf "room-%d-%d-%d" r.Level r.X r.Y
+            match lastAppliedRoomPayloads.TryGetValue(key) with
+            | true, oldPayload when oldPayload = payloadJson ->
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped RoomChange — same payload for %s" key)
+                false
+            | _ ->
+                match lastTimestamps.TryGetValue(key) with
+                | true, prevTs when timestamp <= prevTs ->
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped RoomChange — stale timestamp (%d <= %d)" timestamp prevTs)
+                    false
+                | _ ->
+                    lastAppliedRoomPayloads.[key] <- payloadJson
+                    updateHashAndTimestamp key
+                    pruneIfNeeded lastAppliedRoomPayloads "RoomPayloads"
+                    true
+        with _ ->
+            TrackerModelOptions.DebugConfig.Log("[Sync] RoomChange payload malformed — applying anyway")
+            true
+
+    | "DoorChange" ->
+        try
+            let d = JsonConvert.DeserializeObject<DoorChangePayload>(payloadJson)
+            let key = sprintf "door-%d-%d-%d-%b" d.Level d.X d.Y d.IsHorizontal
+            match lastAppliedDoorPayloads.TryGetValue(key) with
+            | true, oldPayload when oldPayload = payloadJson ->
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DoorChange — same payload for %s" key)
+                false
+            | _ ->
+                match lastTimestamps.TryGetValue(key) with
+                | true, prevTs when timestamp <= prevTs ->
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DoorChange — stale timestamp (%d <= %d)" timestamp prevTs)
+                    false
+                | _ ->
+                    lastAppliedDoorPayloads.[key] <- payloadJson
+                    updateHashAndTimestamp key
+                    pruneIfNeeded lastAppliedDoorPayloads "DoorPayloads"
+                    true
+        with _ ->
+            TrackerModelOptions.DebugConfig.Log("[Sync] DoorChange payload malformed — applying anyway")
+            true
+
+    | _ ->
+        let key = messageType
+        match lastAppliedHashes.TryGetValue(messageType) with
+        | true, oldHash when oldHash = newHash ->
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped %s update — duplicate hash" messageType)
+            false
+        | _ ->
+            match lastTimestamps.TryGetValue(key) with
+            | true, prevTs when timestamp <= prevTs ->
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped %s — stale timestamp (%d <= %d)" messageType timestamp prevTs)
+                false
+            | _ ->
+                updateHashAndTimestamp key
+                pruneIfNeeded lastAppliedHashes "Hashes"
+                true
+
 
 let shouldSendUpdate (messageType: string) (payloadJson: string) =
     let now = DateTime.UtcNow
@@ -584,6 +668,9 @@ let mutable lastDungeonMapsPayload = ""
 let dungeonMapsDebouncer = Debouncer.Debouncer(1000)
 let mutable lastSentDungeonMapsPayload = ""
 
+
+
+
 let sendDungeonMapsUpdate (myConsoleId: string) =
     dungeonMapsDebouncer.Trigger(fun () ->
         async {
@@ -666,29 +753,48 @@ let subscribeToHiddenDungeonColorLabelChanges (myConsoleId: string) =
                         TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send HiddenDungeonColorLabel update: %s" ex.Message)
                 } |> Async.StartImmediate
             )
+let private roomChangeDebouncers = System.Collections.Concurrent.ConcurrentDictionary<string, Debouncer.Debouncer>()
+let private doorChangeDebouncers = System.Collections.Concurrent.ConcurrentDictionary<string, Debouncer.Debouncer>()
+
+let private roomKey (level: int) (x: int) (y: int) =
+    sprintf "room-%d-%d-%d" level x y
+
+let private doorKey (level: int) (x: int) (y: int) (isHorizontal: bool) =
+    sprintf "door-%d-%d-%d-%b" level x y isHorizontal
+
 
 let sendDoorChangeUpdate (info: DungeonUI.DoorChangeInfo) (myConsoleId: string) =
-    async {
+    let key = sprintf "%d-%d-%d-%b" info.Level info.X info.Y info.IsHorizontal
+    let debouncer = doorChangeDebouncers.GetOrAdd(key, fun _ -> Debouncer.Debouncer(150))
+
+    //debouncer.Trigger(fun () ->
+    Async.StartImmediate(async {
         try
             let jsonPayload = JsonConvert.SerializeObject(info)
             if shouldSend "DoorChange" jsonPayload then
                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending DoorChange update: %s" jsonPayload)
 
-                // Echo suppression marker
                 SyncManager.MarkLastSentDoorChange(jsonPayload)
 
-                if isDoorSyncReady() then
-                    if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
+                let (doorSyncReady, coopEnabled) =
+                    System.Windows.Application.Current.Dispatcher.Invoke(fun () ->
+                        (isDoorSyncReady(), TrackerModelOptions.CoopSyncOptions.GetEnableCoop())
+                    )
+
+                if doorSyncReady then
+                    if coopEnabled then
                         do! SyncManager.Send("DoorChange", jsonPayload, myConsoleId) |> Async.AwaitTask
                     else
                         TrackerModelOptions.DebugConfig.Log("[Sync] Coop sync is disabled, not sending DoorChange update")
                 else
-                    TrackerModelOptions.DebugConfig.Log("[Sync] Door sync not ready, skipping DoorChange update")              
+                    TrackerModelOptions.DebugConfig.Log("[Sync] Door sync not ready, skipping DoorChange update")
             else
                 TrackerModelOptions.DebugConfig.Log("[Sync] Skipped sending DoorChange update — no change")
         with ex ->
             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send DoorChange update: %s" ex.Message)
-    }
+    })
+    //)
+
 
 
 let subscribeToDoorChanges (myConsoleId: string) =
@@ -696,22 +802,38 @@ let subscribeToDoorChanges (myConsoleId: string) =
     DungeonUI.doorChangedEvent.Publish.Add(fun info ->
         if not TrackerModelOptions.CoopSyncOptions.IsBulkDoorInit then
             async {
-                do! sendDoorChangeUpdate info myConsoleId
+                sendDoorChangeUpdate info myConsoleId
             } |> Async.StartImmediate
     )
 
-let sendRoomChangeUpdate (level: int) (x: int) (y: int) (room: Z1R_Tracker.Models.CDungeonRoomState) (myConsoleId: string)=
-    async {
-        // Convert room to serializable JSON format
-        if not DungeonPopups.suppressRoomSyncTemporarily then
-            if (level <> 0) then
+let sendRoomChangeUpdate (level: int) (x: int) (y: int) (room: Z1R_Tracker.Models.CDungeonRoomState) (myConsoleId: string) =
+    let key = sprintf "%d-%d-%d" level x y
+    let debouncer = roomChangeDebouncers.GetOrAdd(key, fun _ -> Debouncer.Debouncer(150))
+
+    //debouncer.Trigger(fun () ->
+    Async.StartImmediate(async {
+        try
+            let shouldSuppress =
+                System.Windows.Application.Current.Dispatcher.Invoke(fun () ->
+                    DungeonPopups.suppressRoomSyncTemporarily
+                )
+
+            if not shouldSuppress && level <> 0 then
                 let json = serializeRoomChange level x y room
                 if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() && shouldSend "RoomChange" json then
                     TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending RoomChange: %s" json)
                     do! SyncManager.Send("RoomChange", json, myConsoleId) |> Async.AwaitTask
-        else
-            TrackerModelOptions.DebugConfig.Log("[Sync] Room sync temporarily suppressed, skipping send")
-                }
+                else
+                    TrackerModelOptions.DebugConfig.Log("[Sync] RoomChange not sent — coop disabled or not needed")
+            else
+                TrackerModelOptions.DebugConfig.Log("[Sync] Room sync suppressed or invalid level — skipping send")
+        with ex ->
+            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send RoomChange update: %s" ex.Message)
+    })
+    //)
+
+
+
 
 
 let subscribeToRoomChanges (myConsoleId: string) =
@@ -726,7 +848,7 @@ let subscribeToRoomChanges (myConsoleId: string) =
                         isInternalUpdate <- true
                         try
                             TrackerModelOptions.DebugConfig.Log(sprintf "[RoomSync] OnRoomChanged triggered for L%d (%d,%d) - ID %O" level x y (room.DebugId.ToString()))
-                            do! sendRoomChangeUpdate level x y room myConsoleId
+                            sendRoomChangeUpdate level x y room myConsoleId
                         with ex ->
                             TrackerModelOptions.DebugConfig.Log(sprintf "[RoomSync] ERROR in RoomChanged handler: %s" ex.Message)
                         do isInternalUpdate <- false

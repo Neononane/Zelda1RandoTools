@@ -34,7 +34,8 @@ namespace Z1R_SignalRHost.Controllers
             {
                 messageType = payload.MessageType,
                 senderId = payload.SenderId,
-                payload = payload.Payload
+                payload = payload.Payload,
+                timeStamp = payload.TimeStamp
             };
 
             try

@@ -22,6 +22,44 @@ namespace Z1R_Sync
         private static Action<string, string, string> _onTileChange;
         private static Action<string, string, string> _onSyncMessage;
 
+        private static Action<string, string, string, long> _onSyncMessageWithTimestamp;
+
+        public static void SetSyncMessageHandler(Action<string, string, string, long> handler)
+        {
+            _onSyncMessageWithTimestamp = handler;
+        }
+
+        private static async Task<HttpResponseMessage> PostWithRetry(HttpContent content, int maxRetries = 3)
+        {
+            int delayMs = 250;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            {
+                try
+                {
+                    var response = await _httpClient.PostAsync(AzureFunctionUrl, content);
+                    if (response.IsSuccessStatusCode)
+                        return response; // SUCCESS
+
+                    Console.WriteLine($"[Sync] Attempt {attempt} failed: {response.StatusCode}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Sync] Retry {attempt} exception: {ex.Message}");
+                }
+
+                await Task.Delay(delayMs);
+                delayMs *= 2; // exponential backoff
+            }
+
+            Console.WriteLine("[Sync] All retries failed — giving up.");
+            return null;
+        }
+
+
+
+
+
         private static string lastSentDoorChangePayload = null;
 
         public static void MarkLastSentDoorChange(string payload)
@@ -101,7 +139,7 @@ namespace Z1R_Sync
                 //var stopwatch = Stopwatch.StartNew();
                 //Console.WriteLine($"[Sync] Sending message {msgType} from {senderId} with payload length {json.Length}");
 
-                var response = await _httpClient.PostAsync(AzureFunctionUrl, content);
+                var response = await PostWithRetry(content);
 
                 //stopwatch.Stop();
                 //Console.WriteLine($"[Sync] Response for {msgType}: {(int)response.StatusCode} in {stopwatch.ElapsedMilliseconds}ms");
@@ -209,7 +247,8 @@ namespace Z1R_Sync
                         try
                         {
                             var payloadJson = message.payload.ToString();
-                            _onSyncMessage?.Invoke(message.messageType, payloadJson, message.senderId);
+                            long timestamp = message.timeStamp;
+                            _onSyncMessageWithTimestamp?.Invoke(message.messageType, payloadJson, message.senderId, timestamp);
                         }
                         catch (Exception ex)
                         {
@@ -257,6 +296,8 @@ namespace Z1R_Sync
             public string messageType { get; set; }
             public string senderId { get; set; }
             public object payload { get; set; }
+
+            public long timeStamp { get; set; }
         }
     }
 }
