@@ -440,49 +440,54 @@ type MyWindow() as this =
                                 try
                                     let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
                                     Application.Current.Dispatcher.Invoke(fun () ->
-                                        // Top-level flags
-                                        TrackerModel.IsHiddenDungeonNumbers <- fun () -> data.HiddenDungeonNumbers
-                                        TrackerModel.IsSecondQuestDungeons <- data.SecondQuestDungeons
+                                        //Timeline.isCurrentlyLoadingASave <- true
+                                        try
+                                            // Top-level flags
+                                            TrackerModel.IsHiddenDungeonNumbers <- fun () -> data.HiddenDungeonNumbers
+                                            TrackerModel.IsSecondQuestDungeons <- data.SecondQuestDungeons
 
-                                        // Top-level boxes
-                                        data.WhiteSwordBox.TryApply(TrackerModel.sword2Box) |> ignore
-                                        data.LadderBox.TryApply(TrackerModel.ladderBox) |> ignore
-                                        data.ArmosBox.TryApply(TrackerModel.armosBox) |> ignore
+                                            // Top-level boxes
+                                            data.WhiteSwordBox.TryApply(TrackerModel.sword2Box) |> ignore
+                                            data.LadderBox.TryApply(TrackerModel.ladderBox) |> ignore
+                                            data.ArmosBox.TryApply(TrackerModel.armosBox) |> ignore
 
-                                        // Dungeons
-                                        data.Dungeons
-                                        |> Array.iteri (fun i dungeon ->
-                                            if dungeon <> null then
-                                                let targetDungeon = TrackerModel.GetDungeon(i)
-                                                let expectedLength = targetDungeon.Boxes.Length
+                                            // Dungeons
+                                            data.Dungeons
+                                            |> Array.iteri (fun i dungeon ->
+                                                if dungeon <> null then
+                                                    let targetDungeon = TrackerModel.GetDungeon(i)
+                                                    let expectedLength = targetDungeon.Boxes.Length
 
-                                                //try this line
-                                                dungeon.Triforce <- targetDungeon.PlayerHasTriforce()
+                                                    //try this line
+                                                    dungeon.Triforce <- targetDungeon.PlayerHasTriforce()
 
-                                                if dungeon.Boxes = null || dungeon.Boxes.Length <> expectedLength then
-                                                    let safeBoxes = 
-                                                        Array.init expectedLength (fun j ->
-                                                            if dungeon.Boxes <> null && j < dungeon.Boxes.Length && dungeon.Boxes.[j] <> null then
-                                                                dungeon.Boxes.[j]
-                                                            else
-                                                                new SaveAndLoad.Box()
-                                                        )
-                                                    dungeon.Boxes <- safeBoxes
-                    
-                                                // Apply all properties EXCEPT Triforce (sync separately)
-                                                targetDungeon.Color <- dungeon.Color
-                                                targetDungeon.LabelChar <- if dungeon.LabelChar.Length > 0 then dungeon.LabelChar.[0] else '?'
-                                                targetDungeon.PlayerHasMapOfThisDungeon <- dungeon.PlayerHasMap
+                                                    if dungeon.Boxes = null || dungeon.Boxes.Length <> expectedLength then
+                                                        let safeBoxes = 
+                                                            Array.init expectedLength (fun j ->
+                                                                if dungeon.Boxes <> null && j < dungeon.Boxes.Length && dungeon.Boxes.[j] <> null then
+                                                                    dungeon.Boxes.[j]
+                                                                else
+                                                                    new SaveAndLoad.Box()
+                                                            )
+                                                        dungeon.Boxes <- safeBoxes
+            
+                                                    // Apply all properties EXCEPT Triforce (sync separately)
+                                                    targetDungeon.Color <- dungeon.Color
+                                                    targetDungeon.LabelChar <- if dungeon.LabelChar.Length > 0 then dungeon.LabelChar.[0] else '?'
+                                                    targetDungeon.PlayerHasMapOfThisDungeon <- dungeon.PlayerHasMap
 
-                                                (dungeon.Boxes, targetDungeon.Boxes)
-                                                ||> Array.iter2 (fun srcBox destBox ->
-                                                    if srcBox <> null then
-                                                        srcBox.TryApply(destBox) |> ignore
-                                                )
-                                        )
+                                                    (dungeon.Boxes, targetDungeon.Boxes)
+                                                    ||> Array.iter2 (fun srcBox destBox ->
+                                                        if srcBox <> null then
+                                                            srcBox.TryApply(destBox) |> ignore
+                                                    )
+                                            )
 
-                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Items update from %s (Triforce excluded)" senderId)
+                                            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Items update from %s (Triforce excluded)" senderId)
+                                        finally
+                                            Timeline.isCurrentlyLoadingASave <- false
                                     )
+
                                 with ex ->
                                     TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply Items update: %s" ex.Message)
                         | "StartingItems" ->

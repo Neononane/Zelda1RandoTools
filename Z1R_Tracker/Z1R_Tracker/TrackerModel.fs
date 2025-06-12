@@ -1800,6 +1800,7 @@ type TimelineItemModel(desc: TimelineItemDescription) =
             finishedTotalSeconds <- -1
         itemPlayerHas <- ph
         timelineChanged.Trigger(int span.TotalMinutes)
+
     do
         // listen for changes
         match desc with
@@ -1820,6 +1821,17 @@ type TimelineItemModel(desc: TimelineItemDescription) =
     member this.Identifier = desc.Identifier
     member this.FinishedTotalSeconds = finishedTotalSeconds
     member this.Has = itemPlayerHas
+    member this.MarkDone(?remoteTimestamp: int, ?remoteHas: PlayerHas) =
+        let timestamp =
+            defaultArg remoteTimestamp (int ((System.DateTime.Now - theStartTime.Time).TotalSeconds))
+
+        if finishedTotalSeconds = -1 then
+            finishedTotalSeconds <- timestamp
+            itemPlayerHas <- defaultArg remoteHas PlayerHas.YES
+            timelineChanged.Trigger(timestamp / 60)
+
+
+
     static member TimelineChanged = timelineChanged.Publish
     static member All = all
     static member MakeAll() =
