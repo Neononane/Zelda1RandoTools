@@ -91,39 +91,49 @@ type ChoiceDomain(name:string,maxUsesArray:int[]) =
     member _this.MaxUses(key) = maxUsesArray.[key]
     member _this.CanAddUse(key) = (key = -1) || (uses.[key] < maxUsesArray.[key])
         
-type Cell(cd:ChoiceDomain) =
-    // a location that can hold one item, e.g. armos box that can hold red candle or white sword or whatnot, or
-    // map square that can hold dungeon 4 or bomb shop or whatnot
-    // this is about player-knowing-location-contents, not about players _having_ the things there
+type Cell(cd: ChoiceDomain) =
     let mutable state = -1 // -1 means empty, 0-N are item identifiers
+    let changedEvent = new Event<unit>()
+
+    [<CLIEvent>]
+    member _.Changed = changedEvent.Publish
+
     member _this.Current() = state
+
     member this.Next() =
         if state <> -1 then
             cd.RemoveUse(state)
-        state <- cd.NextFreeKey(state)
-        if state <> -1 then
-            cd.AddUse(state)
+        let newState = cd.NextFreeKey(state)
+        if newState <> state then
+            state <- newState
+            if state <> -1 then cd.AddUse(state)
+            changedEvent.Trigger()
+
     member this.Prev() =
         if state <> -1 then
             cd.RemoveUse(state)
-        state <- cd.PrevFreeKey(state)
-        if state <> -1 then
-            cd.AddUse(state)
-    member this.Set(newState) =
+        let newState = cd.PrevFreeKey(state)
+        if newState <> state then
+            state <- newState
+            if state <> -1 then cd.AddUse(state)
+            changedEvent.Trigger()
+
+    member this.Set(newState: int) =
         if newState < -1 || newState > cd.MaxKey then
             failwith "Cell.Set out of range"
-        if state = newState then
-            ()
-        else
+        if state <> newState then
             cd.AddUse(newState)
             cd.RemoveUse(state)
             state <- newState
-    member this.AttemptToSet(newState) =
+            changedEvent.Trigger()
+
+    member this.AttemptToSet(newState: int) =
         try
             this.Set(newState)
             true
-        with _e -> 
+        with _ -> 
             false
+
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -1025,10 +1035,14 @@ let getOverworldMapExtraData(i,j,k) =
     else
         printfn "dodgy, but there are legal times to be here, e.g. popup redrawing-on-hover when changing from non-shop to shop"  // put a breakpoint here for debugging
 #endif
-    overworldMapExtraData.[i,j].[k]
+    if k < 0 || k > MapSquareChoiceDomainHelper.DARK_X then
+        0  // or some other sensible default fallback
+    else
+        overworldMapExtraData.[i,j].[k]
 let setOverworldMapExtraData(i,j,k,v) = 
-    overworldMapExtraData.[i,j].[k] <- v
-    mapLastChangedTime.SetNow()
+    if k >= 0 && k <= MapSquareChoiceDomainHelper.DARK_X then
+        overworldMapExtraData.[i,j].[k] <- v
+        mapLastChangedTime.SetNow()
 let NOTFOUND = (-1,-1)
 let magsCaveFound, woodSwordCaveFound, foundBlueRingShop, foundBookShop, foundCandleShop, foundArrowShop, foundBombShop, havePotionLetter = 
     new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false)

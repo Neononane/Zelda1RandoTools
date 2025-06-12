@@ -15,6 +15,8 @@ let sunglassesOpacity = 0.85
 
 let mutable THE_DIFF = 0.   // a kludge, until/unless I come up with a better way to thread the layout thru global popup logic
 
+let mutable suppressRoomSyncTemporarily = false
+
 let dungeonRoomExplainer, setOpacity =
     let mkTxt(txt) = new TextBox(Text=txt, Foreground=Brushes.Orange, Background=Brushes.Black, IsReadOnly=true, IsHitTestVisible=false, 
                                     BorderThickness=Thickness(0.), FontSize=16., VerticalAlignment=VerticalAlignment.Center)
@@ -358,10 +360,18 @@ let DoDungeonRoomSelectPopup(cm:CustomComboBoxes.CanvasManager, originalRoomStat
         workingCopy.RoomType <- curState
         workingCopy.IsComplete <- true
         setNewValue(workingCopy)
+        suppressRoomSyncTemporarily <- true
+        async {
+            do! Async.Sleep(250)
+            suppressRoomSyncTemporarily <- false
+        } |> Async.StartImmediate
+
+
         //originalRoomState.RoomType <- curState
         //originalRoomState.IsComplete <- true
         //setNewValue(originalRoomState)
 
     popupCanvas.Children.Clear()
     cm.DismissPopup()
+
 }

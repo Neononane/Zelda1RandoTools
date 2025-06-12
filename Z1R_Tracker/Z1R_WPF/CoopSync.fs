@@ -46,6 +46,15 @@ type RoomChangePayload = {
     FloorDropAppearsBright: bool
 }
 
+type OverworldTileUpdate = {
+    X: int
+    Y: int
+    MapTileValue: int
+    ExtraData: int
+    CircleValue: int
+}
+
+
 let serializeRoomChange (level: int) (x: int) (y: int) (room: Z1R_Tracker.Models.CDungeonRoomState) : string =
     let payload = {
         Level = level
@@ -440,6 +449,35 @@ let subscribeToOverworldChanges (myConsoleId: string) =
         }
     Async.StartImmediate(loop ())
 
+let subscribeToOverworldTileChanges (myConsoleId: string) =
+    for x in 0 .. 15 do
+        for y in 0 .. 7 do
+            TrackerModel.overworldMapMarks.[x, y].Changed.Add(fun _ ->
+                async {
+                    try
+                        if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
+                            let cur = TrackerModel.overworldMapMarks.[x, y].Current()
+                            let ed = TrackerModel.getOverworldMapExtraData(x, y, cur)
+                            let circ = TrackerModel.overworldMapCircles.[x, y]
+
+                            let update = {
+                                X = x
+                                Y = y
+                                MapTileValue = cur
+                                ExtraData = ed
+                                CircleValue = circ
+                            }
+
+                            let jsonPayload = JsonConvert.SerializeObject(update)
+                            if shouldSend "OverworldTile" jsonPayload then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending OverworldTile (%d,%d): %s" x y jsonPayload)
+                                do! SyncManager.Send("OverworldTile", jsonPayload, myConsoleId) |> Async.AwaitTask
+                    with ex ->
+                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send OverworldTile (%d,%d): %s" x y ex.Message)
+                } |> Async.Start
+            )
+
+
 (*let createSerializableDungeonArray () =
     [| for i in 0 .. 8 ->
         let d = TrackerModel.GetDungeon(i)
@@ -656,20 +694,25 @@ let sendDoorChangeUpdate (info: DungeonUI.DoorChangeInfo) (myConsoleId: string) 
 let subscribeToDoorChanges (myConsoleId: string) =
     System.Diagnostics.Debug.WriteLine("[Sync] Subscribing to door changes...")
     DungeonUI.doorChangedEvent.Publish.Add(fun info ->
-        async {
-            do! sendDoorChangeUpdate info myConsoleId
-        } |> Async.StartImmediate
+        if not TrackerModelOptions.CoopSyncOptions.IsBulkDoorInit then
+            async {
+                do! sendDoorChangeUpdate info myConsoleId
+            } |> Async.StartImmediate
     )
 
 let sendRoomChangeUpdate (level: int) (x: int) (y: int) (room: Z1R_Tracker.Models.CDungeonRoomState) (myConsoleId: string)=
     async {
         // Convert room to serializable JSON format
-        if (level <> 0) then
-            let json = serializeRoomChange level x y room
-            if shouldSend "RoomChange" json then
-                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending RoomChange: %s" json)
-                do! SyncManager.Send("RoomChange", json, myConsoleId) |> Async.AwaitTask
-            }
+        if not DungeonPopups.suppressRoomSyncTemporarily then
+            if (level <> 0) then
+                let json = serializeRoomChange level x y room
+                if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() && shouldSend "RoomChange" json then
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Sending RoomChange: %s" json)
+                    do! SyncManager.Send("RoomChange", json, myConsoleId) |> Async.AwaitTask
+        else
+            TrackerModelOptions.DebugConfig.Log("[Sync] Room sync temporarily suppressed, skipping send")
+                }
+
 
 let subscribeToRoomChanges (myConsoleId: string) =
     printfn "[RoomSync] Starting to subscribe to room changes"

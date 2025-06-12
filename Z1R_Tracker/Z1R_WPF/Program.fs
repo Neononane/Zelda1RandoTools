@@ -705,6 +705,18 @@ type MyWindow() as this =
                                 )
                             with ex ->
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply RoomChange update: %s" ex.Message)
+                        | "OverworldTile" ->
+                            try
+                                let data = JsonConvert.DeserializeObject<CoopSync.OverworldTileUpdate>(payloadJson)
+                                Application.Current.Dispatcher.Invoke(fun () ->
+                                    TrackerModel.overworldMapMarks.[data.X, data.Y].Set(data.MapTileValue)
+                                    if data.MapTileValue <> -1 then
+                                        TrackerModel.setOverworldMapExtraData(data.X, data.Y, data.MapTileValue, data.ExtraData)
+                                    TrackerModel.overworldMapCircles.[data.X, data.Y] <- data.CircleValue
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied OverworldTile (%d,%d) update from %s" data.X data.Y senderId)
+                                )
+                            with ex ->
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply OverworldTile update: %s" ex.Message)
 
                         | _ ->
                             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Unknown messageType: %s" msgType)

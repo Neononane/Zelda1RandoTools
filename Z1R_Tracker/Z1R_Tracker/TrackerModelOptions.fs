@@ -79,6 +79,8 @@ module CoopSyncOptions =
         enableCoop <- v
         EnableCoopChanged.Trigger(v)
 
+    let mutable IsBulkDoorInit = false
+
 //RPT added this to support debugging for coop purposes
 module DebugConfig =
     let mutable DebugMode: bool = false

@@ -972,7 +972,8 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         //RPT Test change
         //let horizontalDoors = Array2D.zeroCreate 7 8
         let horizontalDoors =
-            Array2D.init 7 8 (fun i j ->
+            TrackerModelOptions.CoopSyncOptions.IsBulkDoorInit <- true
+            let doors = Array2D.init 7 8 (fun i j ->
                 let currentState = Dungeon.DoorInterop.fromCSharp (CDungeonModelStore.HorizontalDoors.[level - 1].[j, i])
                 let redraw state =
                     triggerDoorChanged {
@@ -984,6 +985,8 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                     }
                 new Dungeon.Door(currentState, redraw, level, i, j, true)
             )
+            TrackerModelOptions.CoopSyncOptions.IsBulkDoorInit <- false
+            doors
 
 
 
@@ -1038,7 +1041,8 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         let vDoorHighlightOutline = new Shapes.Rectangle(Width=24., Height=12., Stroke=highlight, StrokeThickness=2., Fill=Brushes.Transparent, IsHitTestVisible=false, Opacity=0.)
         //RPT replacing below
         let verticalDoors =
-            Array2D.init 8 7 (fun i j ->
+            TrackerModelOptions.CoopSyncOptions.IsBulkDoorInit <- true
+            let doors = Array2D.init 8 7 (fun i j ->
                 let currentState = Dungeon.DoorInterop.fromCSharp (CDungeonModelStore.VerticalDoors.[level - 1].[j, i])
                 let redraw state =
                     triggerDoorChanged {
@@ -1048,9 +1052,11 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                         IsHorizontal = false
                         NewState = state
                     }
-
                 new Dungeon.Door(currentState, redraw, level, i, j, false)
             )
+            TrackerModelOptions.CoopSyncOptions.IsBulkDoorInit <- false
+            doors
+            
 
 
 
@@ -1514,12 +1520,13 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                             redraw()
                             redrawAllDoors()
                             animateDungeonRoomTile(i,j)
-                            triggerRoomChanged {
-                                Level = level  // You need to capture this value earlier!
-                                X = i
-                                Y = j
-                                NewState = roomStates.[i,j].CSharp
-                            }
+                            if not popupIsActive then
+                                triggerRoomChanged {
+                                    Level = level  // You need to capture this value earlier!
+                                    X = i
+                                    Y = j
+                                    NewState = roomStates.[i,j].CSharp
+                                }
 
 
                         else
@@ -1858,38 +1865,17 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
 
                                                 else
                                                     if room.RoomType = RoomType.OffTheMap then
-                                                        let original = room.Clone()
                                                         room.RoomType <- RoomType.Unmarked
-                                                        roomStates.[i,j] <- original
-                                                        SetNewValue(room)
-                                                        roomStates.[i,j] <- room
-                                                        justUnmarked <- None
-                                                        ea.Handled <- true
                                                     else
-                                                        let original = room.Clone()
                                                         room.IsComplete <- not room.IsComplete
-                                                        roomStates.[i,j] <- original
-                                                        SetNewValue(room)
-                                                        roomStates.[i,j] <- room
-                                                        justUnmarked <- None
-                                                        ea.Handled <- true
 
-                                                    if room.RoomType = RoomType.OffTheMap then
-                                                        let original = room.Clone()
-                                                        room.RoomType <- RoomType.Unmarked
-                                                        roomStates.[i,j] <- original
-                                                        SetNewValue(room)
-                                                        roomStates.[i,j] <- room
-                                                        justUnmarked <- None
-                                                        ea.Handled <- true
-                                                    else
-                                                        let original = room.Clone()
-                                                        room.IsComplete <- not room.IsComplete
-                                                        roomStates.[i,j] <- original
-                                                        SetNewValue(room)
-                                                        roomStates.[i,j] <- room
-                                                        justUnmarked <- None
-                                                        ea.Handled <- true
+                                                    let original = room.Clone()
+                                                    roomStates.[i,j] <- original
+                                                    SetNewValue(room)
+                                                    roomStates.[i,j] <- room
+                                                    justUnmarked <- None
+                                                    ea.Handled <- true
+
 
                                         redraw()
                                     ea.Handled <- true

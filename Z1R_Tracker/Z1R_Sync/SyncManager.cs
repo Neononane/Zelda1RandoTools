@@ -89,7 +89,8 @@ namespace Z1R_Sync
             {
                 messageType = msgType,
                 payload = payload,
-                senderId = senderId
+                senderId = senderId,
+                timeStamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
             };
 
             var json = JsonConvert.SerializeObject(request);

@@ -164,6 +164,17 @@ type DungeonRoomState(csharpModel: CDungeonRoomState) as this =
         let result = DungeonRoomState.FromCSharp(this.CSharp.Clone())
         result
 
+    member this.CopyFrom(other: DungeonRoomState) =
+        this.IsComplete <- other.IsComplete
+        this.RoomType <- other.RoomType
+        this.MonsterDetail <- other.MonsterDetail
+        this.FloorDropDetail <- other.FloorDropDetail
+        this.FloorDropAppearsBright <- other.FloorDropAppearsBright
+        this.X <- other.X
+        this.Y <- other.Y
+        this.Level <- other.Level
+
+
     member this.CurrentDisplay() = this.CurrentDisplayEx(fakeUsedTransports)
 
     member this.CurrentDisplayEx(usedTransports) : FrameworkElement =
