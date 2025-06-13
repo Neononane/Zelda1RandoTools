@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.SignalR.Client;
 using Newtonsoft.Json;
@@ -24,6 +25,31 @@ namespace Z1R_Sync
 
         private static Action<string, string, string, long> _onSyncMessageWithTimestamp;
 
+        public static string SafeNormalizeUrl(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return string.Empty;
+
+            // Trim whitespace
+            string url = input.Trim();
+
+            // Remove any trailing slashes
+            url = url.TrimEnd('/');
+
+            // Fix accidental double slashes (except after protocol, e.g. https://)
+            url = Regex.Replace(url, "(?<!:)/{2,}", "/");
+
+            // Ensure it's a valid absolute URI
+            if (Uri.TryCreate(url, UriKind.Absolute, out Uri result))
+            {
+                return result.ToString();
+            }
+            else
+            {
+                // Fall back to raw cleaned version
+                return url;
+            }
+        }
         public static void SetSyncMessageHandler(Action<string, string, string, long> handler)
         {
             _onSyncMessageWithTimestamp = handler;
@@ -103,10 +129,16 @@ namespace Z1R_Sync
 
         public static void Configure(string azureFunctionUrl)
         {
-            _AzureFunctionUrl = azureFunctionUrl;
+            _AzureFunctionUrl = SafeNormalizeUrl(azureFunctionUrl);
         }
 
-        public static string AzureFunctionUrl => _AzureFunctionUrl;
+        public static string AzureFunctionUrl
+        {
+            get
+            {
+                return _AzureFunctionUrl;
+            }
+        }
 
         public static void SetTileChangeHandler(Action<string, string, string> handler)
         {
@@ -205,6 +237,8 @@ namespace Z1R_Sync
             const int retryDelayMs = 5000;
 
             Exception lastException = null;
+
+            negotiateUrl = SafeNormalizeUrl(negotiateUrl);
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
