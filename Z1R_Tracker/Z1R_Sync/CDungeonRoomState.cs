@@ -532,11 +532,13 @@ namespace Z1R_Tracker.Models
             get => _isComplete;
             set
             {
-                if (_isComplete != value)
+                if (_isComplete == value) return;
+                _isComplete = value;
+                // Only notify coop sync if not in preview mode
+                if (!IsPreview)
                 {
-                    _isComplete = value;
-                    Console.WriteLine($"[CDungeonRoomState] IsComplete changed to {value}");
-                    OnChanged();
+                    // Invoke the OnRoomChanged event with this room’s coordinates
+                    RoomSyncBridge.OnRoomChanged?.Invoke(Level, X, Y, this);
                 }
             }
         }
@@ -546,10 +548,13 @@ namespace Z1R_Tracker.Models
             get => _roomType;
             set
             {
-                if (_roomType != value)
+                if (_roomType == value) return;
+                _roomType = value;
+                // Only notify coop sync if not in preview mode
+                if (!IsPreview)
                 {
-                    _roomType = value;
-                    OnChanged();
+                    // Invoke the OnRoomChanged event with this room’s coordinates
+                    RoomSyncBridge.OnRoomChanged?.Invoke(Level, X, Y, this);
                 }
             }
         }
@@ -559,10 +564,13 @@ namespace Z1R_Tracker.Models
             get => _monsterDetail;
             set
             {
-                if (_monsterDetail != value)
+                if (_monsterDetail == value) return;
+                _monsterDetail = value;
+                // Only notify coop sync if not in preview mode
+                if (!IsPreview)
                 {
-                    _monsterDetail = value;
-                    OnChanged();
+                    // Invoke the OnRoomChanged event with this room’s coordinates
+                    RoomSyncBridge.OnRoomChanged?.Invoke(Level, X, Y, this);
                 }
             }
         }
@@ -572,10 +580,13 @@ namespace Z1R_Tracker.Models
             get => _floorDropDetail;
             set
             {
-                if (_floorDropDetail != value)
+                if (_floorDropDetail == value) return;
+                _floorDropDetail = value;
+                // Only notify coop sync if not in preview mode
+                if (!IsPreview)
                 {
-                    _floorDropDetail = value;
-                    OnChanged();
+                    // Invoke the OnRoomChanged event with this room’s coordinates
+                    RoomSyncBridge.OnRoomChanged?.Invoke(Level, X, Y, this);
                 }
             }
         }
@@ -585,13 +596,18 @@ namespace Z1R_Tracker.Models
             get => _floorDropAppearsBright;
             set
             {
-                if (_floorDropAppearsBright != value)
+                if (_floorDropAppearsBright == value) return;
+                _floorDropAppearsBright = value;
+                // Only notify coop sync if not in preview mode
+                if (!IsPreview)
                 {
-                    _floorDropAppearsBright = value;
-                    OnChanged();
+                    // Invoke the OnRoomChanged event with this room’s coordinates
+                    RoomSyncBridge.OnRoomChanged?.Invoke(Level, X, Y, this);
                 }
             }
         }
+
+        public bool IsPreview { get; set; } = false;
 
         public CDungeonRoomState Clone()
         {

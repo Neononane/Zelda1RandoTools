@@ -52,7 +52,7 @@ let private pruneIfNeeded (dict: ConcurrentDictionary<string, 'T>) name =
 let syncBurstTimestamps = ConcurrentQueue<DateTime>()
 let syncBurstWindowMs = 2000
 let syncBurstLimit = 5
-let syncPauseDurationMs = 5000
+let syncPauseDurationMs = 1000
 let mutable autoMutedUntil = DateTime.MinValue
 
 type RoomChangePayload = {

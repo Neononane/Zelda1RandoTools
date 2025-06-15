@@ -257,7 +257,8 @@ let DoDungeonRoomSelectPopup(cm:CustomComboBoxes.CanvasManager, originalRoomStat
     let tileSunglasses = 0.75
 
     let popupCanvas = cm.CreatePopup(0.75)
-    let workingCopy = originalRoomState.Clone()  // for rendering only
+    let workingCopy = originalRoomState.Clone()
+    workingCopy.CSharp.IsPreview <- true // for rendering only
 
     let makeCaption(txt, centered) = 
         let tb = new TextBox(Text=txt, FontSize=16., Foreground=Brushes.Orange, Background=Brushes.Black, BorderThickness=Thickness(0.), IsReadOnly=true, IsHitTestVisible=false,
@@ -357,13 +358,13 @@ let DoDungeonRoomSelectPopup(cm:CustomComboBoxes.CanvasManager, originalRoomStat
     match r with
     | None -> ()
     | Some(curState) -> 
+        workingCopy.CSharp.IsPreview <- false
         workingCopy.RoomType <- curState
         workingCopy.IsComplete <- true
+        suppressRoomSyncTemporarily <- false
         setNewValue(workingCopy)
-        suppressRoomSyncTemporarily <- true
         async {
             do! Async.Sleep(250)
-            suppressRoomSyncTemporarily <- false
         } |> Async.StartImmediate
 
 
