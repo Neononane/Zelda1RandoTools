@@ -12,7 +12,7 @@ You can find the latest copy of the Beta release [here](https://github.com/Neono
 * Some minor text updates
 * A kitty has been swapped for a catbird
 
-# **What Is the Coop Feature Set?**
+# **What Is the Co-op Feature Set?**
 
 This current version synchronizes Triforces, Dungeon Items, Overworld Items, Overworld Locations, Dungeon Maps, and current state of Gannon and Zelda completion. When one user has saved Zelda it will complete the Tracker for both users. 
 
