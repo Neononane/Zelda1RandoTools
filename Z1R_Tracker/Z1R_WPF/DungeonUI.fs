@@ -1542,10 +1542,12 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                     let pretty = CustomComboBoxes.GetPrettyDashes("DungeonRoomSelectActivatePopup", Brushes.Lime, 13.*3., 9.*3., 3., 2., 1.2)
                     dashCanvas.Children.Add(pretty) |> ignore
                     let pos = Point(roomPos.X+13.*3./2., roomPos.Y+9.*3./2.)
-                    do! DungeonPopups.DoDungeonRoomSelectPopup(cm, roomStates.[i,j], usedTransports, SetNewValue, positionAtEntranceRoomIcons, CustomComboBoxes.WarpTo(pos)) 
+                    DungeonPopups.suppressRoomSyncTemporarily <- true
+                    do! DungeonPopups.DoDungeonRoomSelectPopup(cm, roomStates.[i,j], usedTransports, SetNewValue, positionAtEntranceRoomIcons, CustomComboBoxes.WarpTo(pos))
                     dashCanvas.Children.Remove(pretty)
                     c.Children.Remove(dashCanvas)
                     redraw()
+                    DungeonPopups.suppressRoomSyncTemporarily <- false
                     justUnmarked <- None
                     popupIsActive <- false
                     }

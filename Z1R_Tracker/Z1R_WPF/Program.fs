@@ -654,8 +654,9 @@ type MyWindow() as this =
                         | "DoorChange" ->
                             try
                                 let data = JsonConvert.DeserializeObject<CoopSync.DoorChangePayload>(payloadJson)
-
-                                if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome && CoopSync.shouldApplyUpdate "DoorChange" payloadJson timestamp && not (SyncManager.ShouldSuppressDoorChange payloadJson) then
+                                let key = sprintf "DoorChange_%d_%d_%d_%b" data.Level data.X data.Y data.IsHorizontal
+                                if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome && CoopSync.shouldApplyUpdate "DoorChange" payloadJson timestamp && not (SyncManager.ShouldSuppressDoorChange payloadJson) && (CoopSync.isDoorChangeFresh data.Level data.X data.Y data.IsHorizontal timestamp) && not(CoopSync.isRecentlySentByUs key 5000)then
+                                    CoopSync.recordDoorTimestamp data.Level data.X data.Y data.IsHorizontal timestamp
                                     Application.Current.Dispatcher.Invoke(fun () ->
                                         try
                                             let newState = Dungeon.DoorInterop.fromString data.NewState.Case
@@ -685,7 +686,9 @@ type MyWindow() as this =
                             try
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Raw RoomChange payload: %s" payloadJson)
                                 let data = JsonConvert.DeserializeObject<CoopSync.RoomChangePayload>(payloadJson)
-                                if CoopSync.shouldApplyUpdate "RoomChange" payloadJson timestamp then
+                                let key = sprintf "DungeonRoom_%d_%d_%d" data.Level data.X data.Y
+                                if CoopSync.shouldApplyUpdate "RoomChange" payloadJson timestamp && (CoopSync.isRoomChangeFresh data.Level data.X data.Y timestamp) && not (CoopSync.isRecentlySentByUs key 5000) then
+                                    CoopSync.recordRoomTimestamp data.Level data.X data.Y timestamp
                                     Application.Current.Dispatcher.Invoke(fun () ->
                                         Z1R_Tracker.Models.RoomSyncBridge.ApplyRoomChangeFromSync(
                                             data.Level,

@@ -1,6 +1,9 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Text;
@@ -24,6 +27,11 @@ namespace Z1R_Sync
         private static Action<string, string, string> _onSyncMessage;
 
         private static Action<string, string, string, long> _onSyncMessageWithTimestamp;
+
+        private static readonly ConcurrentQueue<SyncMessage> _outbox = new ConcurrentQueue<SyncMessage>();
+        private static bool _sending = false;
+        private static readonly object _sendLock = new object();
+        private static int _retryDelayMs = 1000; // base delay for retries
 
         public static string SafeNormalizeUrl(string input)
         {
@@ -50,6 +58,99 @@ namespace Z1R_Sync
                 return url;
             }
         }
+
+        public static void EnqueueSync(string msgType, string payload, string senderId)
+        {
+            var message = new SyncMessage
+            {
+                messageType = msgType,
+                payload = payload,
+                senderId = senderId,
+                timeStamp = DateTime.UtcNow.Ticks  // include a timestamp or guid
+            };
+            _outbox.Enqueue(message);
+            StartSenderLoop();
+        }
+
+        private static void StartSenderLoop()
+        {
+            lock (_sendLock)
+            {
+                if (_sending) return;
+                _sending = true;
+                // Run the send loop on a background thread (Task)
+                Task.Run(async () => await ProcessQueueAsync());
+            }
+        }
+
+        private static async Task ProcessQueueAsync()
+        {
+            while (_outbox.TryPeek(out SyncMessage msg))
+            {
+                bool sent = await TrySendMessageAsync(msg);
+                if (sent)
+                {
+                    _outbox.TryDequeue(out _);  // remove the successfully sent message
+                    _retryDelayMs = 1000;       // reset delay after success
+                }
+                else
+                {
+                    // Exponential backoff before retrying the same message
+                    await Task.Delay(_retryDelayMs);
+                    _retryDelayMs = Math.Min(_retryDelayMs * 2, 15000);  // cap the backoff (e.g., 15s max)
+                }
+            }
+            // Queue is empty, stop the loop
+            lock (_sendLock) { _sending = false; }
+        }
+
+        private static async Task<bool> TrySendMessageAsync(SyncMessage message)
+        {
+            try
+            {
+                // Example using existing HTTP post to Azure Function (same as current Send logic)
+                var json = JsonConvert.SerializeObject(new
+                {
+                    messageType = message.messageType,
+                    payload = message.payload,
+                    senderId = message.senderId,
+                    timeStamp = message.timeStamp
+                });
+                using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
+                {
+                    HttpResponseMessage resp = await _httpClient.PostAsync(AzureFunctionUrl, content);
+                    if (resp.StatusCode == (HttpStatusCode)429)
+                    {
+                        // Too Many Requests: don't consider as sent, but handle retry after
+                        if (resp.Headers.TryGetValues("Retry-After", out var values))
+                        {
+                            string retryAfterSec = values.FirstOrDefault();
+                            Console.WriteLine("[Sync] Throttled, server said retry after " + retryAfterSec + " seconds.");
+                        }
+                        else
+                        {
+                            Console.WriteLine("[Sync] Throttled with 429, no Retry-After header.");
+                        }
+                        return false; // will trigger a retry with backoff
+                    }
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        string err = await resp.Content.ReadAsStringAsync();
+                        Console.WriteLine($"[Sync] Send failed: HTTP {resp.StatusCode} - {err}");
+                        return false;
+                    }
+                }
+                // If we reach here, the HTTP post was successful
+                Debug.WriteLine($"[Sync] Sent message {message.messageType} (id={message.timeStamp})");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Sync] Exception during send: {ex.Message}");
+                return false;
+            }
+        }
+
         public static void SetSyncMessageHandler(Action<string, string, string, long> handler)
         {
             _onSyncMessageWithTimestamp = handler;
