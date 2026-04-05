@@ -251,9 +251,6 @@ type GrabHelper() =
                         destination.CSharp.Y <- y
                         destination.CSharp.FireChangedManually()
 
-                        // Clear the original room
-                        roomStates.[i,j].CSharp.Clear()
-
                         roomIsCircled.[x,y] <- oldRoomIsCircled.[i,j]
 
                         let do_door(target:Door[,], x, y, source:DoorState[,], i, j) =
@@ -263,6 +260,17 @@ type GrabHelper() =
                         if x>0 && i>0 then do_door(horizontalDoors,x-1,y,oldHorizontalDoors,i-1,j)
                         if y<7 && j<7 then do_door(verticalDoors,x,y,oldVerticalDoors,i,j)
                         if y>0 && j>0 then do_door(verticalDoors,x,y-1,oldVerticalDoors,i,j-1)
+
+        // Second pass: clear source positions that are not also destinations of another grabbed room.
+        // Doing this in the same loop as the copy causes rooms to be erroneously cleared when the
+        // destination of one grabbed room coincides with the source of another (e.g. moving a group right).
+        for i = 0 to 7 do
+            for j = 0 to 7 do
+                if grabContiguousRooms.[i,j] then
+                    let si, sj = i - dx, j - dy
+                    let isAlsoDestination = si >= 0 && si <= 7 && sj >= 0 && sj <= 7 && grabContiguousRooms.[si,sj]
+                    if not isAlsoDestination then
+                        roomStates.[i,j].CSharp.Clear()
 
         this.Abort()
 

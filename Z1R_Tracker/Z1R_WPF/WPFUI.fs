@@ -261,8 +261,8 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
             canvasAdd(c, bottomShade, 0., float(10*3))
             let rightShade  = new Canvas(Width=float(3), Height=float(11*3), Background=Brushes.Black, Opacity=OPA)
             canvasAdd(c, rightShade, OMTW-3., 0.)
-            // permanent icons
-            if owInstance.AlwaysEmpty(i,j) then
+            // permanent icons (only for tiles that are ALWAYS empty in every quest variant, never switchable)
+            if owInstance.AlwaysEmpty(i,j) && OverworldData.owMapSquaresSecondQuestOnly.[j].[i] <> 'X' && OverworldData.owMapSquaresFirstQuestOnly.[j].[i] <> 'X' then
                 let icon = Graphics.BMPtoImage(Graphics.theFullTileBmpTable.[TrackerModel.MapSquareChoiceDomainHelper.DARK_X].[0]) // "X"
                 icon.Opacity <- X_OPACITY
                 canvasAdd(c, icon, 0., 0.)
@@ -503,7 +503,9 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                 | _ -> ()
             )
             // icon
-            if owInstance.AlwaysEmpty(i,j) then
+            // Quest-switchable tiles (owMapSquaresSecondQuestOnly or owMapSquaresFirstQuestOnly) must always get the full interactive handler
+            // so that when the quest switches at runtime, redrawGridSpot() exists and owUpdateFunctions is populated.
+            if owInstance.AlwaysEmpty(i,j) && OverworldData.owMapSquaresSecondQuestOnly.[j].[i] <> 'X' && OverworldData.owMapSquaresFirstQuestOnly.[j].[i] <> 'X' then
                 // already set up as permanent opaque layer, in code above, so nothing else to do
                 // except...
                 if i=9 && j=3 || i=3 && j=4 || (owInstance.Quest=OverworldData.OWQuest.SECOND && i=11 && j=0) then // fairy spots
@@ -604,12 +606,21 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                                         | _ -> ()
                                         animateOverworldTileIfOptionIsChecked(i,j)
                                 | None -> ()
-                            elif MapStateProxy(curState).IsThreeItemShop && TrackerModel.getOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP)=0 then
-                                // if item shop with only one item marked, use voice to set other item
+                            elif MapStateProxy(curState).IsThreeItemShop && TrackerModel.getShopItem2_1based(i,j)=0 then
+                                // if item shop with only one item marked, use voice to set item2
                                 match speechRecognitionInstance.ConvertSpokenPhraseToMapCell(phrase) with
-                                | Some newState -> 
+                                | Some newState ->
                                     if TrackerModel.MapSquareChoiceDomainHelper.IsItem(newState) then
-                                        TrackerModel.setOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP,TrackerModel.MapSquareChoiceDomainHelper.ToItem(newState))
+                                        TrackerModel.setShopItems(i,j,TrackerModel.MapSquareChoiceDomainHelper.ToItem(newState),0)
+                                        Graphics.PlaySoundForSpeechRecognizedAndUsedToMark()
+                                        animateOverworldTileIfOptionIsChecked(i,j)
+                                | None -> ()
+                            elif MapStateProxy(curState).IsThreeItemShop && TrackerModel.getShopItem3_1based(i,j)=0 then
+                                // if item shop with two items marked, use voice to set item3
+                                match speechRecognitionInstance.ConvertSpokenPhraseToMapCell(phrase) with
+                                | Some newState ->
+                                    if TrackerModel.MapSquareChoiceDomainHelper.IsItem(newState) then
+                                        TrackerModel.setShopItems(i,j,TrackerModel.getShopItem2_1based(i,j),TrackerModel.MapSquareChoiceDomainHelper.ToItem(newState))
                                         Graphics.PlaySoundForSpeechRecognizedAndUsedToMark()
                                         animateOverworldTileIfOptionIsChecked(i,j)
                                 | None -> ()
@@ -647,7 +658,7 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                                                                     (sprintf "%c%d" (char (int 'A' + j)) (if TrackerModel.MirrorOverworld then 16-i else (i+1)))
                                                                     (TrackerModel.MapSquareChoiceDomainHelper.AsHotKeyName(currentState)))
                 }
-                let GCOL,GROW = 8,5
+                let GCOL,GROW = 8,6
                 let GCOUNT = GCOL*GROW
                 let ST = CustomComboBoxes.borderThickness
                 let gridWidth = float(GCOL*(5*3+2*int ST)+int ST)
@@ -684,6 +695,13 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                         yield upcast new Canvas(Width=5.*3., Height=9.*3., Background=Graphics.overworldCommonestFloorColorDarkBrush), true, 35
                         yield upcast new Canvas(Width=5.*3., Height=9.*3., Background=Graphics.overworldCommonestFloorColorBrush), true, -1
                         yield null, false, -999  // null asks selector to 'leave a hole' here
+                        // personal preference row (centered: 3 holes, PP1, PP2, 3 holes)
+                        for _ = 1 to 3 do
+                            yield null, false, -999
+                        yield typicalGESAI(TrackerModel.MapSquareChoiceDomainHelper.PERSONAL_PREF_1)
+                        yield typicalGESAI(TrackerModel.MapSquareChoiceDomainHelper.PERSONAL_PREF_2)
+                        for _ = 1 to 3 do
+                            yield null, false, -999
                         |]
                     let shopsOnTop = TrackerModelOptions.Overworld.ShopsFirst.Value // start with shops, rather than dungeons, on top of grid
                     let gridElementsSelectablesAndIDs = 
@@ -745,14 +763,16 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                                 let pos = c.TranslatePoint(Point(), appMainCanvas)
                                 let msp = MapStateProxy(TrackerModel.overworldMapMarks.[i,j].Current())
                                 if msp.IsX then
-                                    if Graphics.shouldInitiallyHideOverworldMap then
+                                    if TrackerModel.owInstance.AlwaysEmpty(i,j) then
+                                        ()  // tile is AlwaysEmpty in current quest; don't open popup (only circles allowed)
+                                    elif Graphics.shouldInitiallyHideOverworldMap then
                                         let ex = TrackerModel.getOverworldMapExtraData(i,j,msp.State)
                                         popupIsActive <- true
                                         async {
                                             if ex=msp.State then
                                                 // hidden -> unmarked           (and recall that unmarked left clicks to DontCare)
                                                 TrackerModel.setOverworldMapExtraData(i,j,msp.State,0)
-                                                do! SetNewValue(-1,msp.State)  
+                                                do! SetNewValue(-1,msp.State)
                                             else
                                                 // DontCare -> hidden           (thus left click is a 3-cycle hidden, unmarked, DontCare)
                                                 TrackerModel.setOverworldMapExtraData(i,j,msp.State,msp.State)
@@ -777,8 +797,8 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                                 TrackerModel.nextOverworldMapCircleColor(i,j)
                                 owCircleRedraws.[i,j]()
                             else
-                                // right click activates the popup selector
-                                activatePopup(0)
+                                // right click activates the popup selector (only when tile is interactive in current quest)
+                                if not (TrackerModel.owInstance.AlwaysEmpty(i,j)) then activatePopup(0)
                         elif ea.ChangedButton = Input.MouseButton.Middle then
                             // middle click toggles circle
                             TrackerModel.toggleOverworldMapCircle(i,j)
@@ -813,6 +833,8 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                     TrackerModel.overworldMapMarks.[i,j].Set(TrackerModel.MapSquareChoiceDomainHelper.DARK_X)
                     TrackerModel.setOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.DARK_X,TrackerModel.MapSquareChoiceDomainHelper.DARK_X)
                     redrawGridSpot()
+                elif TrackerModel.overworldMapMarks.[i,j].Current() = TrackerModel.MapSquareChoiceDomainHelper.DARK_X then
+                    redrawGridSpot()  // quest-switchable tile that starts as AlwaysEmpty in the current quest; draw its initial dark X
     if speechRecognitionInstance <> null then
         speechRecognitionInstance.AttachSpeechRecognizedToApp(appMainCanvas, (fun recognizedText ->
                                 if currentlyMousedOWX >= 0 then // can hear speech before we have moused over any (uninitialized location)
@@ -1129,14 +1151,14 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                     oneTimeRemindAnyKey <- Some(new TrackerModel.LastChangedTime(), (fun() ->
                         oneTimeRemindAnyKey <- None
                         if TrackerModel.playerComputedStateSummary.HaveAnyKey then
-                            SendReminder(TrackerModel.ReminderCategory.HaveKeyLadder, "Don't forget that you have the magic key", [upcb(Graphics.key_bmp)])
+                            SendReminder(TrackerModel.ReminderCategory.HaveMagicKey, "Don't forget that you have the magic key", [upcb(Graphics.key_bmp)])
                         else
                             TrackerModel.remindedAnyKey <- false))
                 elif itemId = TrackerModel.ITEMS.LADDER then
                     oneTimeRemindLadder <- Some(new TrackerModel.LastChangedTime(), (fun() ->
                         oneTimeRemindLadder <- None
                         if TrackerModel.playerComputedStateSummary.HaveLadder then
-                            SendReminder(TrackerModel.ReminderCategory.HaveKeyLadder, "Don't forget that you have the ladder", [upcb(Graphics.ladder_bmp)])
+                            SendReminder(TrackerModel.ReminderCategory.HaveLadder, "Don't forget that you have the ladder", [upcb(Graphics.ladder_bmp)])
                         else
                             TrackerModel.remindedLadder <- false))
                 else
@@ -1463,8 +1485,8 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
         for i = 0 to 15 do
             for j = 0 to 7 do
                 let cur = TrackerModel.overworldMapMarks.[i,j].Current()
-                if MapStateProxy(cur).IsThreeItemShop && 
-                        (cur = item || (TrackerModel.getOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(item))) then
+                if MapStateProxy(cur).IsThreeItemShop &&
+                        (cur = item || TrackerModel.getShopItem2_1based(i,j) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(item) || TrackerModel.getShopItem3_1based(i,j) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(item)) then
                     owLocatorTileRectangles.[i,j].MakeGreenWithBriefAnimation()
                     OverworldMapTileCustomization.temporarilyDisplayHiddenOverworldTileMarks.[i,j] <- true
                     owUpdateFunctions.[i,j] 0 null  // redraw tile, with icon shown
@@ -1833,7 +1855,11 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
             TrackerModel.SetLevelHint(i, TrackerModel.HintZone.FromIndex(data.Hints.LocationHints.[i]))
         TrackerModel.NoFeatOfStrengthHintWasGiven <- data.Hints.NoFeatOfStrengthHint
         TrackerModel.SailNotHintWasGiven <- data.Hints.SailNotHint
-        hideFeatsOfStrength TrackerModel.NoFeatOfStrengthHintWasGiven 
+        TrackerModel.SailToHintWasGiven <- data.Hints.SailToHint
+        TrackerModel.PlayMelodyHintWasGiven <- data.Hints.PlayMelodyHint
+        TrackerModel.StepOverWaterHintWasGiven <- data.Hints.StepOverWaterHint
+        TrackerModel.FireArrowsHintWasGiven <- data.Hints.FireArrowsHint
+        hideFeatsOfStrength TrackerModel.NoFeatOfStrengthHintWasGiven
         hideRaftSpots TrackerModel.SailNotHintWasGiven
         // Notes
         notesTextBox.Text <- data.Notes

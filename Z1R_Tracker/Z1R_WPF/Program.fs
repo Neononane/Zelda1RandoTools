@@ -558,6 +558,10 @@ type MyWindow() as this =
                                         TrackerModel.SetLevelHint(i, TrackerModel.HintZone.FromIndex(data.LocationHints.[i]))
                                     TrackerModel.NoFeatOfStrengthHintWasGiven <- data.NoFeatOfStrengthHint
                                     TrackerModel.SailNotHintWasGiven <- data.SailNotHint
+                                    TrackerModel.SailToHintWasGiven <- data.SailToHint
+                                    TrackerModel.PlayMelodyHintWasGiven <- data.PlayMelodyHint
+                                    TrackerModel.StepOverWaterHintWasGiven <- data.StepOverWaterHint
+                                    TrackerModel.FireArrowsHintWasGiven <- data.FireArrowsHint
 
                                     TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Hints update from %s" senderId)
                                 )
@@ -1155,7 +1159,7 @@ type MyWindow() as this =
                 if n = 999 then
                     let ofd = new Microsoft.Win32.OpenFileDialog()
                     ofd.InitialDirectory <- System.AppDomain.CurrentDomain.BaseDirectory
-                    ofd.Filter <- "ZTracker saves|zt-save-*.json|All Files|*.*"
+                    ofd.Filter <- "ZTracker saves|zt-save-*.json|All JSON files|*.json|All Files|*.*"
                     let r = ofd.ShowDialog(this)
                     if r.HasValue && r.Value then
                         try
@@ -1304,6 +1308,10 @@ type MyWindow() as this =
                 if n<=3 then addQuestExplainer(startButton)
             startButton.Click.Add(fun _ -> startButtonBehavior(n))
 
+        stackPanel.Children.Add(finalChildTipArea) |> ignore  // finalChildTipArea still used for explainer arrows on startup options
+
+        // Tip lives inside bottomSP so it's in proper layout flow — can never overlap the Settings header
+        let bottomSP = new StackPanel(Orientation=Orientation.Vertical, HorizontalAlignment=HorizontalAlignment.Center)
         let tipsp = new StackPanel(Orientation=Orientation.Vertical)
         let tb = MakeTipTextBox("Random tip:")
         tipsp.Children.Add(tb) |> ignore
@@ -1311,13 +1319,10 @@ type MyWindow() as this =
         //let tb = MakeTipTextBox(DungeonData.Factoids.allTips |> Array.sortBy (fun s -> s.Length) |> Seq.last)   // show the longest tip (to test screen layout)
         tb.Margin <- spacing
         tipsp.Children.Add(tb) |> ignore
-        stackPanel.Children.Add(finalChildTipArea) |> ignore
-        let tip = new Border(Child=tipsp, BorderThickness=Thickness(1.), Padding=Thickness(5.), BorderBrush=Brushes.Orange, Width=WIDTH*2./3.)
-        Graphics.canvasAdd(finalChildTipArea, tip, WIDTH/6. - CHROME_WIDTH/2., 55.)
-
-        let bottomSP = new StackPanel(Orientation=Orientation.Vertical, HorizontalAlignment=HorizontalAlignment.Center)
+        let tip = new Border(Child=tipsp, BorderThickness=Thickness(1.), Padding=Thickness(5.), BorderBrush=Brushes.Orange, Width=WIDTH*2./3., Margin=Thickness(0.,4.,0.,4.), HorizontalAlignment=HorizontalAlignment.Center)
+        bottomSP.Children.Add(tip) |> ignore
         bottomSP.Children.Add(new Shapes.Rectangle(HorizontalAlignment=HorizontalAlignment.Stretch, Fill=Brushes.Black, Height=2., Margin=spacing)) |> ignore
-        let tb = new TextBox(Text="Settings (most can be changed later, using 'Options...' button above timeline):", HorizontalAlignment=HorizontalAlignment.Center, 
+        let tb = new TextBox(Text="Settings (most can be changed later, using 'Options...' button above timeline):", HorizontalAlignment=HorizontalAlignment.Center,
                                 Margin=Thickness(0.,0.,0.,5.), BorderThickness=Thickness(0.))
         bottomSP.Children.Add(tb) |> ignore
         let options = OptionsMenu.makeOptionsCanvas(cm, false, true)

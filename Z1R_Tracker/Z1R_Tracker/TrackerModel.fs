@@ -7,12 +7,17 @@ type ReminderCategory =
     | DungeonFeedback
     | SwordHearts
     | CoastItem
-    | RecorderPBSpotsAndBoomstickBook
-    | HaveKeyLadder
+    | RecorderPBSpotsAndBoomstickBook  // legacy, kept for save-compat; logic now uses individual below
+    | HaveKeyLadder                    // legacy, kept for save-compat; logic now uses individual below
     | Blockers
     | DoorRepair
     | OverworldOverwrites
     | Asterisk
+    | RecorderSpots
+    | PowerBraceletSpots
+    | BoomstickBook
+    | HaveMagicKey
+    | HaveLadder
     member this.DisplayName =
         match this with
         | DungeonFeedback -> "Dungeon feedback"
@@ -24,6 +29,11 @@ type ReminderCategory =
         | DoorRepair -> "Door Repair Count"
         | OverworldOverwrites -> "Overworld overwrites"
         | Asterisk -> "Error beeps"
+        | RecorderSpots -> "Recorder spots"
+        | PowerBraceletSpots -> "Power Bracelet spots"
+        | BoomstickBook -> "Boomstick book"
+        | HaveMagicKey -> "Have magic key"
+        | HaveLadder -> "Have ladder"
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -307,6 +317,8 @@ let overworldTiles(isFirstQuestOverworld, isHDN) = [|
     "TakeAny"          , 4                                                  , "Take Any",             "Take Any One\nYou Want"
     "PotionShop"       , (if isFirstQuestOverworld then 7 else 9)           , "Potion Shop",          "Potion Shop\n(20-60, 48-88 rupees)"
     "DarkX"            , 999                                                , "Don't Care",           "Don't Care"
+    "PersonalPref1"    , 999                                                , "Personal Pref 1",      "Personal Preference 1\n(custom marker)"
+    "PersonalPref2"    , 999                                                , "Personal Pref 2",      "Personal Preference 2\n(custom marker)"
     |]
 // 1Q has 73 total spots, 2Q has 80, Mixed has 93
 let MaxRemain1Q = 73
@@ -360,6 +372,8 @@ type MapSquareChoiceDomainHelper =
     static member TAKE_ANY = 33
     static member POTION_SHOP = 34
     static member DARK_X = 35
+    static member PERSONAL_PREF_1 = 36
+    static member PERSONAL_PREF_2 = 37
     static member AsHotKeyName(n) =
         if n>=0 && n<dummyOverworldTiles.Length then
             let r,_,_,_ = dummyOverworldTiles.[n] in r
@@ -1005,6 +1019,7 @@ do
 // Map
 
 let mutable owInstance = new OverworldData.OverworldInstance(OverworldData.OWQuest.FIRST)
+let overworldQuestChanged = new Event<unit>()   // fired when reinitializeOverworld switches to a new quest
 
 let mapLastChangedTime = new LastChangedTime()
 let overworldMapCircles = Array2D.create 16 8 0   // 0 means none, 1 means just circle, 48-57 means circle with 0-9 label, 65-90 means circle with A-Z label; +100 of those or +200 of those changes color
@@ -1024,10 +1039,18 @@ let prevOverworldMapCircleColor(i,j) =
         overworldMapCircles.[i,j] <- overworldMapCircles.[i,j] - 300
 let mutable overworldMapMarks : Cell[,] = null
 let private overworldMapExtraData = Array2D.init 16 8 (fun _ _ -> Array.zeroCreate (MapSquareChoiceDomainHelper.DARK_X+1))
-// extra data key-value store, used by 
-//  - 3-item shops to store the second item, key for all shops is SHOP, value 0 is none and 1-MapStateProxy.NUM_ITEMS are those items
+// Per-shop price notes: 0 = not set, positive value = rupee price the user recorded for that shop
+let overworldShopPrices = Array2D.create 16 8 0
+let getShopPrice(i,j) = overworldShopPrices.[i,j]
+let setShopPrice(i,j,v:int) =
+    overworldShopPrices.[i,j] <- v
+    mapLastChangedTime.SetNow()
+// extra data key-value store, used by
+//  - 3-item shops to store the second and third items; key for all shops is SHOP
+//    encoding: ed = item2_1based + 9 * item3_1based  (0=none, 1-8=item)
+//    backward compat: old saves with ed ∈ {0..8} decode as item2=ed, item3=0
 //  - various others store a brightness toggle, key is <mapstate>, value is 0 or <mapstate>
-let getOverworldMapExtraData(i,j,k) = 
+let getOverworldMapExtraData(i,j,k) =
 #if DEBUG
     let cur = overworldMapMarks.[i,j].Current()
     if cur=k || (MapSquareChoiceDomainHelper.IsItem(cur) && k=MapSquareChoiceDomainHelper.SHOP) then
@@ -1039,10 +1062,14 @@ let getOverworldMapExtraData(i,j,k) =
         0  // or some other sensible default fallback
     else
         overworldMapExtraData.[i,j].[k]
-let setOverworldMapExtraData(i,j,k,v) = 
+let setOverworldMapExtraData(i,j,k,v) =
     if k >= 0 && k <= MapSquareChoiceDomainHelper.DARK_X then
         overworldMapExtraData.[i,j].[k] <- v
         mapLastChangedTime.SetNow()
+// Helpers for 3-item shop encoding: ed = item2_1based + 9 * item3_1based
+let getShopItem2_1based(i,j) = getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) % 9
+let getShopItem3_1based(i,j) = getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) / 9
+let setShopItems(i,j,item2_1based,item3_1based) = setOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP, item2_1based + 9*item3_1based)
 let NOTFOUND = (-1,-1)
 let magsCaveFound, woodSwordCaveFound, foundBlueRingShop, foundBookShop, foundCandleShop, foundArrowShop, foundBombShop, havePotionLetter = 
     new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false)
@@ -1136,21 +1163,14 @@ let recomputeMapStateSummary() =
                         owSpotsRemain <- owSpotsRemain + 1         // un-revealed spots count as remaining
                 | n -> 
                     if MapSquareChoiceDomainHelper.IsItem(n) then // shop
-                        let item = MapSquareChoiceDomainHelper.BLUE_RING
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundBlueRingShop_ <- true
-                        let item = MapSquareChoiceDomainHelper.BOOK
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundBookShop_ <- true
-                        let item = MapSquareChoiceDomainHelper.BLUE_CANDLE
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundCandleShop_ <- true
-                        let item = MapSquareChoiceDomainHelper.ARROW
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundArrowShop_ <- true
-                        let item = MapSquareChoiceDomainHelper.BOMB
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundBombShop_ <- true
+                        let item2 = getShopItem2_1based(i,j)
+                        let item3 = getShopItem3_1based(i,j)
+                        let hasItem(item) = n = item || item2 = MapSquareChoiceDomainHelper.ToItem(item) || item3 = MapSquareChoiceDomainHelper.ToItem(item)
+                        if hasItem(MapSquareChoiceDomainHelper.BLUE_RING)   then foundBlueRingShop_ <- true
+                        if hasItem(MapSquareChoiceDomainHelper.BOOK)        then foundBookShop_ <- true
+                        if hasItem(MapSquareChoiceDomainHelper.BLUE_CANDLE) then foundCandleShop_ <- true
+                        if hasItem(MapSquareChoiceDomainHelper.ARROW)       then foundArrowShop_ <- true
+                        if hasItem(MapSquareChoiceDomainHelper.BOMB)        then foundBombShop_ <- true
                     else
                         if n=MapSquareChoiceDomainHelper.THE_LETTER && getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.THE_LETTER)=0 then 
                             havePotionLetter_ <- true
@@ -1443,6 +1463,10 @@ let GetLevelHint, SetLevelHint, LevelHintChanged =
     GetLevelHint, SetLevelHint, LevelHintChanged
 let mutable NoFeatOfStrengthHintWasGiven = false
 let mutable SailNotHintWasGiven = false
+let mutable SailToHintWasGiven = false
+let mutable PlayMelodyHintWasGiven = false
+let mutable StepOverWaterHintWasGiven = false
+let mutable FireArrowsHintWasGiven = false
 
 let mutable currentlyIgnoringForceUpdatesDuringALoad = false
 let forceUpdate() = 
@@ -1918,8 +1942,38 @@ let initializeAll(instance:OverworldData.OverworldInstance, kind) =
     for i = 0 to 15 do
         for j = 0 to 7 do
             if owInstance.AlwaysEmpty(i,j) then
-                overworldMapMarks.[i,j].Prev()   // set to 'X'
+                overworldMapMarks.[i,j].Set(MapSquareChoiceDomainHelper.DARK_X)   // set to 'X'
     recomputeMapStateSummary()
     TimelineItemModel.MakeAll()
 
-        
+let reinitializeOverworld(newInstance: OverworldData.OverworldInstance) =
+    // Save current state before replacing data structures
+    let savedMarks = Array2D.init 16 8 (fun i j -> overworldMapMarks.[i,j].Current())
+    let oldInstance = owInstance
+
+    // Update owInstance
+    owInstance <- newInstance
+
+    // Replace ChoiceDomain (new quest may have different maxUses for a few tile types)
+    mapSquareChoiceDomain <- ChoiceDomain("mapSquare", overworldTiles(newInstance.Quest.IsFirstQuestOW, false) |> Array.map (fun (_,x,_,_) -> x))
+    mapSquareChoiceDomain.Changed.Add(fun _ -> mapLastChangedTime.SetNow())
+
+    // Replace Cell array (all reads of overworldMapMarks.[i,j] will now use new cells)
+    overworldMapMarks <- Array2D.init 16 8 (fun _ _ -> new Cell(mapSquareChoiceDomain))
+
+    // Restore marks, preserving as much data as possible
+    for i = 0 to 15 do
+        for j = 0 to 7 do
+            if newInstance.AlwaysEmpty(i,j) then
+                overworldMapMarks.[i,j].Set(MapSquareChoiceDomainHelper.DARK_X)  // set to DARK_X
+            else
+                let v = savedMarks.[i,j]
+                let wasAlwaysEmpty = oldInstance.AlwaysEmpty(i,j)
+                if not wasAlwaysEmpty && v >= 0 && mapSquareChoiceDomain.CanAddUse(v) then
+                    // Tile was interactive in old quest with a mark — restore if compatible
+                    overworldMapMarks.[i,j].Set(v)
+                // else: was AlwaysEmpty (DARK_X auto-set), was empty (-1), or mark already used elsewhere → leave at -1
+
+    recomputeMapStateSummary()
+    overworldQuestChanged.Trigger()   // notify listeners (e.g. Reminders) to reset cached spot counts
+

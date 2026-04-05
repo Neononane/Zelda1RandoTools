@@ -122,8 +122,8 @@ let SetupLinkRouting(cm:CustomComboBoxes.CanvasManager, changeCurrentRouteTarget
                 for i = 0 to 15 do
                     for j = 0 to 7 do
                         let cur = TrackerModel.overworldMapMarks.[i,j].Current()
-                        if OverworldMapTileCustomization.MapStateProxy(cur).IsThreeItemShop && 
-                                (cur = shopDest || (TrackerModel.getOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(shopDest))) then
+                        if OverworldMapTileCustomization.MapStateProxy(cur).IsThreeItemShop &&
+                                (cur = shopDest || TrackerModel.getShopItem2_1based(i,j) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(shopDest) || TrackerModel.getShopItem3_1based(i,j) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(shopDest)) then
                             spots.Add(i,j)
                 if spots.Count > 0 then
                     makeIconTarget(draw, x, y, RouteDestination.OW_MAP(spots))

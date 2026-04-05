@@ -1400,7 +1400,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                             let src = placeholderIconsByRow.[j].Source.Clone()
                             let ph = new System.Windows.Controls.Image()
                             ph.Source <- src
-                            ph.Opacity <- 0.3  // set how faint it should be
+                            ph.Opacity <- TrackerModelOptions.DungeonMapLocationHintOpacity
                             ph.Stretch <- Stretch.Uniform
                             ph.Width <- float(13*3)
                             ph.Height <- float(9*3)
@@ -1729,11 +1729,13 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                         justUnmarked <- None
                         popupIsActive <- false
                     } |> Async.StartImmediate
-                c.MouseWheel.Add(fun x -> 
+                c.MouseWheel.Add(fun x ->
                     if not popupIsActive then
                         if not grabHelper.IsGrabMode then  // cannot scroll rooms in grab mode
                             popupIsActive <- true
-                            if x.Delta>0 then
+                            let scrollUp = x.Delta > 0
+                            let showMonster = scrollUp <> TrackerModelOptions.ReverseScrollWheelDirection.Value
+                            if showMonster then
                                 doMonsterDetailPopup()
                             else
                                 doFloorDropDetailPopup()
@@ -1982,6 +1984,10 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         masterRedrawAllRooms.[level-1] <- fun() -> redrawAllRooms()
         do! showProgress(sprintf "finish dungeon level %d" level)
     // end -- for level in 1 to 9 do
+    // Now that all masterRedrawAllRooms are populated, fire a redraw so DisplayIconsInDungeonMap hints appear on startup
+    if TrackerModelOptions.DisplayIconsInDungeonMap.Value then
+        for i = 0 to 8 do
+            masterRedrawAllRooms.[i]()
     do
         // summary tab
         let levelTab = new TabItem(Background=Brushes.Black, Foreground=Brushes.Black)

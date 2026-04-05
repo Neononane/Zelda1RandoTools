@@ -14,7 +14,7 @@ module Overworld =
     let mutable RoutesCanScreenScroll = Bool(false)
     let mutable HighlightNearby = Bool(true)
     let mutable ShowMagnifier = Bool(true)
-    let mutable ShopsFirst = Bool(true)
+    let mutable ShopsFirst = Bool(false)
     let mutable Zones = Bool(false)
     let mutable Coords = Bool(false)
     let mutable Gettables = Bool(true)
@@ -23,20 +23,30 @@ module VoiceReminders =
     let mutable DungeonFeedback = Bool(true)
     let mutable SwordHearts = Bool(true)
     let mutable CoastItem = Bool(true)
-    let mutable RecorderPBSpotsAndBoomstickBook = Bool(false)
-    let mutable HaveKeyLadder = Bool(true)
+    let mutable RecorderPBSpotsAndBoomstickBook = Bool(false)  // legacy
+    let mutable HaveKeyLadder = Bool(true)                     // legacy
     let mutable Blockers = Bool(true)
     let mutable DoorRepair = Bool(true)
     let mutable OverworldOverwrites = Bool(true)
+    let mutable RecorderSpots = Bool(false)
+    let mutable PowerBraceletSpots = Bool(false)
+    let mutable BoomstickBook = Bool(false)
+    let mutable HaveMagicKey = Bool(true)
+    let mutable HaveLadder = Bool(true)
 module VisualReminders =
     let mutable DungeonFeedback = Bool(true)
     let mutable SwordHearts = Bool(true)
     let mutable CoastItem = Bool(true)
-    let mutable RecorderPBSpotsAndBoomstickBook = Bool(false)
-    let mutable HaveKeyLadder = Bool(true)
+    let mutable RecorderPBSpotsAndBoomstickBook = Bool(false)  // legacy
+    let mutable HaveKeyLadder = Bool(true)                     // legacy
     let mutable Blockers = Bool(true)
     let mutable DoorRepair = Bool(true)
     let mutable OverworldOverwrites = Bool(true)
+    let mutable RecorderSpots = Bool(true)
+    let mutable PowerBraceletSpots = Bool(true)
+    let mutable BoomstickBook = Bool(true)
+    let mutable HaveMagicKey = Bool(true)
+    let mutable HaveLadder = Bool(true)
 module OverworldTilesToHide =
     let mutable Sword3 = Bool(false)
     let mutable Sword2 = Bool(false)
@@ -107,6 +117,8 @@ let mutable RequirePTTForSpeech = Bool(false)
 let mutable PlaySoundWhenUseSpeech = Bool(true)
 let mutable BOARDInsteadOfLEVEL = Bool(false)
 let mutable DisplayIconsInDungeonMap = Bool(false)
+let mutable DungeonMapLocationHintOpacity = 0.3
+let mutable ReverseScrollWheelDirection = Bool(false)
 let mutable ShowBasementInfo = Bool(true)
 let mutable DoDoorInference = Bool(false)
 let mutable DefaultRoomPreferNonDescriptToMaybePushBlock = Bool(false)
@@ -125,6 +137,8 @@ let mutable IsMuted = false
 let mutable Volume = 30
 //How often should reminders fire?  In milliseconds.
 let mutable ReminderFrequency = 1000
+// Base interval (in minutes) for periodic reminders. Actual intervals scale proportionally.
+let mutable ReminderIntervalMinutes = 5
 let mutable PreferredVoice = ""
 let mutable MainWindowLT = ""
 let mutable BroadcastWindowLT = ""
@@ -138,6 +152,14 @@ let mutable DungeonSummaryTabMode = 0
 let mutable PortNumber = "5000"
 let mutable CoopHostSession = false
 let mutable RaceMode = Bool(false)
+let mutable AllowItemIconOnNonShopTile = Bool(false)
+let mutable AlphabetizeHintZones = Bool(false)
+module PerItemReminders =
+    let mutable Recorder = Bool(true)
+    let mutable PowerBracelet = Bool(true)
+    let mutable Boomstick = Bool(true)
+    let mutable LadderInDungeon = Bool(true)
+    let mutable KeyInDungeon = Bool(true)
 
 
 type ReadWrite() =
@@ -169,7 +191,17 @@ type ReadWrite() =
     member val Visual_Blockers = true with get,set
     member val Visual_DoorRepair = true with get,set
     member val Visual_OverworldOverwrites = true with get,set
-        
+    member val Voice_RecorderSpots = false with get,set
+    member val Voice_PowerBraceletSpots = false with get,set
+    member val Voice_BoomstickBook = false with get,set
+    member val Voice_HaveMagicKey = true with get,set
+    member val Voice_HaveLadder = true with get,set
+    member val Visual_RecorderSpots = true with get,set
+    member val Visual_PowerBraceletSpots = true with get,set
+    member val Visual_BoomstickBook = true with get,set
+    member val Visual_HaveMagicKey = true with get,set
+    member val Visual_HaveLadder = true with get,set
+
     member val HideOverworldTile_Sword3 = false with get,set
     member val HideOverworldTile_Sword2 = false with get,set
     member val HideOverworldTile_Sword1 = false with get,set
@@ -196,6 +228,8 @@ type ReadWrite() =
     member val PlaySoundWhenUseSpeech = true with get,set
     member val BOARDInsteadOfLEVEL = false with get,set
     member val DisplayIconsInDungeonMap = false with get,set
+    member val DungeonMapLocationHintOpacity = 0.3 with get,set
+    member val ReverseScrollWheelDirection = false with get,set
     member val IsSecondQuestDungeons = false with get,set
     member val ShowBasementInfo = true with get,set
     member val DoDoorInference = false with get,set
@@ -215,6 +249,7 @@ type ReadWrite() =
     member val IsMuted = false with get, set
     member val Volume = 30 with get, set
     member val PreferredVoice = "" with get,set
+    member val ReminderIntervalMinutes = 5 with get,set
     member val MainWindowLT = "" with get,set
     member val BroadcastWindowLT = "" with get,set
     member val HotKeyWindowLTWH = "" with get, set
@@ -236,6 +271,13 @@ type ReadWrite() =
 
     member val PortNumber = "5000" with get,set
     member val RaceMode = false with get,set
+    member val AllowItemIconOnNonShopTile = false with get,set
+    member val AlphabetizeHintZones = false with get,set
+    member val PerItemRemind_Recorder = true with get,set
+    member val PerItemRemind_PowerBracelet = true with get,set
+    member val PerItemRemind_Boomstick = true with get,set
+    member val PerItemRemind_LadderInDungeon = true with get,set
+    member val PerItemRemind_KeyInDungeon = true with get,set
 
 let mutable private cachedSettingJson = null
 
@@ -270,6 +312,16 @@ let private writeImpl(filename) =
     data.Visual_Blockers <-        VisualReminders.Blockers.Value
     data.Visual_DoorRepair <-      VisualReminders.DoorRepair.Value
     data.Visual_OverworldOverwrites <- VisualReminders.OverworldOverwrites.Value
+    data.Voice_RecorderSpots <- VoiceReminders.RecorderSpots.Value
+    data.Voice_PowerBraceletSpots <- VoiceReminders.PowerBraceletSpots.Value
+    data.Voice_BoomstickBook <- VoiceReminders.BoomstickBook.Value
+    data.Voice_HaveMagicKey <- VoiceReminders.HaveMagicKey.Value
+    data.Voice_HaveLadder <- VoiceReminders.HaveLadder.Value
+    data.Visual_RecorderSpots <- VisualReminders.RecorderSpots.Value
+    data.Visual_PowerBraceletSpots <- VisualReminders.PowerBraceletSpots.Value
+    data.Visual_BoomstickBook <- VisualReminders.BoomstickBook.Value
+    data.Visual_HaveMagicKey <- VisualReminders.HaveMagicKey.Value
+    data.Visual_HaveLadder <- VisualReminders.HaveLadder.Value
 
     data.HideOverworldTile_Sword3 <- OverworldTilesToHide.Sword3.Value
     data.HideOverworldTile_Sword2 <- OverworldTilesToHide.Sword2.Value
@@ -297,6 +349,8 @@ let private writeImpl(filename) =
     data.PlaySoundWhenUseSpeech <- PlaySoundWhenUseSpeech.Value
     data.BOARDInsteadOfLEVEL <- BOARDInsteadOfLEVEL.Value
     data.DisplayIconsInDungeonMap <- DisplayIconsInDungeonMap.Value
+    data.DungeonMapLocationHintOpacity <- DungeonMapLocationHintOpacity
+    data.ReverseScrollWheelDirection <- ReverseScrollWheelDirection.Value
     data.ShowBasementInfo <- ShowBasementInfo.Value
     data.DoDoorInference <- DoDoorInference.Value
     data.DefaultRoomPreferNonDescriptToMaybePushBlock <- DefaultRoomPreferNonDescriptToMaybePushBlock.Value
@@ -314,6 +368,7 @@ let private writeImpl(filename) =
     data.IsMuted <- IsMuted
     data.Volume <- Volume
     data.PreferredVoice <- PreferredVoice
+    data.ReminderIntervalMinutes <- ReminderIntervalMinutes
     data.MainWindowLT <- MainWindowLT
     data.BroadcastWindowLT <- BroadcastWindowLT
     data.HotKeyWindowLTWH <- HotKeyWindowLTWH
@@ -331,6 +386,13 @@ let private writeImpl(filename) =
     data.baseSyncUpdateUrl <- CoopSyncOptions.baseSyncUpdateUrl
     data.PortNumber <- PortNumber
     data.RaceMode <- RaceMode.Value
+    data.AllowItemIconOnNonShopTile <- AllowItemIconOnNonShopTile.Value
+    data.AlphabetizeHintZones <- AlphabetizeHintZones.Value
+    data.PerItemRemind_Recorder <- PerItemReminders.Recorder.Value
+    data.PerItemRemind_PowerBracelet <- PerItemReminders.PowerBracelet.Value
+    data.PerItemRemind_Boomstick <- PerItemReminders.Boomstick.Value
+    data.PerItemRemind_LadderInDungeon <- PerItemReminders.LadderInDungeon.Value
+    data.PerItemRemind_KeyInDungeon <- PerItemReminders.KeyInDungeon.Value
 
 
     let json = JsonSerializer.Serialize<ReadWrite>(data, new JsonSerializerOptions(WriteIndented=true))
@@ -377,6 +439,16 @@ let private read(filename) =
         VisualReminders.Blockers.Value <-        data.Visual_Blockers
         VisualReminders.DoorRepair.Value <-      data.Visual_DoorRepair
         VisualReminders.OverworldOverwrites.Value <- data.Visual_OverworldOverwrites
+        VoiceReminders.RecorderSpots.Value <- data.Voice_RecorderSpots
+        VoiceReminders.PowerBraceletSpots.Value <- data.Voice_PowerBraceletSpots
+        VoiceReminders.BoomstickBook.Value <- data.Voice_BoomstickBook
+        VoiceReminders.HaveMagicKey.Value <- data.Voice_HaveMagicKey
+        VoiceReminders.HaveLadder.Value <- data.Voice_HaveLadder
+        VisualReminders.RecorderSpots.Value <- data.Visual_RecorderSpots
+        VisualReminders.PowerBraceletSpots.Value <- data.Visual_PowerBraceletSpots
+        VisualReminders.BoomstickBook.Value <- data.Visual_BoomstickBook
+        VisualReminders.HaveMagicKey.Value <- data.Visual_HaveMagicKey
+        VisualReminders.HaveLadder.Value <- data.Visual_HaveLadder
 
         OverworldTilesToHide.Sword3.Value <- data.HideOverworldTile_Sword3
         OverworldTilesToHide.Sword2.Value <- data.HideOverworldTile_Sword2
@@ -404,6 +476,8 @@ let private read(filename) =
         PlaySoundWhenUseSpeech.Value <- data.PlaySoundWhenUseSpeech
         BOARDInsteadOfLEVEL.Value <- data.BOARDInsteadOfLEVEL
         DisplayIconsInDungeonMap.Value <- data.DisplayIconsInDungeonMap
+        DungeonMapLocationHintOpacity <- max 0.05 (min 1.0 data.DungeonMapLocationHintOpacity)
+        ReverseScrollWheelDirection.Value <- data.ReverseScrollWheelDirection
         ShowBasementInfo.Value <- data.ShowBasementInfo
         DoDoorInference.Value <- data.DoDoorInference
         DefaultRoomPreferNonDescriptToMaybePushBlock.Value <- data.DefaultRoomPreferNonDescriptToMaybePushBlock
@@ -421,6 +495,7 @@ let private read(filename) =
         IsMuted <- data.IsMuted
         Volume <- max 0 (min 100 data.Volume)
         PreferredVoice <- data.PreferredVoice
+        ReminderIntervalMinutes <- max 1 (min 60 data.ReminderIntervalMinutes)
         MainWindowLT <- data.MainWindowLT
         BroadcastWindowLT <- data.BroadcastWindowLT
         HotKeyWindowLTWH <- data.HotKeyWindowLTWH
@@ -430,6 +505,14 @@ let private read(filename) =
         InventoryAndHeartsPopout_DisplayedLT <- data.InventoryAndHeartsPopout_DisplayedLT
         RemainingItemsPoput_DisplayedLT <- data.RemainingItemsPoput_DisplayedLT
         DungeonSummaryTabMode <- data.DungeonSummaryTabMode
+
+        AllowItemIconOnNonShopTile.Value <- data.AllowItemIconOnNonShopTile
+        AlphabetizeHintZones.Value <- data.AlphabetizeHintZones
+        PerItemReminders.Recorder.Value <- data.PerItemRemind_Recorder
+        PerItemReminders.PowerBracelet.Value <- data.PerItemRemind_PowerBracelet
+        PerItemReminders.Boomstick.Value <- data.PerItemRemind_Boomstick
+        PerItemReminders.LadderInDungeon.Value <- data.PerItemRemind_LadderInDungeon
+        PerItemReminders.KeyInDungeon.Value <- data.PerItemRemind_KeyInDungeon
 
         CoopSyncOptions.MyConsoleId <- data.MyConsoleId
         CoopSyncOptions.TargetConsoleId <- data.TargetConsoleId

@@ -691,11 +691,16 @@ let MakeHintDecoderUI(cm:CustomComboBoxes.CanvasManager) =
             let redrawTile(i) =
                 tileCanvas.Children.Clear()
                 canvasAdd(tileCanvas, mkTxt(TrackerModel.HintZone.FromIndex(i).ToString()), 3., 3.)
-            let gridElementsSelectablesAndIDs = [|
-                for i = 0 to 10 do
-                    yield mkTxt(TrackerModel.HintZone.FromIndex(i).ToString()) :> FrameworkElement, true, i
-                |]
-            let originalStateIndex = TrackerModel.GetLevelHint(thisRow).ToIndex()
+            let gridElementsSelectablesAndIDs =
+                let raw = [| for i = 0 to 10 do yield mkTxt(TrackerModel.HintZone.FromIndex(i).ToString()) :> FrameworkElement, true, i |]
+                if TrackerModelOptions.AlphabetizeHintZones.Value then
+                    // keep UNKNOWN (index 0) first, alphabetize the rest
+                    let rest = raw.[1..] |> Array.sortBy (fun (_,_,i) -> TrackerModel.HintZone.FromIndex(i).ToString())
+                    Array.append [| raw.[0] |] rest
+                else
+                    raw
+            let currentHintIndex = TrackerModel.GetLevelHint(thisRow).ToIndex()
+            let originalStateIndex = gridElementsSelectablesAndIDs |> Array.findIndex (fun (_,_,i) -> i = currentHintIndex)
             let (gnc, gnr, gcw, grh) = 1, 11, int HINTGRID_W-6, int HINTGRID_H-6
             let gx,gy = HINTGRID_W-3., -HINTGRID_H*float(thisRow)-9.
             let onClick(_ea, i) = CustomComboBoxes.DismissPopupWithResult(i)
@@ -788,6 +793,26 @@ let MakeHintDecoderUI(cm:CustomComboBoxes.CanvasManager) =
                     raftsCheckBox.Checked.Add(fun _ -> TrackerModel.SailNotHintWasGiven <- true; hideRaftSpots true)
                     raftsCheckBox.Unchecked.Add(fun _ -> TrackerModel.SailNotHintWasGiven <- false; hideRaftSpots false)
                     otherSP.Children.Add(raftsCheckBox) |> ignore
+                    let sailToCheckBox = new CheckBox(Content=makeHintText("Sail across the water... (Raft required to reach a place)"))
+                    sailToCheckBox.IsChecked <- System.Nullable.op_Implicit TrackerModel.SailToHintWasGiven
+                    sailToCheckBox.Checked.Add(fun _ -> TrackerModel.SailToHintWasGiven <- true)
+                    sailToCheckBox.Unchecked.Add(fun _ -> TrackerModel.SailToHintWasGiven <- false)
+                    otherSP.Children.Add(sailToCheckBox) |> ignore
+                    let melodyCheckBox = new CheckBox(Content=makeHintText("Play a melody... (Recorder required)"))
+                    melodyCheckBox.IsChecked <- System.Nullable.op_Implicit TrackerModel.PlayMelodyHintWasGiven
+                    melodyCheckBox.Checked.Add(fun _ -> TrackerModel.PlayMelodyHintWasGiven <- true)
+                    melodyCheckBox.Unchecked.Add(fun _ -> TrackerModel.PlayMelodyHintWasGiven <- false)
+                    otherSP.Children.Add(melodyCheckBox) |> ignore
+                    let stepOverCheckBox = new CheckBox(Content=makeHintText("Step over the water... (Ladder required)"))
+                    stepOverCheckBox.IsChecked <- System.Nullable.op_Implicit TrackerModel.StepOverWaterHintWasGiven
+                    stepOverCheckBox.Checked.Add(fun _ -> TrackerModel.StepOverWaterHintWasGiven <- true)
+                    stepOverCheckBox.Unchecked.Add(fun _ -> TrackerModel.StepOverWaterHintWasGiven <- false)
+                    otherSP.Children.Add(stepOverCheckBox) |> ignore
+                    let fireArrowsCheckBox = new CheckBox(Content=makeHintText("Fire the arrow... (Bow and arrow required for Gohma)"))
+                    fireArrowsCheckBox.IsChecked <- System.Nullable.op_Implicit TrackerModel.FireArrowsHintWasGiven
+                    fireArrowsCheckBox.Checked.Add(fun _ -> TrackerModel.FireArrowsHintWasGiven <- true)
+                    fireArrowsCheckBox.Unchecked.Add(fun _ -> TrackerModel.FireArrowsHintWasGiven <- false)
+                    otherSP.Children.Add(fireArrowsCheckBox) |> ignore
                     let otherHintBorder = new Border(BorderBrush=Brushes.Gray, BorderThickness=Thickness(8.), Background=Brushes.Black, Child=otherSP)
                     do! CustomComboBoxes.DoModal(cm, wh, 0., 65., otherHintBorder)
                 popupIsActive <- false

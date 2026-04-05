@@ -20,8 +20,13 @@ let SendReminderImpl(category, text:string, icons:seq<FrameworkElement>, visualU
             | TrackerModel.ReminderCategory.Blockers ->        TrackerModelOptions.VoiceReminders.Blockers.Value,        TrackerModelOptions.VisualReminders.Blockers.Value
             | TrackerModel.ReminderCategory.CoastItem ->       TrackerModelOptions.VoiceReminders.CoastItem.Value,       TrackerModelOptions.VisualReminders.CoastItem.Value
             | TrackerModel.ReminderCategory.DungeonFeedback -> TrackerModelOptions.VoiceReminders.DungeonFeedback.Value, TrackerModelOptions.VisualReminders.DungeonFeedback.Value
-            | TrackerModel.ReminderCategory.HaveKeyLadder ->   TrackerModelOptions.VoiceReminders.HaveKeyLadder.Value,   TrackerModelOptions.VisualReminders.HaveKeyLadder.Value
-            | TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook -> TrackerModelOptions.VoiceReminders.RecorderPBSpotsAndBoomstickBook.Value, TrackerModelOptions.VisualReminders.RecorderPBSpotsAndBoomstickBook.Value
+            | TrackerModel.ReminderCategory.HaveKeyLadder ->   TrackerModelOptions.VoiceReminders.HaveKeyLadder.Value,   TrackerModelOptions.VisualReminders.HaveKeyLadder.Value   // legacy
+            | TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook -> TrackerModelOptions.VoiceReminders.RecorderPBSpotsAndBoomstickBook.Value, TrackerModelOptions.VisualReminders.RecorderPBSpotsAndBoomstickBook.Value   // legacy
+            | TrackerModel.ReminderCategory.RecorderSpots ->      TrackerModelOptions.VoiceReminders.RecorderSpots.Value,      TrackerModelOptions.VisualReminders.RecorderSpots.Value
+            | TrackerModel.ReminderCategory.PowerBraceletSpots -> TrackerModelOptions.VoiceReminders.PowerBraceletSpots.Value, TrackerModelOptions.VisualReminders.PowerBraceletSpots.Value
+            | TrackerModel.ReminderCategory.BoomstickBook ->      TrackerModelOptions.VoiceReminders.BoomstickBook.Value,      TrackerModelOptions.VisualReminders.BoomstickBook.Value
+            | TrackerModel.ReminderCategory.HaveMagicKey ->       TrackerModelOptions.VoiceReminders.HaveMagicKey.Value,       TrackerModelOptions.VisualReminders.HaveMagicKey.Value
+            | TrackerModel.ReminderCategory.HaveLadder ->         TrackerModelOptions.VoiceReminders.HaveLadder.Value,         TrackerModelOptions.VisualReminders.HaveLadder.Value
             | TrackerModel.ReminderCategory.SwordHearts ->     TrackerModelOptions.VoiceReminders.SwordHearts.Value,     TrackerModelOptions.VisualReminders.SwordHearts.Value
             | TrackerModel.ReminderCategory.DoorRepair ->      TrackerModelOptions.VoiceReminders.DoorRepair.Value,      TrackerModelOptions.VisualReminders.DoorRepair.Value
             | TrackerModel.ReminderCategory.OverworldOverwrites -> TrackerModelOptions.VoiceReminders.OverworldOverwrites.Value, TrackerModelOptions.VisualReminders.OverworldOverwrites.Value
@@ -187,14 +192,20 @@ let RemindTriforceCount(n, asyncBrieflyHighlightAnOverworldLocation) =
  //This appears to be where the periodic reminders are set up
  //Any controls regarding frequency of reminders should be added here
 type PeriodicReminders() =
-    //This defines the identification of the interval between reminders I think
     let recentlyAgo = TimeSpan.FromMinutes(3.0)
-    let ladderTime, recorderTime, powerBraceletTime, boomstickTime = 
-        new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo)
+    let ladderTime, recorderTime, powerBraceletTime, boomstickTime, whiteSwordTime =
+        new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo),
+        new TrackerModel.LastChangedTime(recentlyAgo), new TrackerModel.LastChangedTime(recentlyAgo)
     let mutable owPreviouslyAnnouncedWhistleSpotsRemain, owPreviouslyAnnouncedPowerBraceletSpotsRemain, owPreviouslyAnnounceDoorRepairCount = 0, 0, 0
+    do
+        // When the overworld quest switches, reset cached spot counts so the new quest's count fires on the very next interval
+        TrackerModel.overworldQuestChanged.Publish.Add(fun _ ->
+            owPreviouslyAnnouncedWhistleSpotsRemain <- 0
+            owPreviouslyAnnouncedPowerBraceletSpotsRemain <- 0)
     member this.Check() =
-        // remind ladder
-        if (DateTime.Now - ladderTime.Time).Minutes > 2 then  // every 3 mins
+        let interval = float TrackerModelOptions.ReminderIntervalMinutes
+        // remind ladder (fires at 60% of base interval)
+        if (DateTime.Now - ladderTime.Time).TotalMinutes >= interval * 0.6 then
             if TrackerModel.playerComputedStateSummary.HaveLadder then
                 if not(TrackerModel.playerComputedStateSummary.HaveCoastItem) then
                     let n = TrackerModel.ladderBox.CellCurrent()
@@ -207,43 +218,50 @@ type PeriodicReminders() =
                             SendReminder(TrackerModel.ReminderCategory.CoastItem, sprintf "Get the %s off the coast" (TrackerModel.ITEMS.AsPronounceString(n)),
                                             [upcb(Graphics.ladder_bmp); upcb(Graphics.iconRightArrow_bmp); upcb(CustomComboBoxes.boxCurrentBMP(TrackerModel.ladderBox.CellCurrent(), None))])
                     ladderTime.SetNow()
-        // remind whistle spots
-        if (DateTime.Now - recorderTime.Time).Minutes > 4 then  // every 5 mins
+        // remind whistle spots (fires at base interval)
+        if (DateTime.Now - recorderTime.Time).TotalMinutes >= interval then
             if TrackerModel.playerComputedStateSummary.HaveRecorder then
                 let owWhistleSpotsRemain = TrackerModel.mapStateSummary.OwWhistleSpotsRemain.Count
                 if owWhistleSpotsRemain >= owPreviouslyAnnouncedWhistleSpotsRemain && owWhistleSpotsRemain > 0 then
                     let icons = [upcb(Graphics.recorder_bmp); ReminderTextBox(owWhistleSpotsRemain.ToString())]
                     if owWhistleSpotsRemain = 1 then
-                        SendReminder(TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook, "There is one recorder spot", icons)
+                        SendReminder(TrackerModel.ReminderCategory.RecorderSpots, "There is one recorder spot", icons)
                     else
-                        SendReminder(TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook, sprintf "There are %d recorder spots" owWhistleSpotsRemain, icons)
+                        SendReminder(TrackerModel.ReminderCategory.RecorderSpots, sprintf "There are %d recorder spots" owWhistleSpotsRemain, icons)
                 recorderTime.SetNow()
                 owPreviouslyAnnouncedWhistleSpotsRemain <- owWhistleSpotsRemain
-        // remind power bracelet spots
-        if (DateTime.Now - powerBraceletTime.Time).Minutes > 4 then  // every 5 mins
+        // remind power bracelet spots (fires at base interval)
+        if (DateTime.Now - powerBraceletTime.Time).TotalMinutes >= interval then
             if TrackerModel.playerComputedStateSummary.HavePowerBracelet then
                 if TrackerModel.mapStateSummary.OwPowerBraceletSpotsRemain >= owPreviouslyAnnouncedPowerBraceletSpotsRemain && TrackerModel.mapStateSummary.OwPowerBraceletSpotsRemain > 0 then
                     let icons = [upcb(Graphics.power_bracelet_bmp); ReminderTextBox(TrackerModel.mapStateSummary.OwPowerBraceletSpotsRemain.ToString())]
                     if TrackerModel.mapStateSummary.OwPowerBraceletSpotsRemain = 1 then
-                        SendReminder(TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook, "There is one power bracelet spot", icons)
+                        SendReminder(TrackerModel.ReminderCategory.PowerBraceletSpots, "There is one power bracelet spot", icons)
                     else
-                        SendReminder(TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook, sprintf "There are %d power bracelet spots" TrackerModel.mapStateSummary.OwPowerBraceletSpotsRemain, icons)
+                        SendReminder(TrackerModel.ReminderCategory.PowerBraceletSpots, sprintf "There are %d power bracelet spots" TrackerModel.mapStateSummary.OwPowerBraceletSpotsRemain, icons)
                 powerBraceletTime.SetNow()
                 owPreviouslyAnnouncedPowerBraceletSpotsRemain <- TrackerModel.mapStateSummary.OwPowerBraceletSpotsRemain
-        // remind boomstick book
-        if (DateTime.Now - boomstickTime.Time).Minutes > 4 then  // every 5 mins
+        // remind boomstick book (fires at base interval)
+        if (DateTime.Now - boomstickTime.Time).TotalMinutes >= interval then
             if TrackerModel.playerComputedStateSummary.HaveWand && not(TrackerModel.playerProgressAndTakeAnyHearts.PlayerHasBoomBook.Value()) then
                 let mutable boomShopFound = false
                 for i = 0 to 15 do
                     for j = 0 to 7 do
                         let cur = TrackerModel.overworldMapMarks.[i,j].Current()
                         if TrackerModel.MapSquareChoiceDomainHelper.IsItem(cur) then
-                            if cur = TrackerModel.MapSquareChoiceDomainHelper.BOOK || 
-                                    (TrackerModel.getOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(TrackerModel.MapSquareChoiceDomainHelper.BOOK)) then
+                            if cur = TrackerModel.MapSquareChoiceDomainHelper.BOOK ||
+                                    TrackerModel.getShopItem2_1based(i,j) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(TrackerModel.MapSquareChoiceDomainHelper.BOOK) ||
+                                    TrackerModel.getShopItem3_1based(i,j) = TrackerModel.MapSquareChoiceDomainHelper.ToItem(TrackerModel.MapSquareChoiceDomainHelper.BOOK) then
                                 boomShopFound <- true
                 if boomShopFound then
-                    SendReminder(TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook, "Consider buying the boomstick book", [upcb(Graphics.iconRightArrow_bmp); upcb(Graphics.boom_book_bmp)])
+                    SendReminder(TrackerModel.ReminderCategory.BoomstickBook, "Consider buying the boomstick book", [upcb(Graphics.iconRightArrow_bmp); upcb(Graphics.boom_book_bmp)])
                     boomstickTime.SetNow()
+        // remind white sword (fires at base interval) — triggers when white sword cave is unmarked or item not yet obtained
+        if (DateTime.Now - whiteSwordTime.Time).TotalMinutes >= interval then
+            if TrackerModel.playerComputedStateSummary.SwordLevel < 2 then  // player doesn't have white or magic sword
+                if TrackerModel.sword2Box.PlayerHas() = TrackerModel.PlayerHas.NO then  // not yet obtained
+                    RemindSword2()
+            whiteSwordTime.SetNow()
         // remind door repair spots
         if TrackerModel.mapSquareChoiceDomain.NumUses(TrackerModel.MapSquareChoiceDomainHelper.DOOR_REPAIR_CHARGE) > owPreviouslyAnnounceDoorRepairCount then
             let n = TrackerModel.mapSquareChoiceDomain.NumUses(TrackerModel.MapSquareChoiceDomainHelper.DOOR_REPAIR_CHARGE)

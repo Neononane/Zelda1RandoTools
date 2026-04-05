@@ -963,6 +963,20 @@ do
     theInteriorBmpTable.[34].Add(getInteriorIconFromStrip(5))
     // 35  'X'
     theInteriorBmpTable.[35].Add(darkxbmp)
+    // 36  personal preference 1 (magenta background, "G" - unused letter, distinct from dungeon/warp icons)
+    let pp1bmp = new System.Drawing.Bitmap(5*3,9*3)
+    for px = 0 to 5*3-1 do
+        for py = 0 to 9*3-1 do
+            pp1bmp.SetPixel(px, py, System.Drawing.Color.Magenta)
+    paintAlphanumerics3x5('G', System.Drawing.Color.Black, pp1bmp, 1, 2)
+    theInteriorBmpTable.[36].Add(pp1bmp)
+    // 37  personal preference 2 (cyan background, "H" - unused letter, distinct from dungeon/warp icons)
+    let pp2bmp = new System.Drawing.Bitmap(5*3,9*3)
+    for px = 0 to 5*3-1 do
+        for py = 0 to 9*3-1 do
+            pp2bmp.SetPixel(px, py, System.Drawing.Color.Cyan)
+    paintAlphanumerics3x5('H', System.Drawing.Color.Black, pp2bmp, 1, 2)
+    theInteriorBmpTable.[37].Add(pp2bmp)
 // full tiles just have interior bmp in the center and transparent pixels all around (except for the final 'X' one)
 let theFullTileBmpTable = Array.init theInteriorBmpTable.Length (fun _ -> ResizeArray())
 let initFull() =
@@ -976,7 +990,7 @@ let initFull() =
                     if px>=5*3 && px<10*3 && py>=1*3 && py<10*3 then 
                         fullTileBmp.SetPixel(px, py, interiorBmp.GetPixel(px-5*3, py-1*3))
                     else
-                        fullTileBmp.SetPixel(px, py, if i=len-1 then System.Drawing.Color.Black else BG)
+                        fullTileBmp.SetPixel(px, py, if i=35 then System.Drawing.Color.Black else BG)  // 35=DARK_X gets black border; all others (including PersonalPref) get transparent BG
             theFullTileBmpTable.[i].Add(fullTileBmp)
 do  
     initFull()

@@ -906,6 +906,41 @@ let MakeFQSQStuff(cm, isMixed, owLocatorTilesZone:Graphics.TileHighlightRectangl
                     wh.Set() |> ignore
                     )
                 left.Children.Add(mark2QdungeonLocationsButton) |> ignore
+                // Change OW Template section
+                let changeOWTxt = mkTxt("Change Overworld Template (preserves dungeon data and circles):")
+                changeOWTxt.Margin <- Thickness(0.,10.,0.,2.)
+                sp.Children.Add(changeOWTxt) |> ignore
+                let changeOWSP = new StackPanel(Orientation=Orientation.Horizontal)
+                let quests = [|
+                    0, "1st Quest OW",    new OverworldData.OverworldInstance(OverworldData.OWQuest.FIRST)
+                    1, "2nd Quest OW",    new OverworldData.OverworldInstance(OverworldData.OWQuest.SECOND)
+                    2, "Mixed FQ OW",     new OverworldData.OverworldInstance(OverworldData.OWQuest.MIXED_FIRST)
+                    3, "Mixed SQ OW",     new OverworldData.OverworldInstance(OverworldData.OWQuest.MIXED_SECOND)
+                    |]
+                for n, label, newInstance in quests do
+                    let isCurrent = TrackerModel.owInstance.Quest.AsInt() = n
+                    let btnColor = if isCurrent then Brushes.Gray else Brushes.Yellow
+                    let btn = Graphics.makeButton(label, Some(14.), Some(btnColor))
+                    btn.Margin <- Thickness(2.)
+                    btn.IsEnabled <- not isCurrent
+                    btn.ToolTip <- "Switch to this overworld template.\nOW marks on compatible tiles are preserved; AlwaysEmpty tile marks are cleared.\nNote: tile interactivity and background image reflect startup choice."
+                    btn.Click.Add(fun _ ->
+                        TrackerModel.reinitializeOverworld(newInstance)
+                        OptionsMenu.requestRedrawOverworldEvent.Trigger()
+                        wh.Set() |> ignore
+                        )
+                    changeOWSP.Children.Add(btn) |> ignore
+                sp.Children.Add(changeOWSP) |> ignore
+                // Shop prices popout
+                let shopPricesTxt = mkTxt("Shop price notes:")
+                shopPricesTxt.Margin <- Thickness(0.,10.,0.,2.)
+                sp.Children.Add(shopPricesTxt) |> ignore
+                let shopPricesBtn = Graphics.makeButton("Open Shop Prices Window", Some(14.), Some(Brushes.Orange))
+                shopPricesBtn.HorizontalAlignment <- HorizontalAlignment.Left
+                shopPricesBtn.Margin <- Thickness(2.)
+                shopPricesBtn.ToolTip <- "Opens a window listing all marked shops on the OW map so you can record the prices you saw."
+                shopPricesBtn.Click.Add(fun _ -> Popouts.showShopPricesWindow(); wh.Set() |> ignore)
+                sp.Children.Add(shopPricesBtn) |> ignore
                 let b = new Border(Child=sp, BorderBrush=Brushes.Gray, BorderThickness=Thickness(5.), Background=Brushes.Black)
                 clearOW()
                 do! CustomComboBoxes.DoModalCore(cm, wh, (fun (c,e) -> canvasAdd(c, e, 10., 10.)), (fun (c,e) -> c.Children.Remove(e)), b, 0.25)

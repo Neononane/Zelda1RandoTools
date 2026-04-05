@@ -59,37 +59,46 @@ let data1o(isStandardHyrule) =
 // now a clickable feature of top tracker area
 //    yield "Mirror overworld", "Flip the overworld map East<->West", TrackerModelOptions.Overworld.MirrorOverworld, true, (fun()->()), None
     yield "Shops before dungeons", "In the overworld map tile popup, the grid starts with shops when this is checked\n(starts with dungeons when unchecked)", TrackerModelOptions.Overworld.ShopsFirst, false, (fun()->()), None
+    yield "Non-shop item icons", "When enabled, left-clicking a non-shop overworld tile lets you add an extra item icon overlay\n(e.g. mark a bomb dropper with a bomb icon). Off by default.", TrackerModelOptions.AllowItemIconOnNonShopTile, false, (fun()->()), None
     |]
 
 let data1d = [|
     "BOARD instead of LEVEL", "Check this to change the dungeon column labels to BOARD-N instead of LEVEL-N", TrackerModelOptions.BOARDInsteadOfLEVEL, false, BOARDInsteadOfLEVELOptionChanged.Trigger
-    "Dungeon Map Location Hint", "Check this box to add a transparent icon to the dungeon map rooms in order to better guess where that room is", TrackerModelOptions.DisplayIconsInDungeonMap, false, displayIconsInDungeonMapOptionChanged.Trigger
+    "Dungeon Map Hint", "Check this box to add a transparent icon to the dungeon map rooms in order to better guess where that room is", TrackerModelOptions.DisplayIconsInDungeonMap, false, displayIconsInDungeonMapOptionChanged.Trigger
 // now a clickable feature of top tracker area
 //    "Second quest dungeons", "Check this if dungeon 4, rather than dungeon 1, has 3 items (no effect when Hidden Dungeon Numbers)", TrackerModelOptions.IsSecondQuestDungeons, false, secondQuestDungeonsOptionChanged.Trigger
     "Show basement info", "Check this if empty dungeon item boxes should suggest whether they are found as\nbasement items rather than floor drops (no effect when Hidden Dungeon Numbers)", TrackerModelOptions.ShowBasementInfo, false, showBasementInfoOptionChanged.Trigger
     "Do door inference", "Check this to mark a green door when you mark a new room, if the point of entry can be inferred", TrackerModelOptions.DoDoorInference, false, fun()->()
     "Book for Helpful Hints", "Check this if both 'Book To Understand Old Men' flag is on, and\n'Helpful' hints are available. The tracker will let you left-click\nOld Man Hint rooms to toggle whether you have read them yet.", TrackerModelOptions.BookForHelpfulHints, false, bookForHelpfulHintsOptionChanged.Trigger
+    "Alphabetize hint zone list", "When checked, the hint zone dropdown (where you mark which zone a dungeon/sword is in)\nshows zones in alphabetical order instead of geographic order.", TrackerModelOptions.AlphabetizeHintZones, false, (fun()->())
     "Left-drag auto-inverts", "Painting maps: When checked, If your first drag is with left-click,\nand you've not yet inverted OffTheMap with Unmarked, then\nauto-invert when left-click-dragging, to immediately start painting a map.", TrackerModelOptions.LeftClickDragAutoInverts, false, (fun()->())
     "Default to NonDescript", "Room default: When checked, clicking an Unmarked room will mark it as\nNonDescript (empty box) rather than MaybePushBlock (box with two dots)", TrackerModelOptions.DefaultRoomPreferNonDescriptToMaybePushBlock, false, (fun()->())
     "Dungeon 'sunglasses'", "The dungeon tracker has high contrast (bright colors against black);\nTurn this on to darken the colors somewhat to reduce bright contrast", TrackerModelOptions.GiveDungeonTrackerSunglasses, false, dungeonSunglassesChanged.Trigger
+    "Reverse scroll wheel", "When unchecked: scroll up = monster popup, scroll down = floor-drop/item popup.\nWhen checked: scroll up = floor-drop/item popup, scroll down = monster popup.\n(Dungeon rooms)", TrackerModelOptions.ReverseScrollWheelDirection, false, (fun()->())
     |]
 
 let data2 = [|
-    TrackerModel.ReminderCategory.DungeonFeedback.DisplayName, "Note when dungeons are located/completed, triforces obtained, and go-time", 
+    TrackerModel.ReminderCategory.DungeonFeedback.DisplayName, "Note when dungeons are located/completed, triforces obtained, and go-time",
         TrackerModelOptions.VoiceReminders.DungeonFeedback, TrackerModelOptions.VisualReminders.DungeonFeedback
-    TrackerModel.ReminderCategory.SwordHearts.DisplayName, "Remind to consider white/magical sword when you get 4-6 or 10-14 hearts", 
+    TrackerModel.ReminderCategory.SwordHearts.DisplayName, "Remind to consider white/magical sword when you get 4-6 or 10-14 hearts",
         TrackerModelOptions.VoiceReminders.SwordHearts,     TrackerModelOptions.VisualReminders.SwordHearts
-    TrackerModel.ReminderCategory.CoastItem.DisplayName, "Reminder to fetch to coast item when you have the ladder", 
+    TrackerModel.ReminderCategory.CoastItem.DisplayName, "Reminder to fetch to coast item when you have the ladder",
         TrackerModelOptions.VoiceReminders.CoastItem,       TrackerModelOptions.VisualReminders.CoastItem
-    TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook.DisplayName, "Periodic reminders of how many recorder/power-bracelet spots remain, or that the boomstick is available", 
-        TrackerModelOptions.VoiceReminders.RecorderPBSpotsAndBoomstickBook, TrackerModelOptions.VisualReminders.RecorderPBSpotsAndBoomstickBook
-    TrackerModel.ReminderCategory.HaveKeyLadder.DisplayName, "One-time reminder, a little while after obtaining these items, that you have them", 
-        TrackerModelOptions.VoiceReminders.HaveKeyLadder,   TrackerModelOptions.VisualReminders.HaveKeyLadder
-    TrackerModel.ReminderCategory.Blockers.DisplayName, "Reminder when you may have become unblocked on a previously-aborted dungeon", 
+    TrackerModel.ReminderCategory.RecorderSpots.DisplayName, "Periodic reminder of how many recorder spots remain (fires at reminder interval)",
+        TrackerModelOptions.VoiceReminders.RecorderSpots,   TrackerModelOptions.VisualReminders.RecorderSpots
+    TrackerModel.ReminderCategory.PowerBraceletSpots.DisplayName, "Periodic reminder of how many power-bracelet spots remain (fires at reminder interval)",
+        TrackerModelOptions.VoiceReminders.PowerBraceletSpots, TrackerModelOptions.VisualReminders.PowerBraceletSpots
+    TrackerModel.ReminderCategory.BoomstickBook.DisplayName, "Periodic reminder when the boomstick book is available in a found shop (fires at reminder interval)",
+        TrackerModelOptions.VoiceReminders.BoomstickBook,   TrackerModelOptions.VisualReminders.BoomstickBook
+    TrackerModel.ReminderCategory.HaveMagicKey.DisplayName, "One-time reminder when entering a dungeon that you have the magic key",
+        TrackerModelOptions.VoiceReminders.HaveMagicKey,    TrackerModelOptions.VisualReminders.HaveMagicKey
+    TrackerModel.ReminderCategory.HaveLadder.DisplayName, "One-time reminder when entering a dungeon that you have the ladder",
+        TrackerModelOptions.VoiceReminders.HaveLadder,      TrackerModelOptions.VisualReminders.HaveLadder
+    TrackerModel.ReminderCategory.Blockers.DisplayName, "Reminder when you may have become unblocked on a previously-aborted dungeon",
         TrackerModelOptions.VoiceReminders.Blockers,        TrackerModelOptions.VisualReminders.Blockers
-    TrackerModel.ReminderCategory.DoorRepair.DisplayName, "Each time you uncover a door repair charge, remind the count of how many you have found", 
+    TrackerModel.ReminderCategory.DoorRepair.DisplayName, "Each time you uncover a door repair charge, remind the count of how many you have found",
         TrackerModelOptions.VoiceReminders.DoorRepair,        TrackerModelOptions.VisualReminders.DoorRepair
-    TrackerModel.ReminderCategory.OverworldOverwrites.DisplayName, "Each time you make a destructive change to an overworld mark, remind the change, in case it was accidental", 
+    TrackerModel.ReminderCategory.OverworldOverwrites.DisplayName, "Each time you make a destructive change to an overworld mark, remind the change, in case it was accidental",
         TrackerModelOptions.VoiceReminders.OverworldOverwrites, TrackerModelOptions.VisualReminders.OverworldOverwrites
     |]
 
@@ -237,7 +246,14 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     let options1sp = new StackPanel(Orientation=Orientation.Vertical, Margin=Thickness(10.,0.,10.,0.))
     let tb = new TextBox(Text="Overworld settings", IsReadOnly=true, FontWeight=FontWeights.Bold) |> header
     options1sp.Children.Add(tb) |> ignore
-    for text,tip,b,needFU,oe,marginOpt in data1o(isStandardHyrule) do
+    // Options marked as "advanced" only appear in the main-app options popup (not the startup screen),
+    // to keep the startup screen compact and avoid layout overflow.
+    let advancedOverworldOptions = [| |]  // all overworld options now appear on startup screen too
+    let advancedDungeonOptions   = [| "Alphabetize hint zone list" |]  // only this one remains advanced (hidden on startup)
+    let visibleOverworldOpts =
+        data1o(isStandardHyrule)
+        |> Array.filter (fun (text,_,_,_,_,_) -> includePopupExplainer || not (Array.contains text advancedOverworldOptions))
+    for text,tip,b,needFU,oe,marginOpt in visibleOverworldOpts do
         let cb = new CheckBox(Content=new TextBox(Text=text,IsReadOnly=true))
         if marginOpt.IsSome then
             cb.Margin <- marginOpt.Value
@@ -339,12 +355,33 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
 
     let tb = new TextBox(Text="Dungeon settings", IsReadOnly=true, FontWeight=FontWeights.Bold) |> header
     options1sp.Children.Add(tb) |> ignore
-    for text,tip,b,needFU,oe in data1d do
+    let visibleDungeonOpts =
+        data1d
+        |> Array.filter (fun (text,_,_,_,_) -> includePopupExplainer || not (Array.contains text advancedDungeonOptions))
+    for text,tip,b,needFU,oe in visibleDungeonOpts do
         let cb = new CheckBox(Content=new TextBox(Text=text,IsReadOnly=true))
         cb.ToolTip <- tip
         ToolTipService.SetShowDuration(cb, 10000)
         link(cb, b, needFU, oe)
         options1sp.Children.Add(cb) |> ignore
+        if text = "Dungeon Map Hint" then
+            let sliderSp = new StackPanel(Orientation=Orientation.Horizontal, Margin=Thickness(4.,0.,0.,4.))
+            let opacityLabel = new TextBox(Text="Opacity",IsReadOnly=true)
+            sliderSp.Children.Add(opacityLabel) |> ignore
+            let opacitySlider = new Slider(Orientation=Orientation.Horizontal, Minimum=0.05, Maximum=1.0,
+                                           TickFrequency=0.05, TickPlacement=Primitives.TickPlacement.BottomRight,
+                                           IsSnapToTickEnabled=true, Width=100., Margin=Thickness(4.,0.,0.,0.))
+            opacitySlider.Value <- TrackerModelOptions.DungeonMapLocationHintOpacity
+            opacitySlider.ValueChanged.Add(fun _ ->
+                TrackerModelOptions.DungeonMapLocationHintOpacity <- opacitySlider.Value
+                displayIconsInDungeonMapOptionChanged.Trigger()
+            )
+            sliderSp.Children.Add(opacitySlider) |> ignore
+            sliderSp.IsEnabled <- b.Value
+            sliderSp.Opacity <- if b.Value then 1.0 else 0.4
+            cb.Checked.Add(fun _ -> sliderSp.IsEnabled <- true; sliderSp.Opacity <- 1.0)
+            cb.Unchecked.Add(fun _ -> sliderSp.IsEnabled <- false; sliderSp.Opacity <- 0.4)
+            options1sp.Children.Add(sliderSp) |> ignore
     optionsAllsp.Children.Add(options1sp) |> ignore
 
     //This section starts the reminders panel in the initial startup screen
@@ -413,6 +450,16 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
         row <- row + 1
 
     options2sp.Children.Add(options2Grid) |> ignore
+    // Reminder interval slider (label row then slider row for compact layout)
+    let reminderIntervalLabel = new TextBox(Text=sprintf "Reminder interval (minutes): %d" TrackerModelOptions.ReminderIntervalMinutes, IsReadOnly=true, Margin=Thickness(0.,4.,0.,0.), Background=Brushes.Transparent)
+    options2sp.Children.Add(reminderIntervalLabel) |> ignore
+    let reminderIntervalSlider = new Slider(Minimum=1., Maximum=60., TickFrequency=1., IsSnapToTickEnabled=true, Value=float TrackerModelOptions.ReminderIntervalMinutes, Width=200., Margin=Thickness(0.,0.,0.,2.))
+    reminderIntervalSlider.ToolTip <- "How often periodic reminders fire (recorder/power-bracelet spots, boomstick, white sword)"
+    reminderIntervalSlider.ValueChanged.Add(fun _ ->
+        let v = int reminderIntervalSlider.Value
+        TrackerModelOptions.ReminderIntervalMinutes <- v
+        reminderIntervalLabel.Text <- sprintf "Reminder interval (minutes): %d" v)
+    options2sp.Children.Add(reminderIntervalSlider) |> ignore
     if voice.GetInstalledVoices() |> Seq.filter (fun v -> v.Enabled) |> Seq.length > 1 then
         let changeVoiceButton = Graphics.makeButton("Change voice",None,None)
         changeVoiceButton.HorizontalAlignment <- HorizontalAlignment.Left
@@ -716,11 +763,7 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                         CustomComboBoxes.GlobalFlag.popupIsActive <- false
                 } |> Async.StartImmediate
         )
-    options2sp.Children.Add(coopSettingsButton) |> ignore
-    let coopHostSettingsButton = Graphics.makeButton("Co-op Host Settings", None, None)
-    coopHostSettingsButton.HorizontalAlignment <- HorizontalAlignment.Left
-    coopHostSettingsButton.Click.Add(fun _ -> showCoopHostSettingsWindow(cm))
-    options2sp.Children.Add(coopHostSettingsButton) |> ignore
+    // Co-op buttons moved to the "Other" column below
 
 
 
@@ -873,6 +916,14 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     cb.ToolTip <- "Disable many features that could be deemed an unfair advantage during a race."
     ToolTipService.SetShowDuration(cb, 10000)
     options3sp.Children.Add(cb) |> ignore
+
+    // Co-op buttons (moved here from Reminders column to reduce its height)
+    options3sp.Children.Add(new DockPanel(Height=6.)) |> ignore  // small spacer
+    options3sp.Children.Add(coopSettingsButton) |> ignore
+    let coopHostSettingsButton = Graphics.makeButton("Co-op Host Settings", None, None)
+    coopHostSettingsButton.HorizontalAlignment <- HorizontalAlignment.Left
+    coopHostSettingsButton.Click.Add(fun _ -> showCoopHostSettingsWindow(cm))
+    options3sp.Children.Add(coopHostSettingsButton) |> ignore
 
     optionsAllsp.Children.Add(options3sp) |> ignore
 
