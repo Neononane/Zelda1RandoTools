@@ -1,3 +1,12 @@
+# Version 2.0.31.0 Change Log
+
+## Custom Marker (PersonalPref) Tiles
+
+- **Icons replaced with custom pixel art** — the G/H letters that were used for PP1/PP2 markers conflicted with Hidden Dungeon Numbers mode, which maps letters A–H to dungeons 1–8. The markers now display a hand-drawn asterisk (✳, magenta background) for PP1 and a diamond (◆, cyan background) for PP2.
+- **New "Custom marker tiles" option** — added to the advanced options section (hidden on startup screen, default **off**). When enabled, the two custom marker tiles appear in the tile selector popup. When disabled (default), they are hidden entirely.
+
+---
+
 # Version 2.0.30.0 Change Log
 
 ## Options Screen
