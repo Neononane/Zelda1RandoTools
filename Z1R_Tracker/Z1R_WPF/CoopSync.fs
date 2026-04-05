@@ -492,7 +492,10 @@ let createSerializableOverworldModel () =
             let cur = TrackerModel.overworldMapMarks.[i,j].Current()
             let ed =
                 if cur >= 0 && cur <= TrackerModel.MapSquareChoiceDomainHelper.DARK_X then
-                    try TrackerModel.getOverworldMapExtraData(i,j,cur)
+                    try
+                        // Shop tiles (items) all store extra data under the SHOP key regardless of which item is first
+                        let key = if TrackerModel.MapSquareChoiceDomainHelper.IsItem(cur) then TrackerModel.MapSquareChoiceDomainHelper.SHOP else cur
+                        TrackerModel.getOverworldMapExtraData(i,j,key)
                     with _ -> 0
                 else
                     0
@@ -586,7 +589,9 @@ let subscribeToOverworldTileChanges (myConsoleId: string) =
                     try
                         if TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
                             let cur = TrackerModel.overworldMapMarks.[x, y].Current()
-                            let ed = TrackerModel.getOverworldMapExtraData(x, y, cur)
+                            // Shop tiles store extra data (item2, item3) under SHOP key regardless of which item is first
+                            let edKey = if TrackerModel.MapSquareChoiceDomainHelper.IsItem(cur) then TrackerModel.MapSquareChoiceDomainHelper.SHOP else cur
+                            let ed = TrackerModel.getOverworldMapExtraData(x, y, edKey)
                             let circ = TrackerModel.overworldMapCircles.[x, y]
 
                             let update = {
@@ -699,11 +704,16 @@ let transposeRoomStates (input: DungeonSaveAndLoad.DungeonRoomModel[][]) : Dunge
     else
         [| for i in 0 .. 7 -> [| for j in 0 .. 7 -> input.[j].[i] |] |]
 
+let transposeRoomIsCircled (input: bool[][]) : bool[][] =
+    if isNull input then [||]
+    else [| for i in 0 .. 7 -> [| for j in 0 .. 7 -> input.[j].[i] |] |]
+
 let cloneAndFixDungeonModel (dm: DungeonSaveAndLoad.DungeonModel) : DungeonSaveAndLoad.DungeonModel =
     let newDM = new DungeonSaveAndLoad.DungeonModel()
     newDM.HorizontalDoors <- transposeHorizontalDoors dm.HorizontalDoors
     newDM.VerticalDoors <- transposeVerticalDoors dm.VerticalDoors
-    newDM.RoomIsCircled <- dm.RoomIsCircled
+    // importFunctions reads RoomIsCircled as [j][i], so pre-transpose it to match (same as RoomStates)
+    newDM.RoomIsCircled <- transposeRoomIsCircled dm.RoomIsCircled
     newDM.RoomStates <- transposeRoomStates dm.RoomStates
     newDM.VanillaMapOverlay <- dm.VanillaMapOverlay
     newDM

@@ -1,10 +1,5 @@
-# ZTracker v2.0.3 Beta — Release Notes
+# ZTracker v2.1.0 — Release Notes
 
-> **Branch:** `2.0.X-Initial---CoopSync`
-> **Compared against:** `master`
-> **Audience:** Players, race organizers, and tournament staff
-
----
 
 ## What's New at a Glance
 
@@ -36,24 +31,14 @@ Two ZTracker consoles can now stay synchronized during a session. When one playe
 - Starting items and hearts
 - Ganon and Zelda completion flags
 
-**Setup:**
-1. Open **Co-op Client Settings** from the Options menu
-2. Enter the Function App URL (`https://ztrackersync.azurewebsites.net` for the shared cloud server)
-3. Assign a **Console ID** for yourself and a **Target ID** matching your co-op partner
-4. Check **Enable Co-op Sync** and save
-
-Both consoles must use matching Console/Target IDs pointing at each other. Changes sync automatically during play — no manual refresh needed.
-
 ---
 
 ### Self-Hosted Sync Server
 
-Don't want to rely on the shared Azure cloud instance? You can now run a local SignalR host directly from ZTracker.
-
 **Setup:**
 - Open **Co-op Host Settings** from the Options menu
 - Set a port number, enable the session, and start the host
-- Point your Co-op Client Settings at `http://localhost:{port}` instead of the Azure URL
+- Point your Co-op Client Settings at `http://localhost:{port}` 
 
 This is ideal for LAN events, private leagues, or anyone who wants full control over their infrastructure.
 
@@ -116,31 +101,10 @@ Two personal-preference marker tiles — useful for annotating spots with custom
 - **PP1** — Asterisk shape on magenta background
 - **PP2** — Diamond shape on cyan background
 
-The letters that were previously used (G/H) conflicted with Hidden Dungeon Numbers mode (which uses A–H for dungeons 1–8). Both markers now use hand-drawn pixel-art shapes that have no ambiguity.
-
 **These tiles are off by default.** Enable them via **Options → Custom marker tiles** (advanced section, not shown on the startup screen).
 
 ---
 
-### Options Screen Overhaul
-
-The startup and in-session Options screens received a layout fix that was causing the "Other" column to get pushed off-screen:
-
-- Removed a hidden scrollbar that was consuming ~17px and overflowing the 768px canvas
-- Shortened several long option labels that were forcing the first column too wide
-- Tightened the Dungeon Map Hint opacity slider row
-- Fixed the random tip text overlapping the "Settings…" header on long tips
-- Advanced-only options (like "Alphabetize hint zone list") are now hidden on the startup screen to keep it compact
-
----
-
-## Known Issues
-
-The following limitations are acknowledged in this release:
-
-- The timeline tracker at the bottom shows incorrect timings for some item acquisitions
-- When marking two item shops, the second item only syncs if the first item is the Wood Arrow
-- Middle-clicking a dungeon map room syncs to the wrong position on the connected tracker
 
 ---
 

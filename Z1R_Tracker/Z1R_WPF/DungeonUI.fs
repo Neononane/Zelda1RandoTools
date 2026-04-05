@@ -1900,6 +1900,8 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                     // middle click toggles floor drops, or if none, toggle circles
                                     if roomStates.[i,j].FloorDropDetail.IsNotMarked() then
                                         roomIsCircled.[i,j] <- not roomIsCircled.[i,j]
+                                        // Circle state isn't in the room object so we need to poke the dungeon map changed time directly
+                                        TrackerModel.dungeonRoomModelChanged.SetNow()
                                     else
                                         roomStates.[i,j].ToggleFloorDropBrightness()
                                     redraw()

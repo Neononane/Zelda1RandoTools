@@ -440,7 +440,7 @@ type MyWindow() as this =
                                 try
                                     let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
                                     Application.Current.Dispatcher.Invoke(fun () ->
-                                        //Timeline.isCurrentlyLoadingASave <- true
+                                        Timeline.isCurrentlyLoadingASave <- true
                                         try
                                             // Top-level flags
                                             TrackerModel.IsHiddenDungeonNumbers <- fun () -> data.HiddenDungeonNumbers
@@ -544,7 +544,8 @@ type MyWindow() as this =
                                                     let circ = data.Map.[idx + 2]
                                                     TrackerModel.overworldMapMarks.[i,j].Set(cur)
                                                     if cur <> -1 then
-                                                        TrackerModel.setOverworldMapExtraData(i, j, cur, ed)
+                                                        let edKey = if TrackerModel.MapSquareChoiceDomainHelper.IsItem(cur) then TrackerModel.MapSquareChoiceDomainHelper.SHOP else cur
+                                                        TrackerModel.setOverworldMapExtraData(i, j, edKey, ed)
                                                     TrackerModel.overworldMapCircles.[i,j] <- circ
                                         TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Overworld update from %s" senderId)
                                     )
@@ -598,12 +599,16 @@ type MyWindow() as this =
                                 try
                                     let data = JsonConvert.DeserializeObject<CoopSync.DungeonsTriforceState>(payloadJson)
                                     Application.Current.Dispatcher.Invoke(fun () ->
-                                        for i = 0 to 8 do
-                                            let dungeon = TrackerModel.GetDungeon(i)
-                                            let has = data.Triforces.[i]
-                                            if dungeon.PlayerHasTriforce() <> has then
-                                                dungeon.ToggleTriforce()
-                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied DungeonTriforce update from %s" senderId)
+                                        Timeline.isCurrentlyLoadingASave <- true
+                                        try
+                                            for i = 0 to 8 do
+                                                let dungeon = TrackerModel.GetDungeon(i)
+                                                let has = data.Triforces.[i]
+                                                if dungeon.PlayerHasTriforce() <> has then
+                                                    dungeon.ToggleTriforce()
+                                            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied DungeonTriforce update from %s" senderId)
+                                        finally
+                                            Timeline.isCurrentlyLoadingASave <- false
                                     )
                                 with ex ->
                                     printfn "[Sync] Failed to apply DungeonTriforce update: %s" ex.Message
@@ -721,7 +726,9 @@ type MyWindow() as this =
                                     Application.Current.Dispatcher.Invoke(fun () ->
                                         TrackerModel.overworldMapMarks.[data.X, data.Y].Set(data.MapTileValue)
                                         if data.MapTileValue <> -1 then
-                                            TrackerModel.setOverworldMapExtraData(data.X, data.Y, data.MapTileValue, data.ExtraData)
+                                            // Shop tiles store extra data under SHOP key; use the same key the sender used
+                                            let edKey = if TrackerModel.MapSquareChoiceDomainHelper.IsItem(data.MapTileValue) then TrackerModel.MapSquareChoiceDomainHelper.SHOP else data.MapTileValue
+                                            TrackerModel.setOverworldMapExtraData(data.X, data.Y, edKey, data.ExtraData)
                                         TrackerModel.overworldMapCircles.[data.X, data.Y] <- data.CircleValue
                                         TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied OverworldTile (%d,%d) update from %s" data.X data.Y senderId)
                                     )
