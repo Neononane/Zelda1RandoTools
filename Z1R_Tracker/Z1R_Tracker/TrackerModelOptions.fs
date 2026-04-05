@@ -153,6 +153,7 @@ let mutable PortNumber = "5000"
 let mutable CoopHostSession = false
 let mutable RaceMode = Bool(false)
 let mutable AllowItemIconOnNonShopTile = Bool(false)
+let mutable PersonalPrefMarkersEnabled = Bool(false)
 let mutable AlphabetizeHintZones = Bool(false)
 module PerItemReminders =
     let mutable Recorder = Bool(true)
@@ -272,6 +273,7 @@ type ReadWrite() =
     member val PortNumber = "5000" with get,set
     member val RaceMode = false with get,set
     member val AllowItemIconOnNonShopTile = false with get,set
+    member val PersonalPrefMarkersEnabled = false with get,set
     member val AlphabetizeHintZones = false with get,set
     member val PerItemRemind_Recorder = true with get,set
     member val PerItemRemind_PowerBracelet = true with get,set
@@ -387,6 +389,7 @@ let private writeImpl(filename) =
     data.PortNumber <- PortNumber
     data.RaceMode <- RaceMode.Value
     data.AllowItemIconOnNonShopTile <- AllowItemIconOnNonShopTile.Value
+    data.PersonalPrefMarkersEnabled <- PersonalPrefMarkersEnabled.Value
     data.AlphabetizeHintZones <- AlphabetizeHintZones.Value
     data.PerItemRemind_Recorder <- PerItemReminders.Recorder.Value
     data.PerItemRemind_PowerBracelet <- PerItemReminders.PowerBracelet.Value
@@ -507,6 +510,7 @@ let private read(filename) =
         DungeonSummaryTabMode <- data.DungeonSummaryTabMode
 
         AllowItemIconOnNonShopTile.Value <- data.AllowItemIconOnNonShopTile
+        PersonalPrefMarkersEnabled.Value <- data.PersonalPrefMarkersEnabled
         AlphabetizeHintZones.Value <- data.AlphabetizeHintZones
         PerItemReminders.Recorder.Value <- data.PerItemRemind_Recorder
         PerItemReminders.PowerBracelet.Value <- data.PerItemRemind_PowerBracelet

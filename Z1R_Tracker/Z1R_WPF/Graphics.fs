@@ -963,19 +963,38 @@ do
     theInteriorBmpTable.[34].Add(getInteriorIconFromStrip(5))
     // 35  'X'
     theInteriorBmpTable.[35].Add(darkxbmp)
-    // 36  personal preference 1 (magenta background, "G" - unused letter, distinct from dungeon/warp icons)
-    let pp1bmp = new System.Drawing.Bitmap(5*3,9*3)
+    // Helper: paint a 3x3 block at unit coordinates (ux, uy) in black
+    let p3 (bmp:System.Drawing.Bitmap) (ux:int) (uy:int) =
+        for dx = 0 to 2 do
+            for dy = 0 to 2 do
+                bmp.SetPixel(3*ux+dx, 3*uy+dy, System.Drawing.Color.Black)
+    // 36  personal preference 1 (magenta background, ✳ asterisk shape — not a dungeon letter)
+    //  Pattern (unit coords, 5 wide x 9 tall):
+    //    . X . X .   row 2
+    //    . . X . .   row 3
+    //    X X X X X   row 4  (horizontal bar)
+    //    . . X . .   row 5
+    //    . X . X .   row 6
+    let pp1bmp = new System.Drawing.Bitmap(5*3, 9*3)
     for px = 0 to 5*3-1 do
         for py = 0 to 9*3-1 do
             pp1bmp.SetPixel(px, py, System.Drawing.Color.Magenta)
-    paintAlphanumerics3x5('G', System.Drawing.Color.Black, pp1bmp, 1, 2)
+    for ux,uy in [| (1,2);(3,2); (2,3); (0,4);(1,4);(2,4);(3,4);(4,4); (2,5); (1,6);(3,6) |] do
+        p3 pp1bmp ux uy
     theInteriorBmpTable.[36].Add(pp1bmp)
-    // 37  personal preference 2 (cyan background, "H" - unused letter, distinct from dungeon/warp icons)
-    let pp2bmp = new System.Drawing.Bitmap(5*3,9*3)
+    // 37  personal preference 2 (cyan background, ◆ diamond shape — not a dungeon letter)
+    //  Pattern (unit coords):
+    //    . . X . .   row 2  (top point)
+    //    . X X X .   row 3
+    //    X X X X X   row 4  (widest)
+    //    . X X X .   row 5
+    //    . . X . .   row 6  (bottom point)
+    let pp2bmp = new System.Drawing.Bitmap(5*3, 9*3)
     for px = 0 to 5*3-1 do
         for py = 0 to 9*3-1 do
             pp2bmp.SetPixel(px, py, System.Drawing.Color.Cyan)
-    paintAlphanumerics3x5('H', System.Drawing.Color.Black, pp2bmp, 1, 2)
+    for ux,uy in [| (2,2); (1,3);(2,3);(3,3); (0,4);(1,4);(2,4);(3,4);(4,4); (1,5);(2,5);(3,5); (2,6) |] do
+        p3 pp2bmp ux uy
     theInteriorBmpTable.[37].Add(pp2bmp)
 // full tiles just have interior bmp in the center and transparent pixels all around (except for the final 'X' one)
 let theFullTileBmpTable = Array.init theInteriorBmpTable.Length (fun _ -> ResizeArray())

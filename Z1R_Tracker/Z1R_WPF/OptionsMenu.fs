@@ -60,6 +60,7 @@ let data1o(isStandardHyrule) =
 //    yield "Mirror overworld", "Flip the overworld map East<->West", TrackerModelOptions.Overworld.MirrorOverworld, true, (fun()->()), None
     yield "Shops before dungeons", "In the overworld map tile popup, the grid starts with shops when this is checked\n(starts with dungeons when unchecked)", TrackerModelOptions.Overworld.ShopsFirst, false, (fun()->()), None
     yield "Non-shop item icons", "When enabled, left-clicking a non-shop overworld tile lets you add an extra item icon overlay\n(e.g. mark a bomb dropper with a bomb icon). Off by default.", TrackerModelOptions.AllowItemIconOnNonShopTile, false, (fun()->()), None
+    yield "Custom marker tiles", "When enabled, the tile selector popup includes two personal-preference marker tiles\n(asterisk and diamond) you can place on overworld spots for custom notes. Off by default.", TrackerModelOptions.PersonalPrefMarkersEnabled, false, (fun()->()), None
     |]
 
 let data1d = [|
@@ -248,7 +249,7 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     options1sp.Children.Add(tb) |> ignore
     // Options marked as "advanced" only appear in the main-app options popup (not the startup screen),
     // to keep the startup screen compact and avoid layout overflow.
-    let advancedOverworldOptions = [| |]  // all overworld options now appear on startup screen too
+    let advancedOverworldOptions = [| "Custom marker tiles" |]  // only appears in main-app options popup, not startup screen
     let advancedDungeonOptions   = [| "Alphabetize hint zone list" |]  // only this one remains advanced (hidden on startup)
     let visibleOverworldOpts =
         data1o(isStandardHyrule)
