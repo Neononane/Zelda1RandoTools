@@ -39,9 +39,8 @@ let applyDungeonModelToLevel (level:int) (dm:DungeonSaveAndLoad.DungeonModel) =
 // Full function to apply an entire array of DungeonModels
 let applyAllDungeonModels (incomingModels: DungeonModel[]) =
     if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome then
-        for level = 0 to 8 do
-            let incoming = incomingModels.[level]
-            let current = TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstance.Dungeons(level)
+        for level = 1 to 9 do
+            let incoming = incomingModels.[level-1]  // incomingModels is 0-indexed; applyDungeonModelToLevel is 1-indexed
             applyDungeonModelToLevel level incoming
     else
         printfn "[Sync] Skipping dungeon sync: TrackerModel not yet initialized."

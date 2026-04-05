@@ -695,13 +695,17 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                         yield upcast new Canvas(Width=5.*3., Height=9.*3., Background=Graphics.overworldCommonestFloorColorDarkBrush), true, 35
                         yield upcast new Canvas(Width=5.*3., Height=9.*3., Background=Graphics.overworldCommonestFloorColorBrush), true, -1
                         yield null, false, -999  // null asks selector to 'leave a hole' here
-                        // personal preference row (centered: 3 holes, PP1, PP2, 3 holes) — only shown when option is enabled
+                        // personal preference row (8 slots, always present to keep grid count at GCOUNT=48)
+                        // when option is disabled the row is all holes; when enabled PP1/PP2 appear centered
                         if TrackerModelOptions.PersonalPrefMarkersEnabled.Value then
                             for _ = 1 to 3 do
                                 yield null, false, -999
                             yield typicalGESAI(TrackerModel.MapSquareChoiceDomainHelper.PERSONAL_PREF_1)
                             yield typicalGESAI(TrackerModel.MapSquareChoiceDomainHelper.PERSONAL_PREF_2)
                             for _ = 1 to 3 do
+                                yield null, false, -999
+                        else
+                            for _ = 1 to 8 do
                                 yield null, false, -999
                         |]
                     let shopsOnTop = TrackerModelOptions.Overworld.ShopsFirst.Value // start with shops, rather than dungeons, on top of grid
