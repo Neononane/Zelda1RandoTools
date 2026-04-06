@@ -10,6 +10,7 @@ There are a number of other noteworthy contributors to this project:
  - homerjsmash gave extensive feedback on an early version of the tool which influenced many aspects of the design
  - Kigalas and abraxas were beta testers who gave a lot of feedback and found a number of bugs
  - Neononane who took over the project to usher in usage in the current Zelda 1 Randomizer Community
+ - PDXRex who was the primary beta tester of the new work from Neononane
 
 # A brief history of Z-Tracker from Brian Lorgon111's perspective
 
