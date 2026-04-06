@@ -2,8 +2,8 @@
 
 ### A tracker for Zelda 1 Randomizer
 
-The most recent production release is v1.3.1, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/master/doc/TOC.md), which includes links for 
-downloading and installing Z-Tracker.
+The most recent production release is v2.1.0, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/master/doc/TOC.md), which includes links for 
+downloading and installing Z-Tracker.v2.1.0 introduces co-op synchronization, self-hosted sync server, race mode, live overworld quest switching, custom marker tiles, and many UI improvements.
 
 Sample screenshots:
 
@@ -12,12 +12,10 @@ Sample screenshots:
 
 ![sample tracker screenshot](doc/screenshots/full-tracker-example1.png)
 
-The most recent release is v2.1.0, and you can find the [documentation here](https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/doc/TOC.md), which includes links for
-downloading and installing Z-Tracker. v2.1.0 introduces co-op synchronization, self-hosted sync server, race mode, live overworld quest switching, custom marker tiles, and many UI improvements.
 
 ## Motivation
 
-This is a tracking tool for those play seeds of fcouglin's Zelda 1 Randomizer ([z1r discord](https://discord.gg/BEwVJUxxrW), [z1r wiki](https://z1r.fandom.com/wiki/Zelda_1_Randomizer_Wiki), [old z1r site](https://sites.google.com/site/zeldarandomizer/)).
+This is a tracking tool for those play seeds of fcouglin's Zelda 1 Randomizer ([z1r discord](https://discord.gg/BEwVJUxxrW), [z1r wiki](https://z1r.wiki), [old z1r site](https://sites.google.com/site/zeldarandomizer/)).
 
 This tool is inspired by [ZHelper](http://questwizard.net/zhelper/), a tool commonly used by z1r racers.  (Other alternatives for tracking z1r include using an EmoTracker pack,
 using pen & paper, or using electronic notetaking in spreadsheets/Notepad.)
@@ -40,6 +38,6 @@ Enjoy! - _Dr. Brian Lorgon111_
 
 ## Z-Tracker Future
 
-Dr. Brian Lorgon111 has passed the torch on this project to others who are willing to contribute to the structure, goals, and outcomes. Currently the process is slow, but new features and functionality are being added with version 2.0.0 adding the long desired co-op options. Please add any additional requests into the Issues list for future review and prioritization.
+Dr. Brian Lorgon111 has passed the torch on this project to others who are willing to contribute to the structure, goals, and outcomes. This was the attempt by Neononane to add some requested features and capabilities to the project. At this stage it likely will not see future updates and will be stable at v2.1.0.
 
 Regards - _Neononane_
