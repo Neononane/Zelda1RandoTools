@@ -507,9 +507,10 @@ type BoolProperty(initState,changedFunc) =
     let mutable state = initState
     let changed = new Event<_>()
     member _this.Set(b) =
-        state <- b
-        changedFunc()
-        changed.Trigger(state)
+        if state <> b then
+            state <- b
+            changedFunc()
+            changed.Trigger(state)
     member _this.Toggle() =
         state <- not state
         changedFunc()
@@ -531,10 +532,11 @@ type PlayerProgressAndTakeAnyHearts() =
     let playerHasBombs         = BoolProperty(false,fun()->playerProgressLastChangedTime.SetNow())
     let takeAnyHeartChanged = new Event<_>()
     member _this.GetTakeAnyHeart(i) = takeAnyHearts.[i]
-    member _this.SetTakeAnyHeart(i,v) = 
-        takeAnyHearts.[i] <- v
-        playerProgressLastChangedTime.SetNow()
-        takeAnyHeartChanged.Trigger(i)
+    member _this.SetTakeAnyHeart(i,v) =
+        if takeAnyHearts.[i] <> v then
+            takeAnyHearts.[i] <- v
+            playerProgressLastChangedTime.SetNow()
+            takeAnyHeartChanged.Trigger(i)
     member _this.TakeAnyHeartChanged = takeAnyHeartChanged.Publish
     member _this.PlayerHasBoomBook      = playerHasBoomBook
     member _this.PlayerHasWoodSword     = playerHasWoodSword     

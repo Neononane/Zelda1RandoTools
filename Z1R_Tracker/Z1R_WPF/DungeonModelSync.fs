@@ -42,6 +42,9 @@ let applyAllDungeonModels (incomingModels: DungeonModel[]) =
         for level = 1 to 9 do
             let incoming = incomingModels.[level-1]  // incomingModels is 0-indexed; applyDungeonModelToLevel is 1-indexed
             applyDungeonModelToLevel level incoming
+            // If the incoming model has any marked rooms, mark this dungeon as seen so the summary tab shows content
+            if incoming.RoomStates <> null && incoming.RoomStates |> Array.exists (fun row -> row <> null && row |> Array.exists (fun r -> r <> null && not r.IsDefault)) then
+                DungeonUI.isFirstTimeClickingAnyRoom.[level-1].Value <- false
     else
         printfn "[Sync] Skipping dungeon sync: TrackerModel not yet initialized."
 

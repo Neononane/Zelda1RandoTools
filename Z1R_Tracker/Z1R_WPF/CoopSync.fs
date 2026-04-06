@@ -293,10 +293,14 @@ let sendPlayerProgressUpdate (myConsoleId: string) =
             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send PlayerProgress update: %s" ex.Message)
     }
 
+let mutable isApplyingPlayerProgressFromSync = false
+
 let subscribeToPlayerProgressChanges(myConsoleId: string) =
     let lastChanged = TrackerModel.LastChangedTime()
 
-    let markChanged () = lastChanged.SetNow()
+    let markChanged () =
+        if not isApplyingPlayerProgressFromSync then
+            lastChanged.SetNow()
 
     // Listen to the TakeAnyHeart array changes
     TrackerModel.playerProgressAndTakeAnyHearts.TakeAnyHeartChanged.Add(fun _ -> markChanged())
@@ -444,12 +448,16 @@ let sendItemsUpdate (myConsoleId: string) =
             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to send Items update: %s" ex.Message)
     }
 
+let mutable isApplyingItemsFromSync = false
+
 let subscribeToItemsChanges(myConsoleId: string) =
     // Shared timestamp that all item-related changes update
     let lastChanged = TrackerModel.LastChangedTime()
 
-    // Helper to mark the model as changed
-    let markChanged () = lastChanged.SetNow()
+    // Helper to mark the model as changed — suppressed during remote apply to prevent echo
+    let markChanged () =
+        if not isApplyingItemsFromSync then
+            lastChanged.SetNow()
 
     // Top-level boxes
     TrackerModel.sword2Box.Changed.Add(fun _ -> markChanged())
@@ -673,18 +681,14 @@ let sendDungeonTriforceUpdate (myConsoleId: string) =
             printf "[Sync] Failed to send DungeonTriforce update: %s" ex.Message
     }
 
+let mutable isApplyingTriforceFromSync = false
+
 let subscribeToDungeonTriforceChanges (myConsoleId: string) =
-    let mutable lastSent: bool[] = Array.init 9 (fun _ -> false)
-    let rec loop () =
-        async {
-            do! Async.Sleep(750) // poll every ¾ second
-            let current = [| for i in 0 .. 8 -> TrackerModel.GetDungeon(i).PlayerHasTriforce() |]
-            if current <> lastSent then
-                lastSent <- current
-                do! sendDungeonTriforceUpdate myConsoleId
-            return! loop ()
-        }
-    Async.StartImmediate(loop())
+    for i in 0 .. 8 do
+        TrackerModel.GetDungeon(i).PlayerHasTriforceChanged.Add(fun _ ->
+            if not isApplyingTriforceFromSync && TrackerModelOptions.CoopSyncOptions.GetEnableCoop() then
+                sendDungeonTriforceUpdate myConsoleId |> Async.StartImmediate
+        )
 
 let transposeHorizontalDoors (input: int[][]) : int[][] =
     if isNull input then
@@ -720,7 +724,7 @@ let cloneAndFixDungeonModel (dm: DungeonSaveAndLoad.DungeonModel) : DungeonSaveA
 
 // Create a mutable to debounce updates
 let mutable lastDungeonMapsPayload = ""
-let dungeonMapsDebouncer = Debouncer.Debouncer(1000)
+let dungeonMapsDebouncer = Debouncer.Debouncer(200)
 let mutable lastSentDungeonMapsPayload = ""
 
 
@@ -850,10 +854,12 @@ let sendDoorChangeUpdate (info: DungeonUI.DoorChangeInfo) (myConsoleId: string) 
 
 
 
+let mutable isApplyingRoomFromSync = false
+
 let subscribeToDoorChanges (myConsoleId: string) =
     System.Diagnostics.Debug.WriteLine("[Sync] Subscribing to door changes...")
     DungeonUI.doorChangedEvent.Publish.Add(fun info ->
-        if not TrackerModelOptions.CoopSyncOptions.IsBulkDoorInit then
+        if not TrackerModelOptions.CoopSyncOptions.IsBulkDoorInit && not isApplyingRoomFromSync then
             async {
                 sendDoorChangeUpdate info myConsoleId
             } |> Async.StartImmediate
@@ -891,20 +897,17 @@ let sendRoomChangeUpdate (level: int) (x: int) (y: int) (room: Z1R_Tracker.Model
 
 let subscribeToRoomChanges (myConsoleId: string) =
     printfn "[RoomSync] Starting to subscribe to room changes"
-    let mutable isInternalUpdate = false
 
     Z1R_Tracker.Models.RoomSyncBridge.OnRoomChanged <-
         Action<int, int, int, Z1R_Tracker.Models.CDungeonRoomState>(fun level x y room ->
-            if not isInternalUpdate && not (DungeonPopups.suppressRoomSyncTemporarily) then
+            if not isApplyingRoomFromSync && not (DungeonPopups.suppressRoomSyncTemporarily) then
                 Async.StartImmediate(
                     async {
-                        isInternalUpdate <- true
                         try
                             TrackerModelOptions.DebugConfig.Log(sprintf "[RoomSync] OnRoomChanged triggered for L%d (%d,%d) - ID %O" level x y (room.DebugId.ToString()))
                             sendRoomChangeUpdate level x y room myConsoleId
                         with ex ->
                             TrackerModelOptions.DebugConfig.Log(sprintf "[RoomSync] ERROR in RoomChanged handler: %s" ex.Message)
-                        do isInternalUpdate <- false
                     }
                 )
         )

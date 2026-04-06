@@ -202,7 +202,15 @@ let IsHideableShopItem(i) = // 0-based
         
 let GetIconBMPAndExtraDecorations(cm, ms:MapStateProxy,i,j) =   // returns: (shouldAppearLikeDarkX,iconBmp,[decos])
     if ms.State = -1 then
-        false, null, []
+        // Unmarked tile; still check for a stored item icon (right-click icon feature on AlwaysEmpty tiles)
+        if TrackerModelOptions.AllowItemIconOnNonShopTile.Value then
+            let item2 = TrackerModel.getShopItem2_1based(i,j)
+            if item2 <> 0 then
+                false, Graphics.theFullTileBmpTable.[item2 - 1 + TrackerModel.MapSquareChoiceDomainHelper.ARROW].[0], []
+            else
+                false, null, []
+        else
+            false, null, []
     elif ms.IsThreeItemShop then
         let items = ResizeArray()
         items.Add(ms.State - TrackerModel.MapSquareChoiceDomainHelper.ARROW)  // 0-based
@@ -448,48 +456,57 @@ let DoLeftClick(cm:CustomComboBoxes.CanvasManager,msp:MapStateProxy,i,j,pos:Poin
             // left click to toggle it 'used'
             ToggleOverworldTileIfItIsToggleable(i, j, msp.State)
             return true, false
-        elif TrackerModelOptions.AllowItemIconOnNonShopTile.Value then
-            popupIsActive <- true
-            let item2_1b = TrackerModel.getShopItem2_1based(i,j)
-            let item2 = item2_1b - 1  // 0-based, -1=none
-            let ST = CustomComboBoxes.borderThickness
-            let tileImage() = Graphics.theFullTileBmpTable.[msp.State].[0]
-            let tileCanvas = new Canvas(Width=OMTW, Height=11.*3.)
-            canvasAdd(tileCanvas, Graphics.BMPtoImage(tileImage()), 0., 0.)
-            let originalStateIndex = max 0 item2
-            let gridxPosition =
-                if pos.X < OMTW*2. then
-                    -ST
-                elif pos.X > OMTW*13. then
-                    OMTW - float(8*(5*3+2*int ST)+int ST)
-                else
-                    (OMTW - float(8*(5*3+2*int ST)+int ST))/2.
-            let gridElementsSelectablesAndIDs : (FrameworkElement*bool*int)[] = Array.init 8 (fun n ->
-                let idx = n + TrackerModel.MapSquareChoiceDomainHelper.ARROW
-                upcast Graphics.BMPtoImage(MapStateProxy(idx).DefaultInteriorBmp()), true, n
-                )
-            let edTB1 = new TextBox(IsHitTestVisible=false, BorderThickness=Thickness(0.), FontSize=16., Margin=Thickness(2.),
-                                        VerticalContentAlignment=VerticalAlignment.Center, HorizontalContentAlignment=HorizontalAlignment.Center,
-                                        Text="Mark item icon",
-                                        Foreground=Brushes.Orange, Background=Brushes.Black)
-            let edBorder = new Border(BorderThickness=Thickness(3.), BorderBrush=Brushes.Gray, Background=Brushes.Black, Child=edTB1)
-            let extraDecorations = [(upcast edBorder : FrameworkElement), gridxPosition, -33.]
-            let! g = CustomComboBoxes.DoModalGridSelect(cm, pos.X, pos.Y, tileCanvas,
-                            gridElementsSelectablesAndIDs, originalStateIndex, 0, (8, 1, 5*3, 9*3), float(5*3)/2., float(9*3)/2., gridxPosition, 11.*3.+ST,
-                            (fun (_currentState) -> ()),
-                            (fun (_ea, currentState) -> CustomComboBoxes.DismissPopupWithResult(currentState)),
-                            extraDecorations, CustomComboBoxes.ModalGridSelectBrushes.Defaults(), CustomComboBoxes.WarpToCenter, None, "NonShopItemIcon", None)
-            let r =
-                match g with
-                | Some(currentState) ->
-                    TrackerModel.setShopItems(i, j, currentState+1, 0)
-                    TrackerModel.mapLastChangedTime.SetNow()
-                    true, false
-                | None -> false, false
-            popupIsActive <- false
-            return r
         else
             return false, false
+    }
+
+/// Shows the shop item icon picker when right-clicking an overworld tile that has no normal
+/// right-click context menu (i.e. AlwaysEmpty tiles). Returns true if a redraw is needed.
+let DoNonShopItemIconPopup(cm:CustomComboBoxes.CanvasManager, msp:MapStateProxy, i, j, pos:Point) = async {
+    let item2_1b = TrackerModel.getShopItem2_1based(i,j)
+    let item2 = item2_1b - 1  // 0-based, -1=none
+    let ST = CustomComboBoxes.borderThickness
+    let tileCanvas = new Canvas(Width=OMTW, Height=11.*3.)
+    if msp.State >= 0 then
+        canvasAdd(tileCanvas, Graphics.BMPtoImage(Graphics.theFullTileBmpTable.[msp.State].[0]), 0., 0.)
+    let originalStateIndex = max 0 item2
+    let gridxPosition =
+        if pos.X < OMTW*2. then
+            -ST
+        elif pos.X > OMTW*13. then
+            OMTW - float(8*(5*3+2*int ST)+int ST)
+        else
+            (OMTW - float(8*(5*3+2*int ST)+int ST))/2.
+    let gridElementsSelectablesAndIDs : (FrameworkElement*bool*int)[] = Array.init 8 (fun n ->
+        let idx = n + TrackerModel.MapSquareChoiceDomainHelper.ARROW
+        upcast Graphics.BMPtoImage(MapStateProxy(idx).DefaultInteriorBmp()), true, n
+        )
+    let edTB1 = new TextBox(IsHitTestVisible=false, BorderThickness=Thickness(0.), FontSize=16., Margin=Thickness(2.),
+                                VerticalContentAlignment=VerticalAlignment.Center, HorizontalContentAlignment=HorizontalAlignment.Center,
+                                Text="Mark item icon",
+                                Foreground=Brushes.Orange, Background=Brushes.Black)
+    let edBorder = new Border(BorderThickness=Thickness(3.), BorderBrush=Brushes.Gray, Background=Brushes.Black, Child=edTB1)
+    let extraDecorations = [(upcast edBorder : FrameworkElement), gridxPosition, -33.]
+    let! g = CustomComboBoxes.DoModalGridSelect(cm, pos.X, pos.Y, tileCanvas,
+                    gridElementsSelectablesAndIDs, originalStateIndex, 0, (8, 1, 5*3, 9*3), float(5*3)/2., float(9*3)/2., gridxPosition, 11.*3.+ST,
+                    (fun (_currentState) -> ()),
+                    (fun (ea:System.Windows.Input.MouseButtonEventArgs, currentState) ->
+                        if ea.ChangedButton = System.Windows.Input.MouseButton.Right then
+                            CustomComboBoxes.DismissPopupWithResult(-1)  // right-click = clear icon
+                        else
+                            CustomComboBoxes.DismissPopupWithResult(currentState)),
+                    extraDecorations, CustomComboBoxes.ModalGridSelectBrushes.Defaults(), CustomComboBoxes.WarpToCenter, None, "NonShopItemIcon", None)
+    return
+        match g with
+        | Some(-1) ->  // right-click = clear stored item icon
+            TrackerModel.setShopItems(i, j, 0, 0)
+            TrackerModel.mapLastChangedTime.SetNow()
+            true
+        | Some(currentState) ->
+            TrackerModel.setShopItems(i, j, currentState+1, 0)
+            TrackerModel.mapLastChangedTime.SetNow()
+            true
+        | None -> false
     }
 
 ///////////////////////////////////////////////////

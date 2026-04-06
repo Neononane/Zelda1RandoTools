@@ -1474,6 +1474,13 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                 oldManCount <- oldManCount - 1
 
                             roomStates.[i,j].CSharp.CopyFrom(newState.CSharp)
+                            // Restore positional metadata: CopyFrom can overwrite Level/X/Y
+                            // with 0 when newState comes from AsDungeonRoomState() (DungeonMaps import),
+                            // which doesn't set Level/X/Y. Without this, OnRoomChanged fires with
+                            // Level=0 and is silently dropped by sendRoomChangeUpdate's level<>0 guard.
+                            roomStates.[i,j].CSharp.Level <- level  // level is 1-indexed (outer loop var)
+                            roomStates.[i,j].CSharp.X <- i
+                            roomStates.[i,j].CSharp.Y <- j
                             //roomStates.[i,j].Changed.Add(fun _ -> redraw())
                             //RPT maybe flip this
                             if TrackerModelOptions.isCurrentlyApplyingRemoteUpdate() then
@@ -1963,9 +1970,13 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                     let jsonModel = dm.RoomStates.[j].[i]
                     if jsonModel <> null then
                         let rs = jsonModel.AsDungeonRoomState()
+                        // Set positional metadata so SetNewValue/CopyFrom doesn't corrupt Level/X/Y
+                        rs.Level <- level  // 1-indexed
+                        rs.X <- i
+                        rs.Y <- j
                         if rs.RoomType <> RoomType.Unmarked then
                             isFirstTimeClickingAnyRoom.[level-1].Value <- false
-                            numeral.Opacity <- 0.0 
+                            numeral.Opacity <- 0.0
                         setNewValueFunctions.[level-1].[i,j](rs)
             // we set the door after the rooms, because DoDoorInference may have inferred some values during the setNewValueFunctions calls, and want to overwrite
             for i = 0 to 6 do

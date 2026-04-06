@@ -425,8 +425,13 @@ type MyWindow() as this =
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Raw PlayerProgress payload: %s" payloadJson)
                                 let data = JsonConvert.DeserializeObject<PlayerProgressAndTakeAnyHeartsModel>(payloadJson)
                                 Application.Current.Dispatcher.Invoke(fun () ->
-                                    data.Apply()
-                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied PlayerProgress update from %s" senderId)
+                                    CoopSync.isApplyingPlayerProgressFromSync <- true
+                                    try
+                                        data.Apply()
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied PlayerProgress update from %s" senderId)
+                                    finally
+                                        CoopSync.isApplyingPlayerProgressFromSync <- false
+                                    TrackerModel.TimelineItemModel.TriggerTimelineChanged()
                                 )
                             with ex ->
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply PlayerProgress update: %s" ex.Message)
@@ -440,16 +445,19 @@ type MyWindow() as this =
                                 try
                                     let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
                                     Application.Current.Dispatcher.Invoke(fun () ->
-                                        Timeline.isCurrentlyLoadingASave <- true
+                                        CoopSync.isApplyingItemsFromSync <- true
                                         try
                                             // Top-level flags
                                             TrackerModel.IsHiddenDungeonNumbers <- fun () -> data.HiddenDungeonNumbers
                                             TrackerModel.IsSecondQuestDungeons <- data.SecondQuestDungeons
 
-                                            // Top-level boxes
-                                            data.WhiteSwordBox.TryApply(TrackerModel.sword2Box) |> ignore
-                                            data.LadderBox.TryApply(TrackerModel.ladderBox) |> ignore
-                                            data.ArmosBox.TryApply(TrackerModel.armosBox) |> ignore
+                                            // Top-level boxes — only apply if value has actually changed to avoid re-timestamping
+                                            if data.WhiteSwordBox.CellCurrent <> TrackerModel.sword2Box.CellCurrent() || data.WhiteSwordBox.PlayerHas <> TrackerModel.sword2Box.PlayerHas().AsInt() then
+                                                data.WhiteSwordBox.TryApply(TrackerModel.sword2Box) |> ignore
+                                            if data.LadderBox.CellCurrent <> TrackerModel.ladderBox.CellCurrent() || data.LadderBox.PlayerHas <> TrackerModel.ladderBox.PlayerHas().AsInt() then
+                                                data.LadderBox.TryApply(TrackerModel.ladderBox) |> ignore
+                                            if data.ArmosBox.CellCurrent <> TrackerModel.armosBox.CellCurrent() || data.ArmosBox.PlayerHas <> TrackerModel.armosBox.PlayerHas().AsInt() then
+                                                data.ArmosBox.TryApply(TrackerModel.armosBox) |> ignore
 
                                             // Dungeons
                                             data.Dungeons
@@ -458,11 +466,10 @@ type MyWindow() as this =
                                                     let targetDungeon = TrackerModel.GetDungeon(i)
                                                     let expectedLength = targetDungeon.Boxes.Length
 
-                                                    //try this line
                                                     dungeon.Triforce <- targetDungeon.PlayerHasTriforce()
 
                                                     if dungeon.Boxes = null || dungeon.Boxes.Length <> expectedLength then
-                                                        let safeBoxes = 
+                                                        let safeBoxes =
                                                             Array.init expectedLength (fun j ->
                                                                 if dungeon.Boxes <> null && j < dungeon.Boxes.Length && dungeon.Boxes.[j] <> null then
                                                                     dungeon.Boxes.[j]
@@ -470,7 +477,7 @@ type MyWindow() as this =
                                                                     new SaveAndLoad.Box()
                                                             )
                                                         dungeon.Boxes <- safeBoxes
-            
+
                                                     // Apply all properties EXCEPT Triforce (sync separately)
                                                     targetDungeon.Color <- dungeon.Color
                                                     targetDungeon.LabelChar <- if dungeon.LabelChar.Length > 0 then dungeon.LabelChar.[0] else '?'
@@ -478,14 +485,21 @@ type MyWindow() as this =
 
                                                     (dungeon.Boxes, targetDungeon.Boxes)
                                                     ||> Array.iter2 (fun srcBox destBox ->
-                                                        if srcBox <> null then
+                                                        // Only apply if value has actually changed to avoid re-timestamping in the timeline
+                                                        if srcBox <> null && (srcBox.CellCurrent <> destBox.CellCurrent() || srcBox.PlayerHas <> destBox.PlayerHas().AsInt()) then
                                                             srcBox.TryApply(destBox) |> ignore
                                                     )
+
+                                                    // If any box has an item, mark this dungeon as seen so the summary tab shows content
+                                                    if dungeon.Boxes <> null && dungeon.Boxes |> Array.exists (fun b -> b <> null && b.CellCurrent > -1) then
+                                                        DungeonUI.isFirstTimeClickingAnyRoom.[i].Value <- false
                                             )
 
                                             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Items update from %s (Triforce excluded)" senderId)
                                         finally
-                                            Timeline.isCurrentlyLoadingASave <- false
+                                            CoopSync.isApplyingItemsFromSync <- false
+                                        // Force the timeline to redraw now that items have been applied
+                                        TrackerModel.TimelineItemModel.TriggerTimelineChanged()
                                     )
 
                                 with ex ->
@@ -599,16 +613,20 @@ type MyWindow() as this =
                                 try
                                     let data = JsonConvert.DeserializeObject<CoopSync.DungeonsTriforceState>(payloadJson)
                                     Application.Current.Dispatcher.Invoke(fun () ->
-                                        Timeline.isCurrentlyLoadingASave <- true
+                                        CoopSync.isApplyingTriforceFromSync <- true
                                         try
                                             for i = 0 to 8 do
                                                 let dungeon = TrackerModel.GetDungeon(i)
                                                 let has = data.Triforces.[i]
                                                 if dungeon.PlayerHasTriforce() <> has then
                                                     dungeon.ToggleTriforce()
+                                                if has then
+                                                    DungeonUI.isFirstTimeClickingAnyRoom.[i].Value <- false
+                                            TrackerModel.mapLastChangedTime.SetNow()
                                             TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied DungeonTriforce update from %s" senderId)
                                         finally
-                                            Timeline.isCurrentlyLoadingASave <- false
+                                            CoopSync.isApplyingTriforceFromSync <- false
+                                        TrackerModel.TimelineItemModel.TriggerTimelineChanged()
                                     )
                                 with ex ->
                                     printfn "[Sync] Failed to apply DungeonTriforce update: %s" ex.Message
@@ -624,26 +642,41 @@ type MyWindow() as this =
                             else
                                 lastDungeonMapsJson <- payloadJson
                                 CoopSync.dungeonMapsSyncOrigin.MarkSyncedNow()
-                                dungeonMapsDebouncer.Trigger(fun () ->
-                                    try
-                                        let dungeonModels = JsonConvert.DeserializeObject<DungeonSaveAndLoad.DungeonModel[]>(payloadJson)
+                                // Record that we've "sent" this payload so our own poller won't re-broadcast it
+                                CoopSync.lastSentDungeonMapsPayload <- payloadJson
+                                try
+                                    let dungeonModels = JsonConvert.DeserializeObject<DungeonSaveAndLoad.DungeonModel[]>(payloadJson)
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        CoopSync.isApplyingRoomFromSync <- true
                                         CoopSync.dungeonMapsSyncOrigin.MarkSyncStart()
-                                        Application.Current.Dispatcher.Invoke(fun () ->
+                                        try
                                             for level = 0 to 8 do
                                                 let dm = dungeonModels.[level]
-                                                if (not (System.Object.ReferenceEquals(dm, null))) && (not (System.Object.ReferenceEquals(dm.RoomIsCircled, null))) then
+                                                // Skip if null or if RoomIsCircled/RoomStates are not fully populated (e.g. sender had uninitialized dungeon)
+                                                let isValid =
+                                                    not (System.Object.ReferenceEquals(dm, null)) &&
+                                                    not (System.Object.ReferenceEquals(dm.RoomIsCircled, null)) &&
+                                                    dm.RoomIsCircled.Length = 8 &&
+                                                    not (System.Object.ReferenceEquals(dm.RoomStates, null)) &&
+                                                    dm.RoomStates.Length = 8
+                                                if isValid then
                                                     try
                                                         DungeonUI.importFunctions.[level](dm)
-                                                        CoopSync.dungeonMapsSyncOrigin.MarkSyncedNow()
-                                                        let hash = CoopSync.computeHash payloadJson
-                                                        CoopSync.lastAppliedHashes.["DungeonMaps"] <- hash
-                                                        CoopSync.lastSentHashes.["DungeonMaps"] <- hash
-                                                    finally
-                                                        CoopSync.dungeonMapsSyncOrigin.MarkSyncEnd()
-                                        )
-                                    with ex ->
-                                        printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message
-                                )
+                                                    with ex ->
+                                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply DungeonMaps for level %d: %s" level ex.Message)
+                                            // Update lastSentTime AFTER import so that SetNow() calls during import
+                                            // don't produce a timestamp newer than lastSentTime (which would cause re-broadcast)
+                                            CoopSync.lastSentTime <- DateTime.Now
+                                            CoopSync.dungeonMapsSyncOrigin.MarkSyncedNow()
+                                            let hash = CoopSync.computeHash payloadJson
+                                            CoopSync.lastAppliedHashes.["DungeonMaps"] <- hash
+                                            CoopSync.lastSentHashes.["DungeonMaps"] <- hash
+                                        finally
+                                            CoopSync.dungeonMapsSyncOrigin.MarkSyncEnd()
+                                            CoopSync.isApplyingRoomFromSync <- false
+                                    )
+                                with ex ->
+                                    printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message
                         | "HiddenDungeonColorLabel" ->
                            try
                                if TrackerModel.IsHiddenDungeonNumbers()
@@ -676,7 +709,11 @@ type MyWindow() as this =
                                                     DungeonUI.getVerticalDoor data.Level data.X data.Y
 
                                             if door.State <> newState then
-                                                door.State <- newState
+                                                CoopSync.isApplyingRoomFromSync <- true
+                                                try
+                                                    door.State <- newState
+                                                finally
+                                                    CoopSync.isApplyingRoomFromSync <- false
                                                 TrackerModelOptions.DebugConfig.Log(
                                                     sprintf "[Sync] Applied DoorChange at L%d %s (%d,%d) -> %s"
                                                         data.Level
@@ -699,24 +736,28 @@ type MyWindow() as this =
                                 if CoopSync.shouldApplyUpdate "RoomChange" payloadJson timestamp && (CoopSync.isRoomChangeFresh data.Level data.X data.Y timestamp) && not (CoopSync.isRecentlySentByUs key 5000) then
                                     CoopSync.recordRoomTimestamp data.Level data.X data.Y timestamp
                                     Application.Current.Dispatcher.Invoke(fun () ->
-                                        Z1R_Tracker.Models.RoomSyncBridge.ApplyRoomChangeFromSync(
-                                            data.Level,
-                                            data.X,
-                                            data.Y,
-                                            data.IsComplete,
-                                            data.RoomType,
-                                            data.MonsterDetail,
-                                            data.FloorDropDetail,
-                                            data.FloorDropAppearsBright
-                                        )
+                                        CoopSync.isApplyingRoomFromSync <- true
+                                        try
+                                            Z1R_Tracker.Models.RoomSyncBridge.ApplyRoomChangeFromSync(
+                                                data.Level,
+                                                data.X,
+                                                data.Y,
+                                                data.IsComplete,
+                                                data.RoomType,
+                                                data.MonsterDetail,
+                                                data.FloorDropDetail,
+                                                data.FloorDropAppearsBright
+                                            )
 
-                                        match DungeonUI.redrawAllRoomsPublic with
-                                        | Some f -> 
-                                            TrackerModelOptions.DebugConfig.Log("[Sync] Calling redrawAllRoomsPublic after room sync")
-                                            f()
-                                        | None -> 
-                                            TrackerModelOptions.DebugConfig.Log("[Sync] redrawAllRoomsPublic was None — cannot redraw")
-                                )
+                                            match DungeonUI.redrawAllRoomsPublic with
+                                            | Some f ->
+                                                TrackerModelOptions.DebugConfig.Log("[Sync] Calling redrawAllRoomsPublic after room sync")
+                                                f()
+                                            | None ->
+                                                TrackerModelOptions.DebugConfig.Log("[Sync] redrawAllRoomsPublic was None — cannot redraw")
+                                        finally
+                                            CoopSync.isApplyingRoomFromSync <- false
+                                    )
                             with ex ->
                                 TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply RoomChange update: %s" ex.Message)
                         | "OverworldTile" ->
@@ -1440,13 +1481,7 @@ let main _argv =
 
     let runTheApp() =
         System.AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
-            match Dungeon.signalRHostProcess with
-            | Some p when not p.HasExited ->
-                try
-                    p.Kill()
-                    p.Dispose()
-                with _ -> ()
-            | _ -> ()
+            Dungeon.stopLocalSignalRHost()
         )
         killAnyZombieHosts()
         let app = new Application()
@@ -1457,23 +1492,17 @@ let main _argv =
 #endif
             //startLocalSignalRHost()
             theDummyWindow <- DummyWindow()
+            app.Exit.Add(fun _ -> Dungeon.stopLocalSignalRHost())
             app.Run(theDummyWindow) |> ignore
-            app.Exit.Add(fun _ ->
-                match Dungeon.signalRHostProcess with
-                | Some proc when not proc.HasExited ->
-                    try
-                        proc.Kill()
-                        proc.Dispose()
-                    with ex ->
-                        printfn "[Z1R] Failed to kill SignalR host on exit: %s" ex.Message
-                | _ -> ()
-            )
 
 #if DEBUG
 #else
         with e ->
-            printfn "crashed with exception"
-            printfn "%s" (e.ToString())
+            let crashLog = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "Z1R_Tracker_crash_log.txt")
+            try
+                System.IO.File.AppendAllText(crashLog, sprintf "\n\nBEGIN CRASH LOG (startup) -- %s\n%s\nEND CRASH LOG\n" (System.DateTime.Now.ToString("yyyy-MM-dd-HH:mm:ss")) (e.ToString()))
+            with _ -> ()
+            reraise()
 #endif
    
     try

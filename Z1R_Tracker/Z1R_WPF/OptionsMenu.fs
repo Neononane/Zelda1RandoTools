@@ -59,7 +59,7 @@ let data1o(isStandardHyrule) =
 // now a clickable feature of top tracker area
 //    yield "Mirror overworld", "Flip the overworld map East<->West", TrackerModelOptions.Overworld.MirrorOverworld, true, (fun()->()), None
     yield "Shops before dungeons", "In the overworld map tile popup, the grid starts with shops when this is checked\n(starts with dungeons when unchecked)", TrackerModelOptions.Overworld.ShopsFirst, false, (fun()->()), None
-    yield "Non-shop item icons", "When enabled, left-clicking a non-shop overworld tile lets you add an extra item icon overlay\n(e.g. mark a bomb dropper with a bomb icon). Off by default.", TrackerModelOptions.AllowItemIconOnNonShopTile, false, (fun()->()), None
+    yield "Non-shop item icons", "When enabled, right-clicking an overworld tile that has no other right-click action lets you add an extra item icon overlay\n(e.g. mark a bomb dropper with a bomb icon). Off by default.", TrackerModelOptions.AllowItemIconOnNonShopTile, false, (fun()->()), None
     yield "Custom marker tiles", "When enabled, the tile selector popup includes two personal-preference marker tiles\n(asterisk and diamond) you can place on overworld spots for custom notes. Off by default.", TrackerModelOptions.PersonalPrefMarkersEnabled, false, (fun()->()), None
     |]
 

@@ -123,16 +123,73 @@ let SetRoomChangedCallback(cb: int -> int -> int -> unit) =
 
 let mutable signalRHostProcess : System.Diagnostics.Process option = None
 
+// Windows Job Object: ties child process lifetime to the parent process.
+// When this process exits for any reason (crash, task kill, window close),
+// the OS automatically kills all processes in the job.
+[<System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)>]
+extern System.IntPtr CreateJobObject(System.IntPtr lpJobAttributes, System.IntPtr lpName)
+
+[<System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)>]
+extern bool AssignProcessToJobObject(System.IntPtr hJob, System.IntPtr hProcess)
+
+[<System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)>]
+extern bool SetInformationJobObject(System.IntPtr hJob, int infoClass, System.IntPtr lpInfo, uint32 cbInfoLength)
+
+let mutable signalRJobHandle = System.IntPtr.Zero
+
+let createSignalRJob() =
+    try
+        let job = CreateJobObject(System.IntPtr.Zero, System.IntPtr.Zero)
+        if job <> System.IntPtr.Zero then
+            // LimitFlags is always at offset 16 (after two LARGE_INTEGERs) regardless of bitness.
+            // The total struct size depends on compiler alignment settings; try all plausible values:
+            //   x64 natural alignment: 144  |  x64 pack=4: 136
+            //   x86 with 8-byte-aligned ULONGLONG: 112  |  x86 pack=4: 108
+            let JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+            let JobObjectExtendedLimitInformation = 9
+            let sizesToTry =
+                if System.IntPtr.Size = 8 then [| 144; 136 |]
+                else [| 112; 108 |]
+            let mutable jobSet = false
+            for structSize in sizesToTry do
+                if not jobSet then
+                    let ptr = System.Runtime.InteropServices.Marshal.AllocHGlobal(structSize)
+                    try
+                        for i in 0 .. structSize - 1 do
+                            System.Runtime.InteropServices.Marshal.WriteByte(ptr, i, 0uy)
+                        System.Runtime.InteropServices.Marshal.WriteInt32(ptr, 16, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
+                        if SetInformationJobObject(job, JobObjectExtendedLimitInformation, ptr, uint32 structSize) then
+                            signalRJobHandle <- job
+                            jobSet <- true
+                        else
+                            let err = System.Runtime.InteropServices.Marshal.GetLastWin32Error()
+                            if err <> 24 then  // 24 = ERROR_BAD_LENGTH; only retry for that specific error
+                                printfn "[Sync] SetInformationJobObject failed (error %d)" err
+                                jobSet <- true  // non-recoverable error; stop trying other sizes
+                    finally
+                        System.Runtime.InteropServices.Marshal.FreeHGlobal(ptr)
+            if not jobSet then
+                printfn "[Sync] SetInformationJobObject: no struct size worked (%s)" (if System.IntPtr.Size = 8 then "x64" else "x86")
+    with ex ->
+        printfn "[Sync] Could not create job object: %s" ex.Message
+
 let startLocalSignalRHost (port: string) =
     try
         let exePath = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "Z1R_SignalRHost.exe")
         if System.IO.File.Exists(exePath) then
+            // Defer job creation to first actual use; calling at module-load time (do) can trigger
+            // SetInformationJobObject error 24 on first launch due to static-initializer ordering.
+            if signalRJobHandle = System.IntPtr.Zero then
+                createSignalRJob()
             let psi = new System.Diagnostics.ProcessStartInfo()
             psi.FileName <- exePath
             psi.Arguments <- port
             psi.UseShellExecute <- false
             psi.CreateNoWindow <- true
             let proc = System.Diagnostics.Process.Start(psi)
+            // Add to job object so it is killed automatically if ZTracker exits for any reason
+            if signalRJobHandle <> System.IntPtr.Zero then
+                AssignProcessToJobObject(signalRJobHandle, proc.Handle) |> ignore
             signalRHostProcess <- Some proc
             printfn "[Sync] Launched SignalR host on port %s" port
         else
@@ -140,16 +197,18 @@ let startLocalSignalRHost (port: string) =
     with ex ->
         printfn "[Sync] Launch error: %s" ex.Message
 
-
-
 let stopLocalSignalRHost() =
     match signalRHostProcess with
-    | Some proc when not proc.HasExited ->
+    | Some proc ->
         try
-            proc.Kill()
+            if not proc.HasExited then
+                proc.Kill()
+                proc.WaitForExit(3000) |> ignore
+            proc.Dispose()
             printfn "[Sync] Stopped Z1R_SignalRHost.exe"
         with ex ->
             printfn "[Sync] Error stopping host: %s" (ex.Message)
+        signalRHostProcess <- None
     | _ -> ()
 
 type GrabHelper() =
