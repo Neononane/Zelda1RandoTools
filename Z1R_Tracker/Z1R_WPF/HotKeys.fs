@@ -1,6 +1,8 @@
 ﻿module HotKeys
 
 open System.Windows
+open Z1R_Tracker.Models.Z1R_TrackerInterop
+
 
 ////////////////////////////////////////////////////////////
 // Main Window listens for KeyDown, then sends RoutedEvent to element under the mouse
@@ -106,17 +108,17 @@ type UserError(msg) =
 
 let AllDoors = 
     [|
-        for dd,s in [DungeonRoomState.DoorDirection.West,"West"; DungeonRoomState.DoorDirection.East,"East"; 
-                        DungeonRoomState.DoorDirection.North,"North"; DungeonRoomState.DoorDirection.South,"South"] do
-            yield sprintf "%sDoorIncrement" s, DungeonRoomState.DoorHotKeyResponse(dd,DungeonRoomState.DoorAction.Increment)
-            yield sprintf "%sDoorDecrement" s, DungeonRoomState.DoorHotKeyResponse(dd,DungeonRoomState.DoorAction.Decrement)
+        for dd,s in [DoorDirection.West,"West"; DoorDirection.East,"East"; 
+                        DoorDirection.North,"North"; DoorDirection.South,"South"] do
+            yield sprintf "%sDoorIncrement" s, DoorHotKeyResponse(dd,DoorAction.Increment)
+            yield sprintf "%sDoorDecrement" s, DoorHotKeyResponse(dd,DoorAction.Decrement)
     |]
 let AllDungeonRoomNames = [|
-    for x in DungeonRoomState.RoomType.All() do
+    for x in RoomTypeExtensions.All() do
         yield "DungeonRoom_" + x.AsHotKeyName()
-    for x in DungeonRoomState.MonsterDetail.All() do
+    for x in MonsterDetailExtensions.All() do
         yield "DungeonRoom_" + x.AsHotKeyName()
-    for x in DungeonRoomState.FloorDropDetail.All() do
+    for x in FloorDropDetailExtensions.All() do
         yield "DungeonRoom_" + x.AsHotKeyName()
     for x,_ in AllDoors do
         yield "DungeonRoom_" + x
@@ -432,7 +434,7 @@ type HotKeyProcessor<'v when 'v : equality>(contextName) =
 let ItemHotKeyProcessor = new HotKeyProcessor<int>("Item")
 let OverworldHotKeyProcessor = new HotKeyProcessor<int>("Overworld")
 let BlockerHotKeyProcessor = new HotKeyProcessor<TrackerModel.DungeonBlocker>("Blocker")
-let DungeonRoomHotKeyProcessor = new HotKeyProcessor<Choice<DungeonRoomState.RoomType,DungeonRoomState.MonsterDetail,DungeonRoomState.FloorDropDetail,DungeonRoomState.DoorHotKeyResponse> >("DungeonRoom")
+let DungeonRoomHotKeyProcessor = new HotKeyProcessor<Choice<RoomType,MonsterDetail,FloorDropDetail,DoorHotKeyResponse> >("DungeonRoom")
 let HintZoneHotKeyProcessor = new HotKeyProcessor<TrackerModel.HintZone>("HintZone")
 // contextual
 let TakeAnyHotKeyProcessor = new HotKeyProcessor<int>("TakeAny")
@@ -486,15 +488,15 @@ let PopulateHotKeyTables() =
                         Add(OverworldHotKeyProcessor, chOpt, i)
                         found <- true
             if not found then
-                for x in DungeonRoomState.RoomType.All() do
+                for x in RoomTypeExtensions.All() do
                     if name = "DungeonRoom_" + x.AsHotKeyName() then
                         Add(DungeonRoomHotKeyProcessor, chOpt, Choice1Of4 x)
                         found <- true
-                for x in DungeonRoomState.MonsterDetail.All() do
+                for x in MonsterDetailExtensions.All() do
                     if name = "DungeonRoom_" + x.AsHotKeyName() then
                         Add(DungeonRoomHotKeyProcessor, chOpt, Choice2Of4 x)
                         found <- true
-                for x in DungeonRoomState.FloorDropDetail.All() do
+                for x in FloorDropDetailExtensions.All() do
                     if name = "DungeonRoom_" + x.AsHotKeyName() then
                         Add(DungeonRoomHotKeyProcessor, chOpt, Choice3Of4 x)
                         found <- true

@@ -128,7 +128,7 @@ type ApplicationLayout(cm:CustomComboBoxes.CanvasManager) =
         member this.AddCurrentMaxHearts(currentMaxHeartsTextBox) = 
             canvasAdd(appMainCanvas, currentMaxHeartsTextBox, RIGHT_COL-1., 130.-1.)
         member this.AddShowCoords(showCoordsCB, havePotionLetterImage) = 
-            canvasAdd(appMainCanvas, havePotionLetterImage, OW_ITEM_GRID_LOCATIONS.OFFSET+183., 63.)
+            canvasAdd(appMainCanvas, havePotionLetterImage, OW_ITEM_GRID_LOCATIONS.OFFSET+183., 92.)
             canvasAdd(appMainCanvas, showCoordsCB, OW_ITEM_GRID_LOCATIONS.OFFSET+182., 72.)
         member this.AddOWZoneOverlay(zone_checkbox) =
             canvasAdd(appMainCanvas, zone_checkbox, OW_ITEM_GRID_LOCATIONS.OFFSET+182., 52.)
@@ -311,7 +311,7 @@ type ShorterApplicationLayout(cm:CustomComboBoxes.CanvasManager) =
             canvasAdd(upper, logoBorder, 16.*OMTW - ztlogo.Width - 2., THRU_MAIN_MAP_H + kitty.Height - ztlogo.Height - 6.)
             // WANT!
             let kitty = new Image()
-            let imageStream = Graphics.GetResourceStream("CroppedBrianKitty.png")
+            let imageStream = Graphics.GetResourceStream("CatBird.png")
             kitty.Source <- System.Windows.Media.Imaging.BitmapFrame.Create(imageStream)
             kitty.Width <- 45.
             kitty.Height <- 45.
@@ -431,7 +431,9 @@ let makeMouseMagnifierWindow(cm:CustomComboBoxes.CanvasManager) =
     mmWindow.ResizeMode <- ResizeMode.CanResizeWithGrip
     mmWindow.SizeToContent <- SizeToContent.Manual
     mmWindow.WindowStartupLocation <- WindowStartupLocation.Manual
-    mmWindow.Owner <- Application.Current.MainWindow
+    // Do not set Owner — owned windows go behind non-owned popout windows and cannot be brought back.
+    // Instead, close manually when main window closes (same pattern as popout windows).
+    Application.Current.MainWindow.Closed.Add(fun _ -> try mmWindow.Close() with _ -> ())
 
     let MSF = // main scale factor
         if TrackerModelOptions.SmallerAppWindow.Value then

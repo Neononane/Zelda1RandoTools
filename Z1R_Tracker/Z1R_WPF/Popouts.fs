@@ -126,20 +126,25 @@ let MakeInventoryAndHearts() =
                                 Text="Note: having magical sword may make it\n   hard to notice if white sword picked up")
         sp.Children.Add(tb) |> ignore
     sp
-let MakeRemainingItemsDisplay() = 
+let MakeRemainingItemsDisplay() =
     let img(i) = let r = CustomComboBoxes.boxCurrentBMP(i, None) |> Graphics.BMPtoImage in r.Margin <- Thickness(0.,0.,3.,0.); r
     let hsp = new StackPanel(Orientation=Orientation.Horizontal, Margin=Thickness(3.))
+    // An item is "remaining" if no dungeon box has it marked as obtained (IsDone = CellCurrent set AND PlayerHas is YES or SKIPPED).
+    // This correctly handles presets where all items are pre-placed but not yet obtained (PlayerHas=NO).
+    let allBoxes = TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstance.AllBoxes()
+    let isObtained(i) = allBoxes |> Array.exists (fun box -> box.CellCurrent() = i && box.IsDone())
     for i in TrackerModel.ITEMS.PriorityOrderForRemainingDisplay do
-        if TrackerModel.allItemWithHeartShuffleChoiceDomain.CanAddUse(i) then
+        if not (isObtained i) then
             hsp.Children.Add(img(i)) |> ignore
     let h = TrackerModel.ITEMS.HEARTCONTAINER
-    let c = TrackerModel.allItemWithHeartShuffleChoiceDomain.MaxUses(h) - TrackerModel.allItemWithHeartShuffleChoiceDomain.NumUses(h)
+    let obtainedHC = allBoxes |> Array.sumBy (fun box -> if box.CellCurrent() = h && box.IsDone() then 1 else 0)
+    let c = TrackerModel.allItemWithHeartShuffleChoiceDomain.MaxUses(h) - obtainedHC
     for x = 1 to c do
         hsp.Children.Add(img(h)) |> ignore
     if hsp.Children.Count=0 then
         hsp.Children.Add(new TextBox(Text="None",FontSize=12.,IsReadOnly=true,IsHitTestVisible=false,BorderThickness=Thickness(0.),Foreground=Brushes.Orange,Background=Brushes.Black)) |> ignore
     let vsp = new StackPanel(Orientation=Orientation.Vertical)
-    vsp.Children.Add(new TextBox(Text="Remaining unmarked items:",FontSize=12.,IsReadOnly=true,IsHitTestVisible=false,BorderThickness=Thickness(0.),Foreground=Brushes.Orange,Background=Brushes.Black)) |> ignore
+    vsp.Children.Add(new TextBox(Text="Remaining unobtained items:",FontSize=12.,IsReadOnly=true,IsHitTestVisible=false,BorderThickness=Thickness(0.),Foreground=Brushes.Orange,Background=Brushes.Black)) |> ignore
     vsp.Children.Add(hsp) |> ignore
     vsp
 
@@ -271,6 +276,106 @@ let makePopout(kind, isLeftClick, isRightClick, doUIUpdateEvent:Event<unit>) =
     w.Closed.Add(fun _ -> if not(theMainWindowHasClosed) && not(insideMakePopoutCall) then noDisplay())
     w.Show()
     insideMakePopoutCall <- false
+
+// shop price info: tile-state → (display name, price range text, min, max, step)
+let private shopPriceInfo = dict [
+    TrackerModel.MapSquareChoiceDomainHelper.ARROW,        ("Arrow Shop",    "60-100r",  60, 100, 10)
+    TrackerModel.MapSquareChoiceDomainHelper.BOMB,         ("Bomb Shop",     "1-40r",     1,  40,  5)
+    TrackerModel.MapSquareChoiceDomainHelper.BOOK,         ("Book Shop",    "180-220r", 180, 220, 10)
+    TrackerModel.MapSquareChoiceDomainHelper.BLUE_CANDLE,  ("Candle Shop",  "40-80r",   40,  80, 10)
+    TrackerModel.MapSquareChoiceDomainHelper.BLUE_RING,    ("Blue Ring",   "230-255r",  230, 255,  5)
+    TrackerModel.MapSquareChoiceDomainHelper.MEAT,         ("Meat Shop",   "40-120r",   40, 120, 10)
+    TrackerModel.MapSquareChoiceDomainHelper.KEY,          ("Key Shop",    "60-120r",   60, 120, 10)
+    TrackerModel.MapSquareChoiceDomainHelper.SHIELD,       ("Shield Shop", "70-180r",   70, 180, 10)
+    TrackerModel.MapSquareChoiceDomainHelper.HINT_SHOP,    ("Hint Shop",   "10-60r",    10,  60, 10)
+    TrackerModel.MapSquareChoiceDomainHelper.POTION_SHOP,  ("Potion Shop", "20-88r",    20,  88,  8)
+    ]
+
+let mutable private theShopPricesWindow : Window = null
+
+let showShopPricesWindow() =
+    if theShopPricesWindow <> null then
+        theShopPricesWindow.Activate() |> ignore
+    else
+    let w = new Window(Title="Shop Prices", ResizeMode=ResizeMode.NoResize, SizeToContent=SizeToContent.WidthAndHeight,
+                        Background=Brushes.Black, Foreground=Brushes.Orange, Topmost=false)
+    Application.Current.MainWindow.Closed.Add(fun _ -> try w.Close() with _ -> ())
+    w.Closed.Add(fun _ -> theShopPricesWindow <- null)
+    theShopPricesWindow <- w
+    let sp = new StackPanel(Orientation=Orientation.Vertical, Margin=Thickness(6.))
+    let header = new TextBox(Text="Shops found on overworld map — enter the price you saw:", IsReadOnly=true,
+                              Background=Brushes.Black, Foreground=Brushes.Orange, BorderThickness=Thickness(0.), Margin=Thickness(0.,0.,0.,4.))
+    sp.Children.Add(header) |> ignore
+    let grid = new Grid()
+    grid.ColumnDefinitions.Add(new ColumnDefinition(Width=GridLength.Auto))  // 0: coord
+    grid.ColumnDefinitions.Add(new ColumnDefinition(Width=GridLength.Auto))  // 1: icon
+    grid.ColumnDefinitions.Add(new ColumnDefinition(Width=new GridLength(120.)))  // 2: name
+    grid.ColumnDefinitions.Add(new ColumnDefinition(Width=new GridLength(70.)))   // 3: range
+    grid.ColumnDefinitions.Add(new ColumnDefinition(Width=new GridLength(160.)))  // 4: price dropdown
+    let makeCell(text, col, row) =
+        let tb = new TextBox(Text=text, IsReadOnly=true, Background=Brushes.Black, Foreground=Brushes.Orange, BorderThickness=Thickness(0.), Margin=Thickness(2.), VerticalContentAlignment=VerticalAlignment.Center)
+        Grid.SetColumn(tb, col)
+        Grid.SetRow(tb, row)
+        grid.Children.Add(tb) |> ignore
+    let mutable rowIdx = 0
+    // collect all marked shop tiles
+    let shops = ResizeArray()
+    for j = 0 to 7 do
+        for i = 0 to 15 do
+            let state = TrackerModel.overworldMapMarks.[i,j].Current()
+            if shopPriceInfo.ContainsKey(state) then
+                shops.Add((i, j, state))
+    if shops.Count = 0 then
+        sp.Children.Add(new TextBox(Text="No shops found on the overworld map yet.", IsReadOnly=true,
+                                     Background=Brushes.Black, Foreground=Brushes.DarkGray, BorderThickness=Thickness(0.))) |> ignore
+    else
+        for (i, j, state) in shops do
+            grid.RowDefinitions.Add(new RowDefinition(Height=GridLength.Auto))
+            let colLabel = sprintf "%c%d" (char (int 'A' + j)) (i + 1)
+            makeCell(colLabel, 0, rowIdx)
+            // icon
+            let bmp = OverworldMapTileCustomization.MapStateProxy(state).DefaultInteriorBmp()
+            let img = Graphics.BMPtoImage(bmp)
+            img.Width <- 20.; img.Height <- 20.
+            img.Margin <- Thickness(2.)
+            Grid.SetColumn(img, 1)
+            Grid.SetRow(img, rowIdx)
+            grid.Children.Add(img) |> ignore
+            let name, range, pMin, pMax, pStep = shopPriceInfo.[state]
+            makeCell(name, 2, rowIdx)
+            makeCell(range, 3, rowIdx)
+            // price dropdown
+            let cb = new ComboBox(Margin=Thickness(2.), Background=Brushes.Black, Foreground=Brushes.Orange, Width=150.)
+            cb.Items.Add("(unknown)") |> ignore
+            let mutable selectedIdx = 0
+            let mutable valIdx = 1
+            let currentPrice = TrackerModel.getShopPrice(i, j)
+            let mutable v = pMin
+            while v <= pMax do
+                cb.Items.Add(sprintf "%dr" v) |> ignore
+                if v = currentPrice then selectedIdx <- valIdx
+                valIdx <- valIdx + 1
+                v <- v + pStep
+            cb.SelectedIndex <- selectedIdx
+            let ii, jj = i, j  // capture loop vars
+            cb.SelectionChanged.Add(fun _ ->
+                if cb.SelectedIndex = 0 then
+                    TrackerModel.setShopPrice(ii, jj, 0)
+                else
+                    let text = cb.SelectedItem.ToString()
+                    match System.Int32.TryParse(text.TrimEnd('r')) with
+                    | true, price -> TrackerModel.setShopPrice(ii, jj, price)
+                    | _ -> ()
+                )
+            Grid.SetColumn(cb, 4)
+            Grid.SetRow(cb, rowIdx)
+            grid.Children.Add(cb) |> ignore
+            rowIdx <- rowIdx + 1
+        sp.Children.Add(grid) |> ignore
+    let sv = new ScrollViewer(Content=sp, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, MaxHeight=600.)
+    let border = new Border(Child=sv, BorderBrush=Brushes.Gray, BorderThickness=Thickness(3.), Background=Brushes.Black)
+    w.Content <- border
+    w.Show()
 
 let Startup(doUIUpdateEvent:Event<unit>) =
     let f(kind, setting) =

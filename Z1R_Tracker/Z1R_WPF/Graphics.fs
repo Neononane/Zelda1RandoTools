@@ -591,6 +591,26 @@ let (zi_triforce_bmp, zi_heart_bmp, zi_bomb_bmp, zi_key_bmp, zi_fiver_bmp, zi_ma
             yield r
     |]
     (a.[0], a.[1], a.[2], a.[3], a.[4], a.[5], a.[6], a.[7], a.[8], a.[9], a.[10], a.[11], a.[12])
+
+//let (placeholder_row0_bmp, placeholder_row1_bmp, placeholder_row2_bmp, placeholder_row3_bmp, placeholder_row4_bmp, placeholder_row5_bmp, placeholder_row6_bmp, placeholder_row7_bmp) =
+//    let imageStream = GetResourceStream("zelda_items16x16.png")
+//    let bmp = new System.Drawing.Bitmap(imageStream)
+//    let a = [|  
+//        for i = 0 to bmp.Width/16 - 1 do
+//            let r = new System.Drawing.Bitmap(18,18)  // border around it
+//            for px = 0 to 17 do
+//                for py = 0 to 17 do
+//                    if px=0 || px=17 || py=0 || py=17 then
+//                        r.SetPixel(px, py, bg16x16)
+//                    else
+//                        r.SetPixel(px, py, System.Drawing.Color.Black)
+//            for px = 0 to 15 do
+//                for py = 0 to 15 do
+//                    let color = bmp.GetPixel(px + i*16, py)
+//                    if color.ToArgb() = System.Drawing.Color.Black.ToArgb() then () else r.SetPixel(px+1, py+1, color)
+//            yield r
+//    |]
+//    (a.[0], a.[1], a.[2], a.[3], a.[4], a.[5], a.[6], a.[7])
 let unborder(bmp:System.Drawing.Bitmap) =
     let r = new System.Drawing.Bitmap(bmp.Width-2, bmp.Height-2)
     for i = 0 to r.Width-1 do
@@ -943,6 +963,39 @@ do
     theInteriorBmpTable.[34].Add(getInteriorIconFromStrip(5))
     // 35  'X'
     theInteriorBmpTable.[35].Add(darkxbmp)
+    // Helper: paint a 3x3 block at unit coordinates (ux, uy) in black
+    let p3 (bmp:System.Drawing.Bitmap) (ux:int) (uy:int) =
+        for dx = 0 to 2 do
+            for dy = 0 to 2 do
+                bmp.SetPixel(3*ux+dx, 3*uy+dy, System.Drawing.Color.Black)
+    // 36  personal preference 1 (magenta background, ✳ asterisk shape — not a dungeon letter)
+    //  Pattern (unit coords, 5 wide x 9 tall):
+    //    . X . X .   row 2
+    //    . . X . .   row 3
+    //    X X X X X   row 4  (horizontal bar)
+    //    . . X . .   row 5
+    //    . X . X .   row 6
+    let pp1bmp = new System.Drawing.Bitmap(5*3, 9*3)
+    for px = 0 to 5*3-1 do
+        for py = 0 to 9*3-1 do
+            pp1bmp.SetPixel(px, py, System.Drawing.Color.Magenta)
+    for ux,uy in [| (1,2);(3,2); (2,3); (0,4);(1,4);(2,4);(3,4);(4,4); (2,5); (1,6);(3,6) |] do
+        p3 pp1bmp ux uy
+    theInteriorBmpTable.[36].Add(pp1bmp)
+    // 37  personal preference 2 (cyan background, ◆ diamond shape — not a dungeon letter)
+    //  Pattern (unit coords):
+    //    . . X . .   row 2  (top point)
+    //    . X X X .   row 3
+    //    X X X X X   row 4  (widest)
+    //    . X X X .   row 5
+    //    . . X . .   row 6  (bottom point)
+    let pp2bmp = new System.Drawing.Bitmap(5*3, 9*3)
+    for px = 0 to 5*3-1 do
+        for py = 0 to 9*3-1 do
+            pp2bmp.SetPixel(px, py, System.Drawing.Color.Cyan)
+    for ux,uy in [| (2,2); (1,3);(2,3);(3,3); (0,4);(1,4);(2,4);(3,4);(4,4); (1,5);(2,5);(3,5); (2,6) |] do
+        p3 pp2bmp ux uy
+    theInteriorBmpTable.[37].Add(pp2bmp)
 // full tiles just have interior bmp in the center and transparent pixels all around (except for the final 'X' one)
 let theFullTileBmpTable = Array.init theInteriorBmpTable.Length (fun _ -> ResizeArray())
 let initFull() =
@@ -956,7 +1009,7 @@ let initFull() =
                     if px>=5*3 && px<10*3 && py>=1*3 && py<10*3 then 
                         fullTileBmp.SetPixel(px, py, interiorBmp.GetPixel(px-5*3, py-1*3))
                     else
-                        fullTileBmp.SetPixel(px, py, if i=len-1 then System.Drawing.Color.Black else BG)
+                        fullTileBmp.SetPixel(px, py, if i=35 then System.Drawing.Color.Black else BG)  // 35=DARK_X gets black border; all others (including PersonalPref) get transparent BG
             theFullTileBmpTable.[i].Add(fullTileBmp)
 do  
     initFull()

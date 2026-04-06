@@ -7,12 +7,17 @@ type ReminderCategory =
     | DungeonFeedback
     | SwordHearts
     | CoastItem
-    | RecorderPBSpotsAndBoomstickBook
-    | HaveKeyLadder
+    | RecorderPBSpotsAndBoomstickBook  // legacy, kept for save-compat; logic now uses individual below
+    | HaveKeyLadder                    // legacy, kept for save-compat; logic now uses individual below
     | Blockers
     | DoorRepair
     | OverworldOverwrites
     | Asterisk
+    | RecorderSpots
+    | PowerBraceletSpots
+    | BoomstickBook
+    | HaveMagicKey
+    | HaveLadder
     member this.DisplayName =
         match this with
         | DungeonFeedback -> "Dungeon feedback"
@@ -24,6 +29,11 @@ type ReminderCategory =
         | DoorRepair -> "Door Repair Count"
         | OverworldOverwrites -> "Overworld overwrites"
         | Asterisk -> "Error beeps"
+        | RecorderSpots -> "Recorder spots"
+        | PowerBraceletSpots -> "Power Bracelet spots"
+        | BoomstickBook -> "Boomstick book"
+        | HaveMagicKey -> "Have magic key"
+        | HaveLadder -> "Have ladder"
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -91,39 +101,49 @@ type ChoiceDomain(name:string,maxUsesArray:int[]) =
     member _this.MaxUses(key) = maxUsesArray.[key]
     member _this.CanAddUse(key) = (key = -1) || (uses.[key] < maxUsesArray.[key])
         
-type Cell(cd:ChoiceDomain) =
-    // a location that can hold one item, e.g. armos box that can hold red candle or white sword or whatnot, or
-    // map square that can hold dungeon 4 or bomb shop or whatnot
-    // this is about player-knowing-location-contents, not about players _having_ the things there
+type Cell(cd: ChoiceDomain) =
     let mutable state = -1 // -1 means empty, 0-N are item identifiers
+    let changedEvent = new Event<unit>()
+
+    [<CLIEvent>]
+    member _.Changed = changedEvent.Publish
+
     member _this.Current() = state
+
     member this.Next() =
         if state <> -1 then
             cd.RemoveUse(state)
-        state <- cd.NextFreeKey(state)
-        if state <> -1 then
-            cd.AddUse(state)
+        let newState = cd.NextFreeKey(state)
+        if newState <> state then
+            state <- newState
+            if state <> -1 then cd.AddUse(state)
+            changedEvent.Trigger()
+
     member this.Prev() =
         if state <> -1 then
             cd.RemoveUse(state)
-        state <- cd.PrevFreeKey(state)
-        if state <> -1 then
-            cd.AddUse(state)
-    member this.Set(newState) =
+        let newState = cd.PrevFreeKey(state)
+        if newState <> state then
+            state <- newState
+            if state <> -1 then cd.AddUse(state)
+            changedEvent.Trigger()
+
+    member this.Set(newState: int) =
         if newState < -1 || newState > cd.MaxKey then
             failwith "Cell.Set out of range"
-        if state = newState then
-            ()
-        else
+        if state <> newState then
             cd.AddUse(newState)
             cd.RemoveUse(state)
             state <- newState
-    member this.AttemptToSet(newState) =
+            changedEvent.Trigger()
+
+    member this.AttemptToSet(newState: int) =
         try
             this.Set(newState)
             true
-        with _e -> 
+        with _ -> 
             false
+
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -297,6 +317,8 @@ let overworldTiles(isFirstQuestOverworld, isHDN) = [|
     "TakeAny"          , 4                                                  , "Take Any",             "Take Any One\nYou Want"
     "PotionShop"       , (if isFirstQuestOverworld then 7 else 9)           , "Potion Shop",          "Potion Shop\n(20-60, 48-88 rupees)"
     "DarkX"            , 999                                                , "Don't Care",           "Don't Care"
+    "PersonalPref1"    , 999                                                , "Personal Pref 1",      "Personal Preference 1\n(custom marker)"
+    "PersonalPref2"    , 999                                                , "Personal Pref 2",      "Personal Preference 2\n(custom marker)"
     |]
 // 1Q has 73 total spots, 2Q has 80, Mixed has 93
 let MaxRemain1Q = 73
@@ -350,6 +372,8 @@ type MapSquareChoiceDomainHelper =
     static member TAKE_ANY = 33
     static member POTION_SHOP = 34
     static member DARK_X = 35
+    static member PERSONAL_PREF_1 = 36
+    static member PERSONAL_PREF_2 = 37
     static member AsHotKeyName(n) =
         if n>=0 && n<dummyOverworldTiles.Length then
             let r,_,_,_ = dummyOverworldTiles.[n] in r
@@ -450,8 +474,12 @@ type LastChangedTime(intervalHowFarInThePast) as this =
             match isFuture with
             | Some(interval) -> System.DateTime.Now - interval
             | None -> stamp + (System.DateTime.Now - whenPaused)
+    member this.SetNowIfLocal(isRemote: bool) =
+        if not isRemote then this.SetNow()
+
 
 let theStartTime = new LastChangedTime()
+let dungeonRoomModelChanged = new LastChangedTime()
 
 //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -479,9 +507,10 @@ type BoolProperty(initState,changedFunc) =
     let mutable state = initState
     let changed = new Event<_>()
     member _this.Set(b) =
-        state <- b
-        changedFunc()
-        changed.Trigger(state)
+        if state <> b then
+            state <- b
+            changedFunc()
+            changed.Trigger(state)
     member _this.Toggle() =
         state <- not state
         changedFunc()
@@ -503,10 +532,11 @@ type PlayerProgressAndTakeAnyHearts() =
     let playerHasBombs         = BoolProperty(false,fun()->playerProgressLastChangedTime.SetNow())
     let takeAnyHeartChanged = new Event<_>()
     member _this.GetTakeAnyHeart(i) = takeAnyHearts.[i]
-    member _this.SetTakeAnyHeart(i,v) = 
-        takeAnyHearts.[i] <- v
-        playerProgressLastChangedTime.SetNow()
-        takeAnyHeartChanged.Trigger(i)
+    member _this.SetTakeAnyHeart(i,v) =
+        if takeAnyHearts.[i] <> v then
+            takeAnyHearts.[i] <- v
+            playerProgressLastChangedTime.SetNow()
+            takeAnyHeartChanged.Trigger(i)
     member _this.TakeAnyHeartChanged = takeAnyHeartChanged.Publish
     member _this.PlayerHasBoomBook      = playerHasBoomBook
     member _this.PlayerHasWoodSword     = playerHasWoodSword     
@@ -671,7 +701,10 @@ type DungeonTrackerInstanceKind =
     | DEFAULT
 
 type DungeonTrackerInstance(kind) =
-    static let mutable theInstance = None
+    //RPT adjusted this below
+    static let mutable theInstance = None : DungeonTrackerInstance option
+
+
     let finalBoxOf1Or4 = new Box(StairKind.Always, BoxOwner.Dungeon1or4)  // only relevant in DEFAULT
     let makeDungeons() = 
         match kind with
@@ -723,6 +756,11 @@ type DungeonTrackerInstance(kind) =
             member this.Value = pct
             member this.Changed = any().Changed
         }
+
+    
+    static member TheDungeonTrackerInstanceOption
+        with get() = theInstance
+
     member _this.Kind = kind
     member _this.Dungeons(i) = getDungeons().[i]
     member _this.FinalBoxOf1Or4 =
@@ -731,9 +769,14 @@ type DungeonTrackerInstance(kind) =
         | DungeonTrackerInstanceKind.DEFAULT -> finalBoxOf1Or4
     member _this.AllBoxes() = all()
     member this.AllBoxProgress = allBoxProgress
+    //RPT updating
     static member TheDungeonTrackerInstance 
         with get() = 
-            match theInstance with | Some i -> i | _ -> failwith "uninitialized TheDungeonTrackerInstance" 
+            match theInstance with 
+            | Some i -> i 
+            | None -> 
+                TrackerModelOptions.DebugConfig.Log("[ERROR] Accessed TheDungeonTrackerInstance before initialization")
+                failwith "uninitialized TheDungeonTrackerInstance" 
         and set(x:DungeonTrackerInstance) = theInstance <- Some(x)
 
 and Dungeon(id,numBoxes) =
@@ -820,6 +863,9 @@ and Dungeon(id,numBoxes) =
 let GetDungeon(i) = DungeonTrackerInstance.TheDungeonTrackerInstance.Dungeons(i)
 do IsHiddenDungeonNumbers <- fun() -> DungeonTrackerInstance.TheDungeonTrackerInstance.Kind = DungeonTrackerInstanceKind.HIDE_DUNGEON_NUMBERS
 do GetDungeonLabelChar <- fun i -> GetDungeon(i).LabelChar
+
+
+
 let GetTriforceHaves() =
     if IsHiddenDungeonNumbers() then
         let haves = Array.zeroCreate 8
@@ -975,6 +1021,7 @@ do
 // Map
 
 let mutable owInstance = new OverworldData.OverworldInstance(OverworldData.OWQuest.FIRST)
+let overworldQuestChanged = new Event<unit>()   // fired when reinitializeOverworld switches to a new quest
 
 let mapLastChangedTime = new LastChangedTime()
 let overworldMapCircles = Array2D.create 16 8 0   // 0 means none, 1 means just circle, 48-57 means circle with 0-9 label, 65-90 means circle with A-Z label; +100 of those or +200 of those changes color
@@ -994,10 +1041,18 @@ let prevOverworldMapCircleColor(i,j) =
         overworldMapCircles.[i,j] <- overworldMapCircles.[i,j] - 300
 let mutable overworldMapMarks : Cell[,] = null
 let private overworldMapExtraData = Array2D.init 16 8 (fun _ _ -> Array.zeroCreate (MapSquareChoiceDomainHelper.DARK_X+1))
-// extra data key-value store, used by 
-//  - 3-item shops to store the second item, key for all shops is SHOP, value 0 is none and 1-MapStateProxy.NUM_ITEMS are those items
+// Per-shop price notes: 0 = not set, positive value = rupee price the user recorded for that shop
+let overworldShopPrices = Array2D.create 16 8 0
+let getShopPrice(i,j) = overworldShopPrices.[i,j]
+let setShopPrice(i,j,v:int) =
+    overworldShopPrices.[i,j] <- v
+    mapLastChangedTime.SetNow()
+// extra data key-value store, used by
+//  - 3-item shops to store the second and third items; key for all shops is SHOP
+//    encoding: ed = item2_1based + 9 * item3_1based  (0=none, 1-8=item)
+//    backward compat: old saves with ed ∈ {0..8} decode as item2=ed, item3=0
 //  - various others store a brightness toggle, key is <mapstate>, value is 0 or <mapstate>
-let getOverworldMapExtraData(i,j,k) = 
+let getOverworldMapExtraData(i,j,k) =
 #if DEBUG
     let cur = overworldMapMarks.[i,j].Current()
     if cur=k || (MapSquareChoiceDomainHelper.IsItem(cur) && k=MapSquareChoiceDomainHelper.SHOP) then
@@ -1005,10 +1060,18 @@ let getOverworldMapExtraData(i,j,k) =
     else
         printfn "dodgy, but there are legal times to be here, e.g. popup redrawing-on-hover when changing from non-shop to shop"  // put a breakpoint here for debugging
 #endif
-    overworldMapExtraData.[i,j].[k]
-let setOverworldMapExtraData(i,j,k,v) = 
-    overworldMapExtraData.[i,j].[k] <- v
-    mapLastChangedTime.SetNow()
+    if k < 0 || k > MapSquareChoiceDomainHelper.DARK_X then
+        0  // or some other sensible default fallback
+    else
+        overworldMapExtraData.[i,j].[k]
+let setOverworldMapExtraData(i,j,k,v) =
+    if k >= 0 && k <= MapSquareChoiceDomainHelper.DARK_X then
+        overworldMapExtraData.[i,j].[k] <- v
+        mapLastChangedTime.SetNow()
+// Helpers for 3-item shop encoding: ed = item2_1based + 9 * item3_1based
+let getShopItem2_1based(i,j) = getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) % 9
+let getShopItem3_1based(i,j) = getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) / 9
+let setShopItems(i,j,item2_1based,item3_1based) = setOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP, item2_1based + 9*item3_1based)
 let NOTFOUND = (-1,-1)
 let magsCaveFound, woodSwordCaveFound, foundBlueRingShop, foundBookShop, foundCandleShop, foundArrowShop, foundBombShop, havePotionLetter = 
     new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false), new EventingBool(false)
@@ -1092,7 +1155,7 @@ let recomputeMapStateSummary() =
                         (owInstance.Bombable(i,j) && not(playerProgressAndTakeAnyHearts.PlayerHasBombs.Value())) ||
                         (owInstance.Burnable(i,j) && playerComputedStateSummary.CandleLevel=0) then
                         ()  // not routeworthy, as the player can't uncover the spot... except...
-                        if i=15 && j=2 && TrackerModelOptions.Overworld.DrawRoutes.Value && TrackerModelOptions.Overworld.RoutesCanScreenScroll.Value && MirrorOverworld then
+                        if i=15 && j=2 && TrackerModelOptions.Overworld.DrawRoutes.Value && (not TrackerModelOptions.RaceMode.Value) && TrackerModelOptions.Overworld.RoutesCanScreenScroll.Value && MirrorOverworld then
                             owRouteworthySpots.[i,j] <- true  // can screen scroll to coast island; even though is out-of-logic, is good to teach that is possible
                     else
                         owRouteworthySpots.[i,j] <- true
@@ -1102,23 +1165,16 @@ let recomputeMapStateSummary() =
                         owSpotsRemain <- owSpotsRemain + 1         // un-revealed spots count as remaining
                 | n -> 
                     if MapSquareChoiceDomainHelper.IsItem(n) then // shop
-                        let item = MapSquareChoiceDomainHelper.BLUE_RING
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundBlueRingShop_ <- true
-                        let item = MapSquareChoiceDomainHelper.BOOK
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundBookShop_ <- true
-                        let item = MapSquareChoiceDomainHelper.BLUE_CANDLE
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundCandleShop_ <- true
-                        let item = MapSquareChoiceDomainHelper.ARROW
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundArrowShop_ <- true
-                        let item = MapSquareChoiceDomainHelper.BOMB
-                        if n = item || (getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.SHOP) = MapSquareChoiceDomainHelper.ToItem(item)) then
-                            foundBombShop_ <- true
+                        let item2 = getShopItem2_1based(i,j)
+                        let item3 = getShopItem3_1based(i,j)
+                        let hasItem(item) = n = item || item2 = MapSquareChoiceDomainHelper.ToItem(item) || item3 = MapSquareChoiceDomainHelper.ToItem(item)
+                        if hasItem(MapSquareChoiceDomainHelper.BLUE_RING)   then foundBlueRingShop_ <- true
+                        if hasItem(MapSquareChoiceDomainHelper.BOOK)        then foundBookShop_ <- true
+                        if hasItem(MapSquareChoiceDomainHelper.BLUE_CANDLE) then foundCandleShop_ <- true
+                        if hasItem(MapSquareChoiceDomainHelper.ARROW)       then foundArrowShop_ <- true
+                        if hasItem(MapSquareChoiceDomainHelper.BOMB)        then foundBombShop_ <- true
                     else
-                        if n=MapSquareChoiceDomainHelper.THE_LETTER && getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.THE_LETTER)=0 then 
+                        if n=MapSquareChoiceDomainHelper.THE_LETTER && getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.THE_LETTER)=MapSquareChoiceDomainHelper.THE_LETTER then
                             havePotionLetter_ <- true
                 let isInteresting = overworldMapMarks.[i,j].Current() <> -1 && overworldMapMarks.[i,j].Current() <> mapSquareChoiceDomain.MaxKey
                 if OverworldData.owMapSquaresSecondQuestOnly.[j].Chars(i) = 'X' then 
@@ -1409,6 +1465,10 @@ let GetLevelHint, SetLevelHint, LevelHintChanged =
     GetLevelHint, SetLevelHint, LevelHintChanged
 let mutable NoFeatOfStrengthHintWasGiven = false
 let mutable SailNotHintWasGiven = false
+let mutable SailToHintWasGiven = false
+let mutable PlayMelodyHintWasGiven = false
+let mutable StepOverWaterHintWasGiven = false
+let mutable FireArrowsHintWasGiven = false
 
 let mutable currentlyIgnoringForceUpdatesDuringALoad = false
 let forceUpdate() = 
@@ -1780,6 +1840,7 @@ type TimelineItemModel(desc: TimelineItemDescription) =
             finishedTotalSeconds <- -1
         itemPlayerHas <- ph
         timelineChanged.Trigger(int span.TotalMinutes)
+
     do
         // listen for changes
         match desc with
@@ -1800,6 +1861,17 @@ type TimelineItemModel(desc: TimelineItemDescription) =
     member this.Identifier = desc.Identifier
     member this.FinishedTotalSeconds = finishedTotalSeconds
     member this.Has = itemPlayerHas
+    member this.MarkDone(?remoteTimestamp: int, ?remoteHas: PlayerHas) =
+        let timestamp =
+            defaultArg remoteTimestamp (int ((System.DateTime.Now - theStartTime.Time).TotalSeconds))
+
+        if finishedTotalSeconds = -1 then
+            finishedTotalSeconds <- timestamp
+            itemPlayerHas <- defaultArg remoteHas PlayerHas.YES
+            timelineChanged.Trigger(timestamp / 60)
+
+
+
     static member TimelineChanged = timelineChanged.Publish
     static member All = all
     static member MakeAll() =
@@ -1872,8 +1944,38 @@ let initializeAll(instance:OverworldData.OverworldInstance, kind) =
     for i = 0 to 15 do
         for j = 0 to 7 do
             if owInstance.AlwaysEmpty(i,j) then
-                overworldMapMarks.[i,j].Prev()   // set to 'X'
+                overworldMapMarks.[i,j].Set(MapSquareChoiceDomainHelper.DARK_X)   // set to 'X'
     recomputeMapStateSummary()
     TimelineItemModel.MakeAll()
 
-        
+let reinitializeOverworld(newInstance: OverworldData.OverworldInstance) =
+    // Save current state before replacing data structures
+    let savedMarks = Array2D.init 16 8 (fun i j -> overworldMapMarks.[i,j].Current())
+    let oldInstance = owInstance
+
+    // Update owInstance
+    owInstance <- newInstance
+
+    // Replace ChoiceDomain (new quest may have different maxUses for a few tile types)
+    mapSquareChoiceDomain <- ChoiceDomain("mapSquare", overworldTiles(newInstance.Quest.IsFirstQuestOW, false) |> Array.map (fun (_,x,_,_) -> x))
+    mapSquareChoiceDomain.Changed.Add(fun _ -> mapLastChangedTime.SetNow())
+
+    // Replace Cell array (all reads of overworldMapMarks.[i,j] will now use new cells)
+    overworldMapMarks <- Array2D.init 16 8 (fun _ _ -> new Cell(mapSquareChoiceDomain))
+
+    // Restore marks, preserving as much data as possible
+    for i = 0 to 15 do
+        for j = 0 to 7 do
+            if newInstance.AlwaysEmpty(i,j) then
+                overworldMapMarks.[i,j].Set(MapSquareChoiceDomainHelper.DARK_X)  // set to DARK_X
+            else
+                let v = savedMarks.[i,j]
+                let wasAlwaysEmpty = oldInstance.AlwaysEmpty(i,j)
+                if not wasAlwaysEmpty && v >= 0 && mapSquareChoiceDomain.CanAddUse(v) then
+                    // Tile was interactive in old quest with a mark — restore if compatible
+                    overworldMapMarks.[i,j].Set(v)
+                // else: was AlwaysEmpty (DARK_X auto-set), was empty (-1), or mark already used elsewhere → leave at -1
+
+    recomputeMapStateSummary()
+    overworldQuestChanged.Trigger()   // notify listeners (e.g. Reminders) to reset cached spot counts
+

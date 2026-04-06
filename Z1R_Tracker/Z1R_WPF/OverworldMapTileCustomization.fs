@@ -3,6 +3,7 @@
 open System.Windows.Controls
 open System.Windows
 open System.Windows.Media
+open Z1R_Tracker.Models.Z1R_TrackerInterop
 
 let OMTW = Graphics.OMTW
 let canvasAdd = Graphics.canvasAdd
@@ -46,7 +47,7 @@ module OW_ITEM_GRID_LOCATIONS =
 type MapStateProxy(state) =
     static member NumStates = Graphics.theInteriorBmpTable.Length
     member this.State = state
-    member this.IsX = state=MapStateProxy.NumStates-1
+    member this.IsX = state=TrackerModel.MapSquareChoiceDomainHelper.DARK_X
     member this.IsDungeon = state >= 0 && state < 9
     member this.IsWarp = state >= 9 && state < 13
     member this.IsThreeItemShop = TrackerModel.MapSquareChoiceDomainHelper.IsItem(state)
@@ -118,7 +119,8 @@ let sword2LeftSideFullTileBmp =
                 fullTileBmp.SetPixel(px, py, BG)
     fullTileBmp
 
-let twoItemShopBmpCache = new System.Collections.Generic.Dictionary<_,_>()
+let twoItemShopBmpCache   = new System.Collections.Generic.Dictionary<_,_>()
+let threeItemShopBmpCache = new System.Collections.Generic.Dictionary<_,_>()
 let makeTwoItemShopBmp(item1, item2) =  // 0-based, -1 for blank
     if item1 = item2 then
         let state = item1 + TrackerModel.MapSquareChoiceDomainHelper.ARROW
@@ -151,6 +153,35 @@ let makeTwoItemShopBmp(item1, item2) =  // 0-based, -1 for blank
             twoItemShopBmpCache.Add((item1,item2), tile)
             tile
 
+let makeThreeItemShopBmp(item1, item2, item3) =  // 0-based, -1 for blank
+    match threeItemShopBmpCache.TryGetValue((item1,item2,item3)) with
+    | true, r -> r
+    | _ ->
+        let tile = new System.Drawing.Bitmap(16*3,11*3)
+        for px = 0 to 16*3-1 do
+            for py = 0 to 11*3-1 do
+                if px/3 >= 3 && px/3 <= 11 && py/3 >= 1 && py/3 <= 9 then
+                    tile.SetPixel(px, py, Graphics.itemBackgroundColor)
+                else
+                    tile.SetPixel(px, py, Graphics.TRANS_BG)
+                if item1 >= 0 then
+                    if px/3 >= 3 && px/3 <= 5 && py/3 >= 2 && py/3 <= 8 then
+                        let c = Graphics.itemsBMP.GetPixel(item1*3 + px/3-3, py/3-2)
+                        if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                            tile.SetPixel(px, py, c)
+                if item2 >= 0 then
+                    if px/3 >= 6 && px/3 <= 8 && py/3 >= 2 && py/3 <= 8 then
+                        let c = Graphics.itemsBMP.GetPixel(item2*3 + px/3-6, py/3-2)
+                        if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                            tile.SetPixel(px, py, c)
+                if item3 >= 0 then
+                    if px/3 >= 9 && px/3 <= 11 && py/3 >= 2 && py/3 <= 8 then
+                        let c = Graphics.itemsBMP.GetPixel(item3*3 + px/3-9, py/3-2)
+                        if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                            tile.SetPixel(px, py, c)
+        threeItemShopBmpCache.Add((item1,item2,item3), tile)
+        tile
+
 let temporarilyDisplayHiddenOverworldTileMarks = Array2D.create 16 8 false
 let ShouldHide(state,i,j) =
     let r = 
@@ -171,15 +202,24 @@ let IsHideableShopItem(i) = // 0-based
         
 let GetIconBMPAndExtraDecorations(cm, ms:MapStateProxy,i,j) =   // returns: (shouldAppearLikeDarkX,iconBmp,[decos])
     if ms.State = -1 then
-        false, null, []
+        // Unmarked tile; still check for a stored item icon (right-click icon feature on AlwaysEmpty tiles)
+        if TrackerModelOptions.AllowItemIconOnNonShopTile.Value then
+            let item2 = TrackerModel.getShopItem2_1based(i,j)
+            if item2 <> 0 then
+                false, Graphics.theFullTileBmpTable.[item2 - 1 + TrackerModel.MapSquareChoiceDomainHelper.ARROW].[0], []
+            else
+                false, null, []
+        else
+            false, null, []
     elif ms.IsThreeItemShop then
         let items = ResizeArray()
         items.Add(ms.State - TrackerModel.MapSquareChoiceDomainHelper.ARROW)  // 0-based
-        if TrackerModel.getOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP) <> 0 then
-            items.Add(TrackerModel.getOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP) - 1)   // 0-based
-        let itemsToShow = 
+        let item2 = TrackerModel.getShopItem2_1based(i,j)
+        let item3 = TrackerModel.getShopItem3_1based(i,j)
+        if item2 <> 0 then items.Add(item2 - 1)   // 0-based
+        if item3 <> 0 then items.Add(item3 - 1)   // 0-based
+        let itemsToShow =
             if ShouldHide(TrackerModel.MapSquareChoiceDomainHelper.SHOP, i, j) then
-                // filter out hideables
                 let itemsToShow = ResizeArray()
                 for x in items do
                     if not(IsHideableShopItem(x)) then
@@ -187,7 +227,10 @@ let GetIconBMPAndExtraDecorations(cm, ms:MapStateProxy,i,j) =   // returns: (sho
                 itemsToShow
             else
                 items
-        if itemsToShow.Count = 2 then
+        if itemsToShow.Count = 3 then
+            let tile = makeThreeItemShopBmp(itemsToShow.[0], itemsToShow.[1], itemsToShow.[2])
+            false, tile, []
+        elif itemsToShow.Count = 2 then
             let tile = makeTwoItemShopBmp(itemsToShow.[0], itemsToShow.[1])
             false, tile, []
         elif itemsToShow.Count = 1 then
@@ -293,6 +336,11 @@ let GetIconBMPAndExtraDecorations(cm, ms:MapStateProxy,i,j) =   // returns: (sho
             else
                 false, Graphics.theFullTileBmpTable.[ms.State].[0], []
     else
+        // Return just the tile bitmap; item icon overlays for marked tiles (state >= 0) are intentionally
+        // NOT shown here — they only appear on unmarked (state=-1) tiles or dark-X tiles, which are
+        // handled by the state=-1 branch above and the redrawGridSpot dark-X path respectively.
+        // Composing here caused the popup hover callback to show a spurious "letter icon" in the tile
+        // preview whenever a tile with leftover shop data was hovered over PP/WARP tiles in the selector.
         false, Graphics.theFullTileBmpTable.[ms.State].[0], []
 
 let toggleables = [| 
@@ -318,7 +366,7 @@ let mutable goToDungeon = fun (_idx:int) -> ()
 let DoLeftClick(cm:CustomComboBoxes.CanvasManager,msp:MapStateProxy,i,j,pos:Point) = async { // returns tuple of two booleans (needRedrawGridSpot, needHighlightTileHide)
     if msp.State = -1 then
         // left click empty tile changes to 'X'
-        TrackerModel.overworldMapMarks.[i,j].Prev() 
+        TrackerModel.overworldMapMarks.[i,j].Set(TrackerModel.MapSquareChoiceDomainHelper.DARK_X)
         return true, true
     elif msp.IsDungeon then
         goToDungeon(msp.State)
@@ -326,54 +374,60 @@ let DoLeftClick(cm:CustomComboBoxes.CanvasManager,msp:MapStateProxy,i,j,pos:Poin
     elif msp.IsThreeItemShop then
         popupIsActive <- true
         let item1 = msp.State - TrackerModel.MapSquareChoiceDomainHelper.ARROW  // 0-based
-        let item2 = TrackerModel.getOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP) - 1   // 0-based
+        let item2_1b = TrackerModel.getShopItem2_1based(i,j)
+        let item3_1b = TrackerModel.getShopItem3_1based(i,j)
+        let item2 = item2_1b - 1  // 0-based, -1=none
+        let item3 = item3_1b - 1  // 0-based, -1=none
         let ST = CustomComboBoxes.borderThickness
-        let tileImage = Graphics.BMPtoImage(makeTwoItemShopBmp(item1,item2))
-        let tileCanvas = new Canvas(Width=OMTW, Height=11.*3.)
-        canvasAdd(tileCanvas, tileImage, 0., 0.)
-        let originalState = if item2 = -1 then item1 else item2
-        let originalStateIndex = originalState
-        let gridxPosition = 
-            if pos.X < OMTW*2. then 
-                -ST // left align
-            elif pos.X > OMTW*13. then 
-                OMTW - float(8*(5*3+2*int ST)+int ST)  // right align
+        // If item2 not set, pick item2; else pick item3
+        let choosingItem3 = item2 >= 0
+        let currentChoice = if choosingItem3 then item3 else item2
+        let promptText = if choosingItem3 then "Choose 3rd shop item" else "Choose 2nd shop item"
+        let tileImage() =
+            if choosingItem3 then
+                makeTwoItemShopBmp(item1, item2)
             else
-                (OMTW - float(8*(5*3+2*int ST)+int ST))/2.  // center align
+                Graphics.theFullTileBmpTable.[msp.State].[0]
+        let tileCanvas = new Canvas(Width=OMTW, Height=11.*3.)
+        canvasAdd(tileCanvas, Graphics.BMPtoImage(tileImage()), 0., 0.)
+        let originalStateIndex = max 0 currentChoice
+        let gridxPosition =
+            if pos.X < OMTW*2. then
+                -ST
+            elif pos.X > OMTW*13. then
+                OMTW - float(8*(5*3+2*int ST)+int ST)
+            else
+                (OMTW - float(8*(5*3+2*int ST)+int ST))/2.
         let gridElementsSelectablesAndIDs : (FrameworkElement*bool*int)[] = Array.init 8 (fun n ->
             let i = n + TrackerModel.MapSquareChoiceDomainHelper.ARROW
             upcast Graphics.BMPtoImage(MapStateProxy(i).DefaultInteriorBmp()), true, n
             )
         let edTB1 = new TextBox(IsHitTestVisible=false, BorderThickness=Thickness(0.), FontSize=16., Margin=Thickness(2.),
-                                    VerticalContentAlignment=VerticalAlignment.Center, HorizontalContentAlignment=HorizontalAlignment.Center, 
-                                    Text="Choose 2nd shop item", 
+                                    VerticalContentAlignment=VerticalAlignment.Center, HorizontalContentAlignment=HorizontalAlignment.Center,
+                                    Text=promptText,
                                     Foreground=Brushes.Orange, Background=Brushes.Black)
-(*
-        let edTB2 = new TextBox(IsHitTestVisible=false, BorderThickness=Thickness(0.), FontSize=12., Margin=Thickness(2.),
-                                    VerticalContentAlignment=VerticalAlignment.Center, HorizontalContentAlignment=HorizontalAlignment.Center, 
-                                    Text="(Left clicking tile invokes\nthis 2nd item popup,\nRight clicking tile invokes\nwhole tile popup)", 
-                                    Foreground=Brushes.Orange, Background=Brushes.Black)
-        let edSp = new StackPanel(Orientation=Orientation.Vertical)
-        edSp.Children.Add(edTB1) |> ignore
-        edSp.Children.Add(edTB2) |> ignore
-        let edBorder = new Border(BorderThickness=Thickness(3.), BorderBrush=Brushes.Gray, Background=Brushes.Black, Child=edSp)
-*)
         let edBorder = new Border(BorderThickness=Thickness(3.), BorderBrush=Brushes.Gray, Background=Brushes.Black, Child=edTB1)
-        let extraDecorations = [(upcast edBorder : FrameworkElement), gridxPosition, -33.] //-102.]
+        let extraDecorations = [(upcast edBorder : FrameworkElement), gridxPosition, -33.]
         let! g = CustomComboBoxes.DoModalGridSelect(cm, pos.X, pos.Y, tileCanvas,
                         gridElementsSelectablesAndIDs, originalStateIndex, 0, (8, 1, 5*3, 9*3), float(5*3)/2., float(9*3)/2., gridxPosition, 11.*3.+ST,
-                        (fun (currentState) -> 
+                        (fun (currentState) ->
                             tileCanvas.Children.Clear()
-                            let tileImage = Graphics.BMPtoImage(makeTwoItemShopBmp(item1,currentState))
-                            canvasAdd(tileCanvas, tileImage, 0., 0.)
+                            let preview =
+                                if choosingItem3 then makeThreeItemShopBmp(item1, item2, currentState)
+                                else makeTwoItemShopBmp(item1, currentState)
+                            canvasAdd(tileCanvas, Graphics.BMPtoImage(preview), 0., 0.)
                             ),
                         (fun (_ea, currentState) -> CustomComboBoxes.DismissPopupWithResult(currentState)),
                         extraDecorations, CustomComboBoxes.ModalGridSelectBrushes.Defaults(), CustomComboBoxes.WarpToCenter, None, "SecondShopItem", None)
         let r =
             match g with
             | Some(currentState) ->
-                TrackerModel.setOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP,currentState+1)  // extraData is 1-based
-                true, (originalState = -1 && currentState <> -1)
+                if choosingItem3 then
+                    TrackerModel.setShopItems(i, j, item2_1b, currentState+1)
+                else
+                    TrackerModel.setShopItems(i, j, currentState+1, 0)
+                TrackerModel.mapLastChangedTime.SetNow()
+                true, (currentChoice = -1 && currentState >= 0)
             | None -> false, false
         popupIsActive <- false
         return r
@@ -386,28 +440,87 @@ let DoLeftClick(cm:CustomComboBoxes.CanvasManager,msp:MapStateProxy,i,j,pos:Poin
             return false, false
     }
 
+/// Shows the shop item icon picker when right-clicking an overworld tile that has no normal
+/// right-click context menu (i.e. AlwaysEmpty tiles). Returns true if a redraw is needed.
+let DoNonShopItemIconPopup(cm:CustomComboBoxes.CanvasManager, msp:MapStateProxy, i, j, pos:Point) = async {
+    let item2_1b = TrackerModel.getShopItem2_1based(i,j)
+    let item2 = item2_1b - 1  // 0-based, -1=none
+    let ST = CustomComboBoxes.borderThickness
+    let tileCanvas = new Canvas(Width=OMTW, Height=11.*3.)
+    if msp.State >= 0 then
+        canvasAdd(tileCanvas, Graphics.BMPtoImage(Graphics.theFullTileBmpTable.[msp.State].[0]), 0., 0.)
+    let originalStateIndex = max 0 item2
+    let gridxPosition =
+        if pos.X < OMTW*2. then
+            -ST
+        elif pos.X > OMTW*13. then
+            OMTW - float(8*(5*3+2*int ST)+int ST)
+        else
+            (OMTW - float(8*(5*3+2*int ST)+int ST))/2.
+    let gridElementsSelectablesAndIDs : (FrameworkElement*bool*int)[] = Array.init 8 (fun n ->
+        let idx = n + TrackerModel.MapSquareChoiceDomainHelper.ARROW
+        upcast Graphics.BMPtoImage(MapStateProxy(idx).DefaultInteriorBmp()), true, n
+        )
+    let edTB1 = new TextBox(IsHitTestVisible=false, BorderThickness=Thickness(0.), FontSize=16., Margin=Thickness(2.),
+                                VerticalContentAlignment=VerticalAlignment.Center, HorizontalContentAlignment=HorizontalAlignment.Center,
+                                Text="Mark item icon",
+                                Foreground=Brushes.Orange, Background=Brushes.Black)
+    let edBorder = new Border(BorderThickness=Thickness(3.), BorderBrush=Brushes.Gray, Background=Brushes.Black, Child=edTB1)
+    let extraDecorations = [(upcast edBorder : FrameworkElement), gridxPosition, -33.]
+    let! g = CustomComboBoxes.DoModalGridSelect(cm, pos.X, pos.Y, tileCanvas,
+                    gridElementsSelectablesAndIDs, originalStateIndex, 0, (8, 1, 5*3, 9*3), float(5*3)/2., float(9*3)/2., gridxPosition, 11.*3.+ST,
+                    (fun (_currentState) -> ()),
+                    (fun (ea:System.Windows.Input.MouseButtonEventArgs, currentState) ->
+                        if ea.ChangedButton = System.Windows.Input.MouseButton.Right then
+                            CustomComboBoxes.DismissPopupWithResult(-1)  // right-click = clear icon
+                        else
+                            CustomComboBoxes.DismissPopupWithResult(currentState)),
+                    extraDecorations, CustomComboBoxes.ModalGridSelectBrushes.Defaults(), CustomComboBoxes.WarpToCenter, None, "NonShopItemIcon", None)
+    return
+        match g with
+        | Some(-1) ->  // right-click = clear stored item icon
+            TrackerModel.setShopItems(i, j, 0, 0)
+            TrackerModel.mapLastChangedTime.SetNow()
+            true
+        | Some(currentState) ->
+            TrackerModel.setShopItems(i, j, currentState+1, 0)
+            TrackerModel.mapLastChangedTime.SetNow()
+            true
+        | None -> false
+    }
+
 ///////////////////////////////////////////////////
 
 let DoSpecialHotKeyHandlingForOverworldTiles(i, j, originalState, hotKeyedState) =
     // rather than have many idempotent keys, turn some of them into useful actions
     let orig = MapStateProxy(originalState)
     if orig.IsThreeItemShop then
-        let item2 = TrackerModel.getOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP) - 1   // 0-based
+        let item2_1b = TrackerModel.getShopItem2_1based(i,j)
+        let item3_1b = TrackerModel.getShopItem3_1based(i,j)
+        let item2 = item2_1b - 1  // 0-based, -1=none
+        let item3 = item3_1b - 1  // 0-based, -1=none
         let item2AsState = item2 + TrackerModel.MapSquareChoiceDomainHelper.ARROW
+        let item3AsState = item3 + TrackerModel.MapSquareChoiceDomainHelper.ARROW
         if hotKeyedState = originalState then           // pressed same key as left item
             if item2 = -1 then
                 -1   // no second item, so turn back to empty tile
             else
                 item2AsState   // change first item to second item
         elif MapStateProxy(hotKeyedState).IsThreeItemShop then
-            // first item is a different shop, is hotkey the second item? if so can manipulate
-            if item2AsState = hotKeyedState then        // pressed same key as right item
-                TrackerModel.setOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP, 0)  // remove item2
-                originalState   // tell caller not to change item1, despite the hotkey
-            elif item2 = -1 then
+            if item2AsState = hotKeyedState then        // pressed same key as item2 → remove item2 and item3
+                TrackerModel.setShopItems(i, j, 0, 0)
+                originalState
+            elif item3 >= 0 && item3AsState = hotKeyedState then  // pressed same key as item3 → remove item3
+                TrackerModel.setShopItems(i, j, item2_1b, 0)
+                originalState
+            elif item2 = -1 then                        // no item2 yet → set as item2
                 let v = hotKeyedState - TrackerModel.MapSquareChoiceDomainHelper.ARROW + 1
-                TrackerModel.setOverworldMapExtraData(i,j,TrackerModel.MapSquareChoiceDomainHelper.SHOP, v)  // add as item2
-                originalState   // tell caller not to change item1, despite the hotkey
+                TrackerModel.setShopItems(i, j, v, 0)
+                originalState
+            elif item3 = -1 then                        // item2 set, no item3 → set as item3
+                let v = hotKeyedState - TrackerModel.MapSquareChoiceDomainHelper.ARROW + 1
+                TrackerModel.setShopItems(i, j, item2_1b, v)
+                originalState
             else
                 hotKeyedState
         else
@@ -660,25 +773,46 @@ let MakeMappedHotKeysDisplay() =
     let blockerPanel = makePanel(TrackerModel.DungeonBlocker.All, HotKeys.BlockerHotKeyProcessor, (fun state -> 
         upcast Graphics.blockerCurrentDisplay(state)), 24, "BLOCKERS")
     let thingies = [| 
-        yield! DungeonRoomState.RoomType.All() |> Seq.map Choice1Of4
-        yield! DungeonRoomState.MonsterDetail.All() |> Seq.map Choice2Of4
-        yield! DungeonRoomState.FloorDropDetail.All() |> Seq.map Choice3Of4
+        yield! Z1R_Tracker.Models.Z1R_TrackerInterop.RoomTypeExtensions.All() |> Seq.map Choice1Of4
+        yield! Z1R_Tracker.Models.Z1R_TrackerInterop.MonsterDetailExtensions.All() |> Seq.map Choice2Of4
+        yield! Z1R_Tracker.Models.Z1R_TrackerInterop.FloorDropDetailExtensions.All() |> Seq.map Choice3Of4
         yield! HotKeys.AllDoors |> Seq.map snd |> Seq.map Choice4Of4
-        |]
+    |]
     let dungeonRoomPanel = makePanel(thingies, HotKeys.DungeonRoomHotKeyProcessor, (fun c ->
         match c with 
-        | Choice1Of4 rt -> upcast Graphics.BItoImage(rt.UncompletedBI())
-        | Choice2Of4 md -> (let i = md.Bmp() |> bmpElseSize(18,18) in (i.HorizontalAlignment <- HorizontalAlignment.Left; i))
-        | Choice3Of4 fd -> (let i = fd.Bmp() |> bmpElseSize(18,18) in (i.HorizontalAlignment <- HorizontalAlignment.Right; i))
+        | Choice1Of4 rt -> 
+            let bmp = Z1R_Tracker.Models.Z1R_TrackerInterop.RoomTypeExtensions.UncompletedBI(rt)
+            upcast Graphics.BMPtoImage(bmp)
+        | Choice2Of4 md -> 
+            let i = md.Bmp() |> bmpElseSize(18,18) 
+            i.HorizontalAlignment <- HorizontalAlignment.Left
+            i
+        | Choice3Of4 fd -> 
+            let i = fd.Bmp() |> bmpElseSize(18,18) 
+            i.HorizontalAlignment <- HorizontalAlignment.Right
+            i
         | Choice4Of4 dr -> 
-            let c = match dr.Action with DungeonRoomState.DoorAction.Increment -> Brushes.Green | _ -> Brushes.Purple
-            match dr.Direction with
-            | DungeonRoomState.DoorDirection.East -> new DockPanel(Background=c,Width=9.,Height=9.,HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center)
-            | DungeonRoomState.DoorDirection.West -> new DockPanel(Background=c,Width=9.,Height=9.,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center)
-            | DungeonRoomState.DoorDirection.North -> new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top)
-            | DungeonRoomState.DoorDirection.South -> new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Bottom)
-            |> (fun x -> let r = new DockPanel(Width=39., Height=27.) in r.Children.Add(x) |> ignore; upcast r)
-        ), 39, "DUNGEON")
+            let c = 
+                match dr.Action with 
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorAction.Increment -> Brushes.Green 
+                | _ -> Brushes.Purple
+            let panel = 
+                match dr.Direction with
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.East -> 
+                    new DockPanel(Background=c,Width=9.,Height=9.,HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center)
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.West -> 
+                    new DockPanel(Background=c,Width=9.,Height=9.,HorizontalAlignment=HorizontalAlignment.Left,VerticalAlignment=VerticalAlignment.Center)
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.North -> 
+                    new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Top)
+                | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorDirection.South -> 
+                    new DockPanel(Background=c,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Bottom)
+                | _ -> // Handle unknown values
+                    new DockPanel(Background=Brushes.Red,Width=14.,Height=9.,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center)
+            let r = new DockPanel(Width=39., Height=27.)
+            r.Children.Add(panel) |> ignore
+            upcast r
+    ), 39, "DUNGEON")
+
     let globalPanel = makePanel(HotKeys.GlobalHotkeyTargets.All, HotKeys.GlobalHotKeyProcessor, (fun state -> state.AsHotKeyDisplay()), 30, "GLOBALS")
     let all = new StackPanel(Orientation=Orientation.Horizontal)
     all.Children.Add(itemPanel) |> ignore

@@ -5,7 +5,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="..\Z1R_Tracker\OverworldData.fs" />
+    <Compile Include="..\GlobalAssemblyInfo.fs" />
+	<Compile Include="..\Z1R_Tracker\OverworldData.fs" />
     <Compile Include="..\Z1R_Tracker\TrackerModelOptions.fs" Link="TrackerModelOptions.fs" />
     <Compile Include="..\Z1R_Tracker\DungeonData.fs" />
     <Compile Include="..\Z1R_Tracker\OverworldRouting.fs" />

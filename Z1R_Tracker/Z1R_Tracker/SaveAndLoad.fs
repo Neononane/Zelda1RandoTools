@@ -52,6 +52,10 @@ type Hints() =
     member val LocationHints : int[] = null with get,set
     member val NoFeatOfStrengthHint = false with get,set
     member val SailNotHint = false with get,set
+    member val SailToHint = false with get,set
+    member val PlayMelodyHint = false with get,set
+    member val StepOverWaterHint = false with get,set
+    member val FireArrowsHint = false with get,set
 
 [<AllowNullLiteral>]
 type PlayerProgressAndTakeAnyHeartsModel() =
@@ -293,7 +297,11 @@ let SaveHints(prefix) =
     sb.Append("],") |> ignore
     lines.Add(sb.ToString())
     lines.Add(sprintf """    "NoFeatOfStrengthHint": %b,""" TrackerModel.NoFeatOfStrengthHintWasGiven)
-    lines.Add(sprintf """    "SailNotHint": %b""" TrackerModel.SailNotHintWasGiven)
+    lines.Add(sprintf """    "SailNotHint": %b,""" TrackerModel.SailNotHintWasGiven)
+    lines.Add(sprintf """    "SailToHint": %b,""" TrackerModel.SailToHintWasGiven)
+    lines.Add(sprintf """    "PlayMelodyHint": %b,""" TrackerModel.PlayMelodyHintWasGiven)
+    lines.Add(sprintf """    "StepOverWaterHint": %b,""" TrackerModel.StepOverWaterHintWasGiven)
+    lines.Add(sprintf """    "FireArrowsHint": %b""" TrackerModel.FireArrowsHintWasGiven)
     lines.Add("""},""")
     lines |> Seq.map (fun s -> prefix+s) |> Seq.toArray
 

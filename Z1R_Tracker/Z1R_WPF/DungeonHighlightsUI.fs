@@ -3,6 +3,8 @@
 open System.Windows
 open System.Windows.Controls 
 open System.Windows.Media
+open Z1R_Tracker.Models.Z1R_TrackerInterop
+
 
 let canvasAdd = Graphics.canvasAdd
 
@@ -68,19 +70,19 @@ let makeHighlights(level, dungeonTabs:TabControl, dungeonBodyHighlightCanvas:Can
             canvasAdd(setupCanvas, ellipse, float(i*51-12/2-extra), float(j*39-12/2-extra))
             roomHighlights.[i,j] <- ellipse
     let isThereARoom(x,y) =  // 0=no, 1=yes, 2=maybe
-        if roomStates.[x,y].RoomType = DungeonRoomState.RoomType.OffTheMap then
+        if roomStates.[x,y].RoomType = RoomType.OffTheMap then
             0
-        elif roomStates.[x,y].RoomType <> DungeonRoomState.RoomType.Unmarked then
+        elif roomStates.[x,y].RoomType <> RoomType.Unmarked then
             1
         else  // is Unmarked, use other context
             // never a room behind lobby arrow
-            if   y < 7 && roomStates.[x,y+1].RoomType = DungeonRoomState.RoomType.StartEnterFromN then
+            if   y < 7 && roomStates.[x,y+1].RoomType = RoomType.StartEnterFromN then
                 0
-            elif y > 0 && roomStates.[x,y-1].RoomType = DungeonRoomState.RoomType.StartEnterFromS then
+            elif y > 0 && roomStates.[x,y-1].RoomType = RoomType.StartEnterFromS then
                 0
-            elif x < 7 && roomStates.[x+1,y].RoomType = DungeonRoomState.RoomType.StartEnterFromW then
+            elif x < 7 && roomStates.[x+1,y].RoomType = RoomType.StartEnterFromW then
                 0
-            elif x > 0 && roomStates.[x-1,y].RoomType = DungeonRoomState.RoomType.StartEnterFromE then
+            elif x > 0 && roomStates.[x-1,y].RoomType = RoomType.StartEnterFromE then
                 0
             else
                 // use the vanilla map outline the user has chosen, if any
@@ -97,7 +99,7 @@ let makeHighlights(level, dungeonTabs:TabControl, dungeonBodyHighlightCanvas:Can
                         2 // there is a room there, but the player has not marked the room as existing on map, and so we want to make it a possible bomb target to get into, so report 'maybe'
                     else
                         0
-    let isThereANonZeldaRoom(x,y) = if roomStates.[x,y].RoomType = DungeonRoomState.RoomType.Zelda then 0 else isThereARoom(x,y)
+    let isThereANonZeldaRoom(x,y) = if roomStates.[x,y].RoomType = RoomType.Zelda then 0 else isThereARoom(x,y)
     let mutable isCurrentlyHighlighting = false
     let highlight() =
         if isCurrentlyHighlighting then
@@ -110,7 +112,7 @@ let makeHighlights(level, dungeonTabs:TabControl, dungeonBodyHighlightCanvas:Can
             for j = 0 to 7 do
                 if horizontalDoors.[i,j].State = Dungeon.DoorState.UNKNOWN then
                     if isThereANonZeldaRoom(i,j)+isThereANonZeldaRoom(i+1,j)=3 then // one yes and one maybe
-                        if level = 9 && (roomStates.[i,j].RoomType = DungeonRoomState.RoomType.StartEnterFromS || roomStates.[i+1,j].RoomType = DungeonRoomState.RoomType.StartEnterFromS) then
+                        if level = 9 && (roomStates.[i,j].RoomType = RoomType.StartEnterFromS || roomStates.[i+1,j].RoomType = RoomType.StartEnterFromS) then
                             () // do nothing, left/right walls of L9 lobby unbombable
                         else
                             horizontalDoorHighlights.[i,j].Opacity <- 1.0
@@ -120,27 +122,28 @@ let makeHighlights(level, dungeonTabs:TabControl, dungeonBodyHighlightCanvas:Can
                 if verticalDoors.[i,j].State = Dungeon.DoorState.UNKNOWN then
                     if isThereANonZeldaRoom(i,j)+isThereANonZeldaRoom(i,j+1)=3 then // one yes and one maybe
                         // npc hints & bomb upgrades never can bomb north
-                        if roomStates.[i,j+1].RoomType <> DungeonRoomState.RoomType.OldManHint && roomStates.[i,j+1].RoomType <> DungeonRoomState.RoomType.BombUpgrade then
+                        if roomStates.[i,j+1].RoomType <> RoomType.OldManHint && roomStates.[i,j+1].RoomType <> RoomType.BombUpgrade then
                             verticalDoorHighlights.[i,j].Opacity <- 1.0
                             anyFound <- true
         // rooms with possible continuations
         for i = 0 to 7 do
             for j = 0 to 7 do
                 // an incomplete room that might have a push-block may yet reveal a transport
-                if roomStates.[i,j].RoomType = DungeonRoomState.RoomType.MaybePushBlock && not(roomStates.[i,j].IsComplete) then
+                if roomStates.[i,j].RoomType = RoomType.MaybePushBlock && not(roomStates.[i,j].IsComplete) then
                     roomHighlights.[i,j].Opacity <- 1.0
                     anyFound <- true
                 // a '?' stair may have been forgotten to traverse
-                if roomStates.[i,j].RoomType = DungeonRoomState.RoomType.StaircaseToUnknown then
+                if roomStates.[i,j].RoomType = RoomType.StaircaseToUnknown then
                     roomHighlights.[i,j].Opacity <- 1.0
                     anyFound <- true
                 // only marked one of a transport pair
-                match roomStates.[i,j].RoomType.KnownTransportNumber with
-                | None -> ()
-                | Some n -> 
-                    if usedTransports.[n] = 1 then
-                        roomHighlights.[i,j].Opacity <- 1.0
-                        anyFound <- true
+                match Option.ofNullable (roomStates.[i,j].RoomType.KnownTransportNumber()) with
+                | Some n when usedTransports.[n] = 1 ->
+                    roomHighlights.[i,j].Opacity <- 1.0
+                    anyFound <- true
+                | _ -> ()
+
+
                 // blocked? un-traversed doorway (could be key, moat, just forgotten, ...)
                 if isThereARoom(i,j)=2 then
                     if i > 0 && horizontalDoors.[i-1,j].IsTraversible ||
@@ -185,11 +188,12 @@ Rooms that might contain un-taken transport stairs, or that you have not visited
     blockersHoverEvent.Publish.Add(fun b ->
         if level-1 = dungeonTabs.SelectedIndex then
             if b then
-                if not finishedSetup then
-                    finishedSetup <- true
-                    //printfn "finishing dungeon %d highlight setup" level
-                    dungeonBodyHighlightCanvas.Children.Add(setupCanvas) |> ignore   // this is a heavy thing, do it on-demand rather than during 'Loading UI' at start
-                highlight()
+                if not TrackerModelOptions.RaceMode.Value then
+                    if not finishedSetup then
+                        finishedSetup <- true
+                        dungeonBodyHighlightCanvas.Children.Add(setupCanvas) |> ignore
+                    highlight()
+
             else
                 unhighlight()
         )

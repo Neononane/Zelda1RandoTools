@@ -2,6 +2,12 @@
 open System.Windows
 open System.Windows.Controls 
 open System.Windows.Media
+open Z1R_Sync
+open SaveAndLoad
+open Newtonsoft.Json
+open Newtonsoft.Json.Linq
+open DungeonUI
+
 
 open CustomComboBoxes.GlobalFlag
 
@@ -189,6 +195,10 @@ let ApplyKonamiCodeEasterEgg(cm:CustomComboBoxes.CanvasManager, fe:FrameworkElem
                     } |> Async.StartImmediate
         )
 
+
+
+
+
 let mutable theDummyWindow : Window = null
 let waitForConsole = new System.Threading.ManualResetEvent(true)
 
@@ -291,6 +301,21 @@ type MyWindow() as this =
         let mutable settingsWereSuccessfullyRead = false
         TrackerModelOptions.readSettings()
         settingsWereSuccessfullyRead <- true
+        Z1R_SharedInterop.TrackerOptionsBridge.Initialize(
+            (fun () -> TrackerModelOptions.BookForHelpfulHints.Value),
+            (fun () -> TrackerModelOptions.DoDoorInference.Value)
+        ) 
+
+        //RPT try to initialize here for SyncManager
+        SyncManager.Configure(TrackerModelOptions.CoopSyncOptions.SyncUpdateUrl())
+        TrackerModelOptions.CoopSyncOptions.EnableCoopChanged.Publish.Add(fun isEnabled ->
+            if isEnabled then
+                printfn "[Sync] Co-op enabled at runtime — resetting SyncUrl"
+                SyncManager.Configure(TrackerModelOptions.CoopSyncOptions.SyncUpdateUrl())
+            else
+                printfn "[Sync] Co-op disabled at runtime — not connecting"
+               
+        )
         // some global variables have already been initialized, and so they read the default value of settings, rather than the settings we just read; this bit patches that up:
         OptionsMenu.InitializeVoice()
         OptionsMenu.hideTimerChanged.Trigger()
@@ -352,6 +377,455 @@ type MyWindow() as this =
             Graphics.canvasAdd(rootCanvas, appMainCanvas, 0., 0.)
             let cm = new CustomComboBoxes.CanvasManager(rootCanvas, appMainCanvas)
             appMainCanvas, cm
+        // Stubbed SignalR sync startup
+
+        let mutable lastOverworldSyncSource = ""
+        let mutable lastOverworldSyncTime = System.DateTime.MinValue
+
+        let shouldApplyUpdate (senderId: string) =
+            let now = System.DateTime.UtcNow
+            let elapsed = now - lastOverworldSyncTime
+            if lastOverworldSyncSource = senderId && elapsed.TotalMilliseconds < 500.0 then
+                false
+            else
+                lastOverworldSyncSource <- senderId
+                lastOverworldSyncTime <- now
+                true
+        
+        let mutable lastDungeonMapsJson = ""
+        let dungeonMapsDebouncer = Debouncer.Debouncer(500)
+
+        let handleRemoteTileChange (tileId: string, iconId: string, senderId: string) =
+            let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
+            let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
+            if senderId <> me && senderId = target then
+                try
+                    //let tileInt = int tileId
+                    //let iconInt = int iconId
+                    //TileCustomization.assignIcon cm tileInt iconInt
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Received tile change from %s: tileId=%s, iconId=%s" senderId tileId iconId)
+                 with ex ->
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Error applying tile change: %s" ex.Message)
+                else
+                    // Optional debug log for ignored messages
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Ignored tile update from senderId=%s (target=%s, me=%s)" senderId target me)
+        let handleIncomingMessage (msgType: string) (payloadJson: string) (senderId: string) (timestamp: int64) =
+            let target = TrackerModelOptions.CoopSyncOptions.TargetConsoleId
+            let me = TrackerModelOptions.CoopSyncOptions.MyConsoleId
+            if not (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
+                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Co-op disabled — ignoring incoming message: %s" msgType)
+            else
+                if senderId <> me && senderId = target then
+                    if CoopSync.alreadyReceived msgType payloadJson then
+                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Ignored duplicate message from %s" senderId)
+                    else
+                        match msgType with
+                        | "PlayerProgress" ->
+                            try
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Raw PlayerProgress payload: %s" payloadJson)
+                                let data = JsonConvert.DeserializeObject<PlayerProgressAndTakeAnyHeartsModel>(payloadJson)
+                                Application.Current.Dispatcher.Invoke(fun () ->
+                                    CoopSync.isApplyingPlayerProgressFromSync <- true
+                                    try
+                                        data.Apply()
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied PlayerProgress update from %s" senderId)
+                                    finally
+                                        CoopSync.isApplyingPlayerProgressFromSync <- false
+                                    TrackerModel.TimelineItemModel.TriggerTimelineChanged()
+                                )
+                            with ex ->
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply PlayerProgress update: %s" ex.Message)
+                        | "Items" ->
+                        
+                            if not (CoopSync.shouldApplyUpdate "Items" payloadJson timestamp) then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipping duplicate Items update from %s" senderId)
+                            elif TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipping Items update from %s — TrackerModel not initialized" senderId)
+                            else
+                                try
+                                    let data = JsonConvert.DeserializeObject<SaveAndLoad.Items>(payloadJson)
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        CoopSync.isApplyingItemsFromSync <- true
+                                        try
+                                            // Top-level flags
+                                            TrackerModel.IsHiddenDungeonNumbers <- fun () -> data.HiddenDungeonNumbers
+                                            TrackerModel.IsSecondQuestDungeons <- data.SecondQuestDungeons
+
+                                            // Top-level boxes — only apply if value has actually changed to avoid re-timestamping
+                                            if data.WhiteSwordBox.CellCurrent <> TrackerModel.sword2Box.CellCurrent() || data.WhiteSwordBox.PlayerHas <> TrackerModel.sword2Box.PlayerHas().AsInt() then
+                                                data.WhiteSwordBox.TryApply(TrackerModel.sword2Box) |> ignore
+                                            if data.LadderBox.CellCurrent <> TrackerModel.ladderBox.CellCurrent() || data.LadderBox.PlayerHas <> TrackerModel.ladderBox.PlayerHas().AsInt() then
+                                                data.LadderBox.TryApply(TrackerModel.ladderBox) |> ignore
+                                            if data.ArmosBox.CellCurrent <> TrackerModel.armosBox.CellCurrent() || data.ArmosBox.PlayerHas <> TrackerModel.armosBox.PlayerHas().AsInt() then
+                                                data.ArmosBox.TryApply(TrackerModel.armosBox) |> ignore
+
+                                            // Dungeons
+                                            data.Dungeons
+                                            |> Array.iteri (fun i dungeon ->
+                                                if dungeon <> null then
+                                                    let targetDungeon = TrackerModel.GetDungeon(i)
+                                                    let expectedLength = targetDungeon.Boxes.Length
+
+                                                    dungeon.Triforce <- targetDungeon.PlayerHasTriforce()
+
+                                                    if dungeon.Boxes = null || dungeon.Boxes.Length <> expectedLength then
+                                                        let safeBoxes =
+                                                            Array.init expectedLength (fun j ->
+                                                                if dungeon.Boxes <> null && j < dungeon.Boxes.Length && dungeon.Boxes.[j] <> null then
+                                                                    dungeon.Boxes.[j]
+                                                                else
+                                                                    new SaveAndLoad.Box()
+                                                            )
+                                                        dungeon.Boxes <- safeBoxes
+
+                                                    // Apply all properties EXCEPT Triforce (sync separately)
+                                                    targetDungeon.Color <- dungeon.Color
+                                                    targetDungeon.LabelChar <- if dungeon.LabelChar.Length > 0 then dungeon.LabelChar.[0] else '?'
+                                                    targetDungeon.PlayerHasMapOfThisDungeon <- dungeon.PlayerHasMap
+
+                                                    (dungeon.Boxes, targetDungeon.Boxes)
+                                                    ||> Array.iter2 (fun srcBox destBox ->
+                                                        // Only apply if value has actually changed to avoid re-timestamping in the timeline
+                                                        if srcBox <> null && (srcBox.CellCurrent <> destBox.CellCurrent() || srcBox.PlayerHas <> destBox.PlayerHas().AsInt()) then
+                                                            srcBox.TryApply(destBox) |> ignore
+                                                    )
+
+                                                    // If any box has an item, mark this dungeon as seen so the summary tab shows content
+                                                    if dungeon.Boxes <> null && dungeon.Boxes |> Array.exists (fun b -> b <> null && b.CellCurrent > -1) then
+                                                        DungeonUI.isFirstTimeClickingAnyRoom.[i].Value <- false
+                                            )
+
+                                            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Items update from %s (Triforce excluded)" senderId)
+                                        finally
+                                            CoopSync.isApplyingItemsFromSync <- false
+                                        // Force the timeline to redraw now that items have been applied
+                                        TrackerModel.TimelineItemModel.TriggerTimelineChanged()
+                                    )
+
+                                with ex ->
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply Items update: %s" ex.Message)
+                        | "StartingItems" ->
+                            try
+                                let data = JsonConvert.DeserializeObject<SaveAndLoad.StartingItemsAndExtrasModel>(payloadJson)
+                                Application.Current.Dispatcher.Invoke(fun () ->
+                                    for i = 0 to 7 do
+                                        TrackerModel.startingItemsAndExtras.HDNStartingTriforcePieces.[i].Set(data.HDNStartingTriforcePieces.[i])
+                                        TrackerModel.startingItemsAndExtras.PlayerHasWhiteSword.Set(data.PlayerHasWhiteSword)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasMagicalSword.Set(data.PlayerHasMagicalSword)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasSilverArrow.Set(data.PlayerHasSilverArrow)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasBow.Set(data.PlayerHasBow)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasWand.Set(data.PlayerHasWand)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasRedCandle.Set(data.PlayerHasRedCandle)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasBoomerang.Set(data.PlayerHasBoomerang)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasMagicBoomerang.Set(data.PlayerHasMagicBoomerang)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasRedRing.Set(data.PlayerHasRedRing)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasPowerBracelet.Set(data.PlayerHasPowerBracelet)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasLadder.Set(data.PlayerHasLadder)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasRaft.Set(data.PlayerHasRaft)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasRecorder.Set(data.PlayerHasRecorder)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasAnyKey.Set(data.PlayerHasAnyKey)
+                                        TrackerModel.startingItemsAndExtras.PlayerHasBook.Set(data.PlayerHasBook)
+                                        TrackerModel.startingItemsAndExtras.MaxHeartsDifferential <- data.MaxHeartsDifferential
+
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied StartingItems update from %s" senderId)
+                                )
+                            with ex ->
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply StartingItems update: %s" ex.Message)
+
+                        | "Overworld" ->
+                            if isNull TrackerModel.overworldMapMarks then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipping Overworld update — TrackerModel not initialized yet.")
+                            elif not (shouldApplyUpdate senderId) then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Ignored Overworld update from %s (too soon after last update)" senderId)
+                            else
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Raw Overworld payload: %s" payloadJson)
+                                // Apply the update safely here
+                                try
+                                    let data = JsonConvert.DeserializeObject<SaveAndLoad.Overworld>(payloadJson)
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        TrackerModel.MirrorOverworld <- data.MirrorOverworld
+                                        TrackerModel.startIconX <- data.StartIconX
+                                        TrackerModel.startIconY <- data.StartIconY
+                                        TrackerModel.customWaypointX <- data.CustomWaypointX
+                                        TrackerModel.customWaypointY <- data.CustomWaypointY
+
+                                        if data.Map <> null && data.Map.Length = 384 then
+                                            for j = 0 to 7 do
+                                                for i = 0 to 15 do
+                                                    let idx = (j * 16 + i) * 3
+                                                    let cur = data.Map.[idx]
+                                                    let ed  = data.Map.[idx + 1]
+                                                    let circ = data.Map.[idx + 2]
+                                                    TrackerModel.overworldMapMarks.[i,j].Set(cur)
+                                                    if cur <> -1 then
+                                                        let edKey = if TrackerModel.MapSquareChoiceDomainHelper.IsItem(cur) then TrackerModel.MapSquareChoiceDomainHelper.SHOP else cur
+                                                        TrackerModel.setOverworldMapExtraData(i, j, edKey, ed)
+                                                    TrackerModel.overworldMapCircles.[i,j] <- circ
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Overworld update from %s" senderId)
+                                    )
+                                with ex ->
+                                    printf "[Sync] Failed to apply Overworld update: %s" ex.Message
+                        | "Hints" ->
+                            try
+                                let data = JsonConvert.DeserializeObject<SaveAndLoad.Hints>(payloadJson)
+                                Application.Current.Dispatcher.Invoke(fun () ->
+                                    for i = 0 to 10 do
+                                        TrackerModel.SetLevelHint(i, TrackerModel.HintZone.FromIndex(data.LocationHints.[i]))
+                                    TrackerModel.NoFeatOfStrengthHintWasGiven <- data.NoFeatOfStrengthHint
+                                    TrackerModel.SailNotHintWasGiven <- data.SailNotHint
+                                    TrackerModel.SailToHintWasGiven <- data.SailToHint
+                                    TrackerModel.PlayMelodyHintWasGiven <- data.PlayMelodyHint
+                                    TrackerModel.StepOverWaterHintWasGiven <- data.StepOverWaterHint
+                                    TrackerModel.FireArrowsHintWasGiven <- data.FireArrowsHint
+
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Hints update from %s" senderId)
+                                )
+                            with ex ->
+                                printfn "[Sync] Failed to apply Hints update: %s" ex.Message
+                        | "Blockers" ->
+                            if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
+                                TrackerModelOptions.DebugConfig.Log("[Sync][Blockers] Skipping update — tracker not initialized yet.")
+                            else
+                                try
+                                    let data = JsonConvert.DeserializeObject<SaveAndLoad.Blocker[][]>(payloadJson)
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        TrackerModel.DungeonBlockersContainer.StartIgnoreChangesDuringLoad()
+                                        for i = 0 to data.Length - 1 do
+                                            for j = 0 to data.[i].Length - 1 do
+                                                let b = data.[i].[j]
+                                                if b <> null then
+                                                    let blockerKind = TrackerModel.DungeonBlocker.FromHotKeyName(b.Kind)
+                                                    TrackerModel.DungeonBlockersContainer.SetDungeonBlocker(i, j, blockerKind)
+                                                    for k = 0 to b.AppliesTo.Length - 1 do
+                                                        TrackerModel.DungeonBlockersContainer.SetDungeonBlockerAppliesTo(i, j, k, b.AppliesTo.[k])
+                                                    let actualKind = TrackerModel.DungeonBlockersContainer.GetDungeonBlocker(i, j)
+                                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync][Blockers] Applied blocker [%d,%d]: %A" i j actualKind)
+                                        TrackerModel.DungeonBlockersContainer.FinishIgnoreChangesDuringLoad()
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied Blockers update from %s" senderId)
+                                    )
+                                with ex ->
+                                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply Blockers update: %s" ex.Message)
+
+                        | "DungeonTriforce" ->
+                            if not (CoopSync.shouldApplyUpdate "DungeonTriforce" payloadJson timestamp) then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonTriforce update — no change")
+                            else
+                                try
+                                    let data = JsonConvert.DeserializeObject<CoopSync.DungeonsTriforceState>(payloadJson)
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        CoopSync.isApplyingTriforceFromSync <- true
+                                        try
+                                            for i = 0 to 8 do
+                                                let dungeon = TrackerModel.GetDungeon(i)
+                                                let has = data.Triforces.[i]
+                                                if dungeon.PlayerHasTriforce() <> has then
+                                                    dungeon.ToggleTriforce()
+                                                if has then
+                                                    DungeonUI.isFirstTimeClickingAnyRoom.[i].Value <- false
+                                            TrackerModel.mapLastChangedTime.SetNow()
+                                            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied DungeonTriforce update from %s" senderId)
+                                        finally
+                                            CoopSync.isApplyingTriforceFromSync <- false
+                                        TrackerModel.TimelineItemModel.TriggerTimelineChanged()
+                                    )
+                                with ex ->
+                                    printfn "[Sync] Failed to apply DungeonTriforce update: %s" ex.Message
+                        | "DungeonMaps" ->
+                            if not (CoopSync.shouldApplyUpdate "DungeonMaps" payloadJson timestamp) then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update — no change")
+                            elif TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsNone then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update from %s — TrackerModel not initialized" senderId)
+                            elif payloadJson = lastDungeonMapsJson then
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Skipped DungeonMaps update from %s — duplicate payload" senderId)
+                            elif senderId = TrackerModelOptions.CoopSyncOptions.MyConsoleId then
+                                TrackerModelOptions.DebugConfig.Log("[Sync] Skipped DungeonMaps update — echo from self")
+                            else
+                                lastDungeonMapsJson <- payloadJson
+                                CoopSync.dungeonMapsSyncOrigin.MarkSyncedNow()
+                                // Record that we've "sent" this payload so our own poller won't re-broadcast it
+                                CoopSync.lastSentDungeonMapsPayload <- payloadJson
+                                try
+                                    let dungeonModels = JsonConvert.DeserializeObject<DungeonSaveAndLoad.DungeonModel[]>(payloadJson)
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        CoopSync.isApplyingRoomFromSync <- true
+                                        CoopSync.dungeonMapsSyncOrigin.MarkSyncStart()
+                                        try
+                                            for level = 0 to 8 do
+                                                let dm = dungeonModels.[level]
+                                                // Skip if null or if RoomIsCircled/RoomStates are not fully populated (e.g. sender had uninitialized dungeon)
+                                                let isValid =
+                                                    not (System.Object.ReferenceEquals(dm, null)) &&
+                                                    not (System.Object.ReferenceEquals(dm.RoomIsCircled, null)) &&
+                                                    dm.RoomIsCircled.Length = 8 &&
+                                                    not (System.Object.ReferenceEquals(dm.RoomStates, null)) &&
+                                                    dm.RoomStates.Length = 8
+                                                if isValid then
+                                                    try
+                                                        DungeonUI.importFunctions.[level](dm)
+                                                    with ex ->
+                                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply DungeonMaps for level %d: %s" level ex.Message)
+                                            // Update lastSentTime AFTER import so that SetNow() calls during import
+                                            // don't produce a timestamp newer than lastSentTime (which would cause re-broadcast)
+                                            CoopSync.lastSentTime <- DateTime.Now
+                                            CoopSync.dungeonMapsSyncOrigin.MarkSyncedNow()
+                                            let hash = CoopSync.computeHash payloadJson
+                                            CoopSync.lastAppliedHashes.["DungeonMaps"] <- hash
+                                            CoopSync.lastSentHashes.["DungeonMaps"] <- hash
+                                        finally
+                                            CoopSync.dungeonMapsSyncOrigin.MarkSyncEnd()
+                                            CoopSync.isApplyingRoomFromSync <- false
+                                    )
+                                with ex ->
+                                    printfn "[Sync] Failed to apply DungeonMaps update: %s" ex.Message
+                        | "HiddenDungeonColorLabel" ->
+                           try
+                               if TrackerModel.IsHiddenDungeonNumbers()
+                               && TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome then
+                                   let data = JsonConvert.DeserializeObject<Newtonsoft.Json.Linq.JObject>(payloadJson)
+                                   let i = data.["Index"].ToObject<int>()
+                                   let color = data.["Color"].ToObject<int>()
+                                   let labelChar = data.["LabelChar"].ToObject<string>()
+                                   Application.Current.Dispatcher.Invoke(fun () ->
+                                       let dungeon = TrackerModel.GetDungeon(i)
+                                       dungeon.Color <- color
+                                       dungeon.LabelChar <- if not (String.IsNullOrEmpty(labelChar)) then labelChar.[0] else '?'
+                                       TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied HiddenDungeonColorLabel update to dungeon %d from %s" i senderId)
+                                   )
+                           with ex ->
+                               TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply HiddenDungeonColorLabel update: %s" ex.Message)
+                        | "DoorChange" ->
+                            try
+                                let data = JsonConvert.DeserializeObject<CoopSync.DoorChangePayload>(payloadJson)
+                                let key = sprintf "DoorChange_%d_%d_%d_%b" data.Level data.X data.Y data.IsHorizontal
+                                if TrackerModel.DungeonTrackerInstance.TheDungeonTrackerInstanceOption.IsSome && CoopSync.shouldApplyUpdate "DoorChange" payloadJson timestamp && not (SyncManager.ShouldSuppressDoorChange payloadJson) && (CoopSync.isDoorChangeFresh data.Level data.X data.Y data.IsHorizontal timestamp) && not(CoopSync.isRecentlySentByUs key 5000)then
+                                    CoopSync.recordDoorTimestamp data.Level data.X data.Y data.IsHorizontal timestamp
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        try
+                                            let newState = Dungeon.DoorInterop.fromString data.NewState.Case
+                                            let door =
+                                                if data.IsHorizontal then
+                                                    DungeonUI.getHorizontalDoor data.Level data.X data.Y
+                                                else
+                                                    DungeonUI.getVerticalDoor data.Level data.X data.Y
+
+                                            if door.State <> newState then
+                                                CoopSync.isApplyingRoomFromSync <- true
+                                                try
+                                                    door.State <- newState
+                                                finally
+                                                    CoopSync.isApplyingRoomFromSync <- false
+                                                TrackerModelOptions.DebugConfig.Log(
+                                                    sprintf "[Sync] Applied DoorChange at L%d %s (%d,%d) -> %s"
+                                                        data.Level
+                                                        (if data.IsHorizontal then "H" else "V")
+                                                        data.X
+                                                        data.Y
+                                                        data.NewState.Case
+                                                )
+                                        with ex2 ->
+                                            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] DoorChange internal error: %s" ex2.Message)
+                                    )
+                            with ex ->
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply DoorChange update: %s" ex.Message)
+
+                        | "RoomChange" ->
+                            try
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Raw RoomChange payload: %s" payloadJson)
+                                let data = JsonConvert.DeserializeObject<CoopSync.RoomChangePayload>(payloadJson)
+                                let key = sprintf "DungeonRoom_%d_%d_%d" data.Level data.X data.Y
+                                if CoopSync.shouldApplyUpdate "RoomChange" payloadJson timestamp && (CoopSync.isRoomChangeFresh data.Level data.X data.Y timestamp) && not (CoopSync.isRecentlySentByUs key 5000) then
+                                    CoopSync.recordRoomTimestamp data.Level data.X data.Y timestamp
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        CoopSync.isApplyingRoomFromSync <- true
+                                        try
+                                            Z1R_Tracker.Models.RoomSyncBridge.ApplyRoomChangeFromSync(
+                                                data.Level,
+                                                data.X,
+                                                data.Y,
+                                                data.IsComplete,
+                                                data.RoomType,
+                                                data.MonsterDetail,
+                                                data.FloorDropDetail,
+                                                data.FloorDropAppearsBright
+                                            )
+
+                                            match DungeonUI.redrawAllRoomsPublic with
+                                            | Some f ->
+                                                TrackerModelOptions.DebugConfig.Log("[Sync] Calling redrawAllRoomsPublic after room sync")
+                                                f()
+                                            | None ->
+                                                TrackerModelOptions.DebugConfig.Log("[Sync] redrawAllRoomsPublic was None — cannot redraw")
+                                        finally
+                                            CoopSync.isApplyingRoomFromSync <- false
+                                    )
+                            with ex ->
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply RoomChange update: %s" ex.Message)
+                        | "OverworldTile" ->
+                            try
+                                let data = JsonConvert.DeserializeObject<CoopSync.OverworldTileUpdate>(payloadJson)
+                                if CoopSync.shouldApplyUpdate "OverworldTile" payloadJson timestamp then
+                                    Application.Current.Dispatcher.Invoke(fun () ->
+                                        TrackerModel.overworldMapMarks.[data.X, data.Y].Set(data.MapTileValue)
+                                        if data.MapTileValue <> -1 then
+                                            // Shop tiles store extra data under SHOP key; use the same key the sender used
+                                            let edKey = if TrackerModel.MapSquareChoiceDomainHelper.IsItem(data.MapTileValue) then TrackerModel.MapSquareChoiceDomainHelper.SHOP else data.MapTileValue
+                                            TrackerModel.setOverworldMapExtraData(data.X, data.Y, edKey, data.ExtraData)
+                                        TrackerModel.overworldMapCircles.[data.X, data.Y] <- data.CircleValue
+                                        TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Applied OverworldTile (%d,%d) update from %s" data.X data.Y senderId)
+                                    )
+                            with ex ->
+                                TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Failed to apply OverworldTile update: %s" ex.Message)
+
+                        | _ ->
+                            TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Unknown messageType: %s" msgType)
+                else
+                    TrackerModelOptions.DebugConfig.Log(sprintf "[Sync] Ignored sync message from senderId=%s (target=%s, me=%s)" senderId target me)
+
+        //let negotiateUrl = (TrackerModelOptions.CoopSyncOptions.NegotiateUrl())
+        // THIS is the correct way to run async without causing the Async<'T> comparison error
+        let tryStartSignalRConnection() =
+            Async.StartImmediate(async {
+                try
+                    do! SyncManager.StartAsync(TrackerModelOptions.CoopSyncOptions.NegotiateUrl()) |> Async.AwaitTask
+                    //CoopSync.subscribeToPlayerProgressChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+                    //CoopSync.subscribeToStartingItemsAndExtrasChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+                    //CoopSync.subscribeToItemsChanges(TrackerModelOptions.CoopSyncOptions.MyConsoleId)
+                    // Tile-specific handler
+                    let tileHandlerDelegate = System.Action<string, string, string>(fun tileId iconId senderId ->
+                        handleRemoteTileChange(tileId, iconId, senderId)
+                    )
+                    SyncManager.SetTileChangeHandler(tileHandlerDelegate)
+
+                    // General message handler (e.g. PlayerProgress)
+                    let messageHandlerDelegate = System.Action<string, string, string, int64>(fun messageType payloadJson senderId timestamp ->
+                        handleIncomingMessage messageType payloadJson senderId timestamp
+                    )
+                    SyncManager.SetSyncMessageHandler(messageHandlerDelegate)
+
+
+                    printfn "[Sync] Connected to Azure SignalR via negotiate"
+                with ex ->
+                    printfn "[Sync] ERROR: %s" ex.Message
+                    match ex with
+                    | :? System.AggregateException as agg ->
+                        for inner in agg.InnerExceptions do
+                        printfn "[Sync] Inner exception: %s" inner.Message
+                    | _ -> ()
+            })
+        if (TrackerModelOptions.CoopSyncOptions.GetEnableCoop()) then
+            tryStartSignalRConnection()
+        else
+            printfn "[Sync] Co-op disabled — not starting SignalR connection"
+        TrackerModelOptions.CoopSyncOptions.EnableCoopChanged.Publish.Add(fun isEnabled ->
+            if isEnabled then
+                printfn "[Sync] Co-op enabled at runtime — connecting to Azure SignalR"
+                tryStartSignalRConnection()
+            else
+                printfn "[Sync] Co-op disabled at runtime — not connecting"
+                // Optional: implement disconnect logic here
+        )
+
+
         let wholeCanvas, hmsTimerCanvas = new Canvas(), new Canvas()
         this.Content <- wholeCanvas
         this.Loaded.Add(fun _ -> 
@@ -733,7 +1207,7 @@ type MyWindow() as this =
                 if n = 999 then
                     let ofd = new Microsoft.Win32.OpenFileDialog()
                     ofd.InitialDirectory <- System.AppDomain.CurrentDomain.BaseDirectory
-                    ofd.Filter <- "ZTracker saves|zt-save-*.json|All Files|*.*"
+                    ofd.Filter <- "ZTracker saves|zt-save-*.json|All JSON files|*.json|All Files|*.*"
                     let r = ofd.ShowDialog(this)
                     if r.HasValue && r.Value then
                         try
@@ -882,6 +1356,10 @@ type MyWindow() as this =
                 if n<=3 then addQuestExplainer(startButton)
             startButton.Click.Add(fun _ -> startButtonBehavior(n))
 
+        stackPanel.Children.Add(finalChildTipArea) |> ignore  // finalChildTipArea still used for explainer arrows on startup options
+
+        // Tip lives inside bottomSP so it's in proper layout flow — can never overlap the Settings header
+        let bottomSP = new StackPanel(Orientation=Orientation.Vertical, HorizontalAlignment=HorizontalAlignment.Center)
         let tipsp = new StackPanel(Orientation=Orientation.Vertical)
         let tb = MakeTipTextBox("Random tip:")
         tipsp.Children.Add(tb) |> ignore
@@ -889,13 +1367,10 @@ type MyWindow() as this =
         //let tb = MakeTipTextBox(DungeonData.Factoids.allTips |> Array.sortBy (fun s -> s.Length) |> Seq.last)   // show the longest tip (to test screen layout)
         tb.Margin <- spacing
         tipsp.Children.Add(tb) |> ignore
-        stackPanel.Children.Add(finalChildTipArea) |> ignore
-        let tip = new Border(Child=tipsp, BorderThickness=Thickness(1.), Padding=Thickness(5.), BorderBrush=Brushes.Orange, Width=WIDTH*2./3.)
-        Graphics.canvasAdd(finalChildTipArea, tip, WIDTH/6. - CHROME_WIDTH/2., 55.)
-
-        let bottomSP = new StackPanel(Orientation=Orientation.Vertical, HorizontalAlignment=HorizontalAlignment.Center)
+        let tip = new Border(Child=tipsp, BorderThickness=Thickness(1.), Padding=Thickness(5.), BorderBrush=Brushes.Orange, Width=WIDTH*2./3., Margin=Thickness(0.,4.,0.,4.), HorizontalAlignment=HorizontalAlignment.Center)
+        bottomSP.Children.Add(tip) |> ignore
         bottomSP.Children.Add(new Shapes.Rectangle(HorizontalAlignment=HorizontalAlignment.Stretch, Fill=Brushes.Black, Height=2., Margin=spacing)) |> ignore
-        let tb = new TextBox(Text="Settings (most can be changed later, using 'Options...' button above timeline):", HorizontalAlignment=HorizontalAlignment.Center, 
+        let tb = new TextBox(Text="Settings (most can be changed later, using 'Options...' button above timeline):", HorizontalAlignment=HorizontalAlignment.Center,
                                 Margin=Thickness(0.,0.,0.,5.), BorderThickness=Thickness(0.))
         bottomSP.Children.Add(tb) |> ignore
         let options = OptionsMenu.makeOptionsCanvas(cm, false, true)
@@ -999,20 +1474,35 @@ let main _argv =
     let thisExe = System.IO.Path.Combine(cwd, Graphics.ExeName)
     let thisExeName = thisExe.Replace('\\', '_')   // backslash is not allowed character in mutex name
     use mutex = new System.Threading.Mutex(false, thisExeName)
+    let killAnyZombieHosts () =
+        let procs = System.Diagnostics.Process.GetProcessesByName("Z1R_SignalRHost")
+        for p in procs do
+            try p.Kill() with _ -> ()
+
     let runTheApp() =
+        System.AppDomain.CurrentDomain.ProcessExit.Add(fun _ ->
+            Dungeon.stopLocalSignalRHost()
+        )
+        killAnyZombieHosts()
         let app = new Application()
 #if DEBUG
         do
 #else
         try
 #endif
+            //startLocalSignalRHost()
             theDummyWindow <- DummyWindow()
+            app.Exit.Add(fun _ -> Dungeon.stopLocalSignalRHost())
             app.Run(theDummyWindow) |> ignore
+
 #if DEBUG
 #else
         with e ->
-            printfn "crashed with exception"
-            printfn "%s" (e.ToString())
+            let crashLog = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "Z1R_Tracker_crash_log.txt")
+            try
+                System.IO.File.AppendAllText(crashLog, sprintf "\n\nBEGIN CRASH LOG (startup) -- %s\n%s\nEND CRASH LOG\n" (System.DateTime.Now.ToString("yyyy-MM-dd-HH:mm:ss")) (e.ToString()))
+            with _ -> ()
+            reraise()
 #endif
    
     try
@@ -1032,5 +1522,6 @@ let main _argv =
         printfn "(Press a key to dismiss this console window)"
         System.Console.ReadKey() |> ignore
 
+    Dungeon.stopLocalSignalRHost()
     Async.RunSynchronously(Async.AwaitWaitHandle(waitForConsole)) |> ignore
     0

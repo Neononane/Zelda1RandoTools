@@ -17,15 +17,27 @@ let InitializeVoice() =
 let mutable microphoneFailedToInitialize = false
 let mutable gamepadFailedToInitialize = false
 
+let mutable userWantsMute = false
+let mutable raceModeMuted = false
+
+
+
+
 let broadcastWindowOptionChanged = new Event<unit>()
 let mouseMagnifierWindowOptionChanged = new Event<unit>()
 let BOARDInsteadOfLEVELOptionChanged = new Event<unit>()
+let displayIconsInDungeonMapOptionChanged = new Event<unit>()
 let secondQuestDungeonsOptionChanged = new Event<unit>()
 let showBasementInfoOptionChanged = new Event<unit>()
 let bookForHelpfulHintsOptionChanged = new Event<unit>()
 let requestRedrawOverworldEvent = new Event<unit>()
 let hideTimerChanged = new Event<unit>()
 let dungeonSunglassesChanged = new Event<unit>()
+let raceModeChanged = new Event<unit>()
+
+let isValidUrl (url: string) =
+    System.Uri.TryCreate(url, System.UriKind.Absolute) |> fst
+
 
 let link(cb:CheckBox, b:TrackerModelOptions.Bool, needFU, otherEffect) =
     let effect() = 
@@ -47,38 +59,169 @@ let data1o(isStandardHyrule) =
 // now a clickable feature of top tracker area
 //    yield "Mirror overworld", "Flip the overworld map East<->West", TrackerModelOptions.Overworld.MirrorOverworld, true, (fun()->()), None
     yield "Shops before dungeons", "In the overworld map tile popup, the grid starts with shops when this is checked\n(starts with dungeons when unchecked)", TrackerModelOptions.Overworld.ShopsFirst, false, (fun()->()), None
+    yield "Non-shop item icons", "When enabled, right-clicking an overworld tile that has no other right-click action lets you add an extra item icon overlay\n(e.g. mark a bomb dropper with a bomb icon). Off by default.", TrackerModelOptions.AllowItemIconOnNonShopTile, false, (fun()->()), None
+    yield "Custom marker tiles", "When enabled, the tile selector popup includes two personal-preference marker tiles\n(asterisk and diamond) you can place on overworld spots for custom notes. Off by default.", TrackerModelOptions.PersonalPrefMarkersEnabled, false, (fun()->()), None
     |]
 
 let data1d = [|
     "BOARD instead of LEVEL", "Check this to change the dungeon column labels to BOARD-N instead of LEVEL-N", TrackerModelOptions.BOARDInsteadOfLEVEL, false, BOARDInsteadOfLEVELOptionChanged.Trigger
+    "Dungeon Map Hint", "Check this box to add a transparent icon to the dungeon map rooms in order to better guess where that room is", TrackerModelOptions.DisplayIconsInDungeonMap, false, displayIconsInDungeonMapOptionChanged.Trigger
 // now a clickable feature of top tracker area
 //    "Second quest dungeons", "Check this if dungeon 4, rather than dungeon 1, has 3 items (no effect when Hidden Dungeon Numbers)", TrackerModelOptions.IsSecondQuestDungeons, false, secondQuestDungeonsOptionChanged.Trigger
     "Show basement info", "Check this if empty dungeon item boxes should suggest whether they are found as\nbasement items rather than floor drops (no effect when Hidden Dungeon Numbers)", TrackerModelOptions.ShowBasementInfo, false, showBasementInfoOptionChanged.Trigger
     "Do door inference", "Check this to mark a green door when you mark a new room, if the point of entry can be inferred", TrackerModelOptions.DoDoorInference, false, fun()->()
     "Book for Helpful Hints", "Check this if both 'Book To Understand Old Men' flag is on, and\n'Helpful' hints are available. The tracker will let you left-click\nOld Man Hint rooms to toggle whether you have read them yet.", TrackerModelOptions.BookForHelpfulHints, false, bookForHelpfulHintsOptionChanged.Trigger
+    "Alphabetize hint zone list", "When checked, the hint zone dropdown (where you mark which zone a dungeon/sword is in)\nshows zones in alphabetical order instead of geographic order.", TrackerModelOptions.AlphabetizeHintZones, false, (fun()->())
     "Left-drag auto-inverts", "Painting maps: When checked, If your first drag is with left-click,\nand you've not yet inverted OffTheMap with Unmarked, then\nauto-invert when left-click-dragging, to immediately start painting a map.", TrackerModelOptions.LeftClickDragAutoInverts, false, (fun()->())
     "Default to NonDescript", "Room default: When checked, clicking an Unmarked room will mark it as\nNonDescript (empty box) rather than MaybePushBlock (box with two dots)", TrackerModelOptions.DefaultRoomPreferNonDescriptToMaybePushBlock, false, (fun()->())
     "Dungeon 'sunglasses'", "The dungeon tracker has high contrast (bright colors against black);\nTurn this on to darken the colors somewhat to reduce bright contrast", TrackerModelOptions.GiveDungeonTrackerSunglasses, false, dungeonSunglassesChanged.Trigger
+    "Reverse scroll wheel", "When unchecked: scroll up = monster popup, scroll down = floor-drop/item popup.\nWhen checked: scroll up = floor-drop/item popup, scroll down = monster popup.\n(Dungeon rooms)", TrackerModelOptions.ReverseScrollWheelDirection, false, (fun()->())
     |]
 
 let data2 = [|
-    TrackerModel.ReminderCategory.DungeonFeedback.DisplayName, "Note when dungeons are located/completed, triforces obtained, and go-time", 
+    TrackerModel.ReminderCategory.DungeonFeedback.DisplayName, "Note when dungeons are located/completed, triforces obtained, and go-time",
         TrackerModelOptions.VoiceReminders.DungeonFeedback, TrackerModelOptions.VisualReminders.DungeonFeedback
-    TrackerModel.ReminderCategory.SwordHearts.DisplayName, "Remind to consider white/magical sword when you get 4-6 or 10-14 hearts", 
+    TrackerModel.ReminderCategory.SwordHearts.DisplayName, "Remind to consider white/magical sword when you get 4-6 or 10-14 hearts",
         TrackerModelOptions.VoiceReminders.SwordHearts,     TrackerModelOptions.VisualReminders.SwordHearts
-    TrackerModel.ReminderCategory.CoastItem.DisplayName, "Reminder to fetch to coast item when you have the ladder", 
+    TrackerModel.ReminderCategory.CoastItem.DisplayName, "Reminder to fetch to coast item when you have the ladder",
         TrackerModelOptions.VoiceReminders.CoastItem,       TrackerModelOptions.VisualReminders.CoastItem
-    TrackerModel.ReminderCategory.RecorderPBSpotsAndBoomstickBook.DisplayName, "Periodic reminders of how many recorder/power-bracelet spots remain, or that the boomstick is available", 
-        TrackerModelOptions.VoiceReminders.RecorderPBSpotsAndBoomstickBook, TrackerModelOptions.VisualReminders.RecorderPBSpotsAndBoomstickBook
-    TrackerModel.ReminderCategory.HaveKeyLadder.DisplayName, "One-time reminder, a little while after obtaining these items, that you have them", 
-        TrackerModelOptions.VoiceReminders.HaveKeyLadder,   TrackerModelOptions.VisualReminders.HaveKeyLadder
-    TrackerModel.ReminderCategory.Blockers.DisplayName, "Reminder when you may have become unblocked on a previously-aborted dungeon", 
+    TrackerModel.ReminderCategory.RecorderSpots.DisplayName, "Periodic reminder of how many recorder spots remain (fires at reminder interval)",
+        TrackerModelOptions.VoiceReminders.RecorderSpots,   TrackerModelOptions.VisualReminders.RecorderSpots
+    TrackerModel.ReminderCategory.PowerBraceletSpots.DisplayName, "Periodic reminder of how many power-bracelet spots remain (fires at reminder interval)",
+        TrackerModelOptions.VoiceReminders.PowerBraceletSpots, TrackerModelOptions.VisualReminders.PowerBraceletSpots
+    TrackerModel.ReminderCategory.BoomstickBook.DisplayName, "Periodic reminder when the boomstick book is available in a found shop (fires at reminder interval)",
+        TrackerModelOptions.VoiceReminders.BoomstickBook,   TrackerModelOptions.VisualReminders.BoomstickBook
+    TrackerModel.ReminderCategory.HaveMagicKey.DisplayName, "One-time reminder when entering a dungeon that you have the magic key",
+        TrackerModelOptions.VoiceReminders.HaveMagicKey,    TrackerModelOptions.VisualReminders.HaveMagicKey
+    TrackerModel.ReminderCategory.HaveLadder.DisplayName, "One-time reminder when entering a dungeon that you have the ladder",
+        TrackerModelOptions.VoiceReminders.HaveLadder,      TrackerModelOptions.VisualReminders.HaveLadder
+    TrackerModel.ReminderCategory.Blockers.DisplayName, "Reminder when you may have become unblocked on a previously-aborted dungeon",
         TrackerModelOptions.VoiceReminders.Blockers,        TrackerModelOptions.VisualReminders.Blockers
-    TrackerModel.ReminderCategory.DoorRepair.DisplayName, "Each time you uncover a door repair charge, remind the count of how many you have found", 
+    TrackerModel.ReminderCategory.DoorRepair.DisplayName, "Each time you uncover a door repair charge, remind the count of how many you have found",
         TrackerModelOptions.VoiceReminders.DoorRepair,        TrackerModelOptions.VisualReminders.DoorRepair
-    TrackerModel.ReminderCategory.OverworldOverwrites.DisplayName, "Each time you make a destructive change to an overworld mark, remind the change, in case it was accidental", 
+    TrackerModel.ReminderCategory.OverworldOverwrites.DisplayName, "Each time you make a destructive change to an overworld mark, remind the change, in case it was accidental",
         TrackerModelOptions.VoiceReminders.OverworldOverwrites, TrackerModelOptions.VisualReminders.OverworldOverwrites
     |]
+
+let showCoopHostSettingsWindow(cm: CustomComboBoxes.CanvasManager) =
+    let wh = new System.Threading.ManualResetEvent(false)
+    let window = new Window(Title = "Co-op Host Settings", Width = 400.0, Height = 300.0)
+    let sp = new StackPanel(Orientation = Orientation.Vertical, Margin = Thickness(10.))
+
+    // Apply modal style
+    let AddStyle(e:FrameworkElement) =
+        let textboxStyle = new Style(typeof<TextBox>)
+        textboxStyle.Setters.Add(new Setter(TextBox.BorderThicknessProperty, Thickness(0.)))
+        textboxStyle.Setters.Add(new Setter(TextBox.BorderBrushProperty, Brushes.DarkGray))
+        textboxStyle.Setters.Add(new Setter(TextBox.FontSizeProperty, 16.))
+        textboxStyle.Setters.Add(new Setter(TextBox.ForegroundProperty, Brushes.Orange))
+        textboxStyle.Setters.Add(new Setter(TextBox.BackgroundProperty, Brushes.Black))
+        e.Resources.Add(typeof<TextBox>, textboxStyle)
+
+        let checkboxStyle = new Style(typeof<CheckBox>)
+        checkboxStyle.Setters.Add(new Setter(CheckBox.HeightProperty, 22.))
+        e.Resources.Add(typeof<CheckBox>, checkboxStyle)
+
+    AddStyle(sp)
+
+    let mutable isSessionEnabled = TrackerModelOptions.CoopHostSession
+
+    let enableCheck = new CheckBox(Content = new TextBox(Text="Enable Hosting", IsReadOnly=true))
+    enableCheck.IsChecked <- System.Nullable.op_Implicit(isSessionEnabled)
+    enableCheck.Checked.Add(fun _ -> isSessionEnabled <- true)
+    enableCheck.Unchecked.Add(fun _ -> isSessionEnabled <- false)
+    sp.Children.Add(enableCheck) |> ignore
+
+    let portLabel = new TextBox(Text = "Port Number:", IsReadOnly = true)
+    sp.Children.Add(portLabel) |> ignore
+
+    let portBox = new TextBox(Text = TrackerModelOptions.PortNumber)
+    portBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+    portBox.TextAlignment <- TextAlignment.Left
+
+    let portBoxBorder = new Border(
+        Child = portBox,
+        BorderBrush = Brushes.Orange,
+        BorderThickness = Thickness(2.),
+        Margin = Thickness(0., 2., 0., 6.)
+    )
+    sp.Children.Add(portBoxBorder) |> ignore
+
+    let portValidationMessage = new TextBlock(
+        Text = "Port must be a number between 1024 and 65535",
+        Foreground = Brushes.Red,
+        Visibility = Visibility.Collapsed,
+        Margin = Thickness(0., 0., 0., 6.)
+    )
+    sp.Children.Add(portValidationMessage) |> ignore
+
+    let launchButton = Graphics.makeButton("Launch", None, None)
+    launchButton.HorizontalAlignment <- HorizontalAlignment.Left
+
+    launchButton.Click.Add(fun _ ->
+        let port = portBox.Text.Trim()
+        TrackerModelOptions.PortNumber <- port
+        if not isSessionEnabled then
+            isSessionEnabled <- true
+            enableCheck.IsChecked <- System.Nullable.op_Implicit true
+        TrackerModelOptions.CoopHostSession <- true
+        TrackerModelOptions.CoopSyncOptions.SetEnableCoop(true)
+        Dungeon.startLocalSignalRHost port
+        wh.Set() |> ignore
+        window.Close()
+    )
+
+    let stopButton = Graphics.makeButton("Stop", None, None)
+    stopButton.HorizontalAlignment <- HorizontalAlignment.Left
+
+    stopButton.Click.Add(fun _ ->
+        Dungeon.stopLocalSignalRHost()
+        if isSessionEnabled then
+            isSessionEnabled <- false
+            enableCheck.IsChecked <- System.Nullable.op_Implicit false
+        TrackerModelOptions.CoopHostSession <- false
+        wh.Set() |> ignore
+        window.Close()
+    )
+
+    sp.Children.Add(launchButton) |> ignore
+    sp.Children.Add(stopButton) |> ignore
+
+    let stylePanel = new Border(
+        Child = sp,
+        BorderBrush = Brushes.Gray,
+        BorderThickness = Thickness(3.),
+        Background = Brushes.Black,
+        Width = 400.,
+        HorizontalAlignment = HorizontalAlignment.Center
+    )
+
+    let validatePort () =
+        let text = portBox.Text.Trim()
+        let mutable valid = false
+        match System.Int32.TryParse(text) with
+        | (true, port) when port >= 1024 && port <= 65535 -> valid <- true
+        | _ -> ()
+        portBoxBorder.BorderBrush <- if valid then Brushes.Orange else Brushes.Red
+        portValidationMessage.Visibility <- if valid then Visibility.Collapsed else Visibility.Visible
+        enableCheck.IsEnabled <- valid
+        launchButton.IsEnabled <- valid && (System.Nullable.op_Explicit(enableCheck.IsChecked) = true)
+
+    portBox.TextChanged.Add(fun _ -> validatePort())
+    enableCheck.Checked.Add(fun _ -> validatePort())
+    enableCheck.Unchecked.Add(fun _ -> validatePort())
+
+    validatePort()
+
+    async {
+        CustomComboBoxes.GlobalFlag.popupIsActive <- true
+        do! CustomComboBoxes.DoModalDocked(cm, wh, Dock.Bottom, stylePanel)
+        CustomComboBoxes.GlobalFlag.popupIsActive <- false
+    } |> Async.StartImmediate
+
+
+
+
 
 let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, isStandardHyrule) = 
     let width = cm.AppMainCanvas.Width
@@ -104,7 +247,14 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     let options1sp = new StackPanel(Orientation=Orientation.Vertical, Margin=Thickness(10.,0.,10.,0.))
     let tb = new TextBox(Text="Overworld settings", IsReadOnly=true, FontWeight=FontWeights.Bold) |> header
     options1sp.Children.Add(tb) |> ignore
-    for text,tip,b,needFU,oe,marginOpt in data1o(isStandardHyrule) do
+    // Options marked as "advanced" only appear in the main-app options popup (not the startup screen),
+    // to keep the startup screen compact and avoid layout overflow.
+    let advancedOverworldOptions = [| "Custom marker tiles" |]  // only appears in main-app options popup, not startup screen
+    let advancedDungeonOptions   = [| "Alphabetize hint zone list" |]  // only this one remains advanced (hidden on startup)
+    let visibleOverworldOpts =
+        data1o(isStandardHyrule)
+        |> Array.filter (fun (text,_,_,_,_,_) -> includePopupExplainer || not (Array.contains text advancedOverworldOptions))
+    for text,tip,b,needFU,oe,marginOpt in visibleOverworldOpts do
         let cb = new CheckBox(Content=new TextBox(Text=text,IsReadOnly=true))
         if marginOpt.IsSome then
             cb.Margin <- marginOpt.Value
@@ -206,12 +356,33 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
 
     let tb = new TextBox(Text="Dungeon settings", IsReadOnly=true, FontWeight=FontWeights.Bold) |> header
     options1sp.Children.Add(tb) |> ignore
-    for text,tip,b,needFU,oe in data1d do
+    let visibleDungeonOpts =
+        data1d
+        |> Array.filter (fun (text,_,_,_,_) -> includePopupExplainer || not (Array.contains text advancedDungeonOptions))
+    for text,tip,b,needFU,oe in visibleDungeonOpts do
         let cb = new CheckBox(Content=new TextBox(Text=text,IsReadOnly=true))
         cb.ToolTip <- tip
         ToolTipService.SetShowDuration(cb, 10000)
         link(cb, b, needFU, oe)
         options1sp.Children.Add(cb) |> ignore
+        if text = "Dungeon Map Hint" then
+            let sliderSp = new StackPanel(Orientation=Orientation.Horizontal, Margin=Thickness(4.,0.,0.,4.))
+            let opacityLabel = new TextBox(Text="Opacity",IsReadOnly=true)
+            sliderSp.Children.Add(opacityLabel) |> ignore
+            let opacitySlider = new Slider(Orientation=Orientation.Horizontal, Minimum=0.05, Maximum=1.0,
+                                           TickFrequency=0.05, TickPlacement=Primitives.TickPlacement.BottomRight,
+                                           IsSnapToTickEnabled=true, Width=100., Margin=Thickness(4.,0.,0.,0.))
+            opacitySlider.Value <- TrackerModelOptions.DungeonMapLocationHintOpacity
+            opacitySlider.ValueChanged.Add(fun _ ->
+                TrackerModelOptions.DungeonMapLocationHintOpacity <- opacitySlider.Value
+                displayIconsInDungeonMapOptionChanged.Trigger()
+            )
+            sliderSp.Children.Add(opacitySlider) |> ignore
+            sliderSp.IsEnabled <- b.Value
+            sliderSp.Opacity <- if b.Value then 1.0 else 0.4
+            cb.Checked.Add(fun _ -> sliderSp.IsEnabled <- true; sliderSp.Opacity <- 1.0)
+            cb.Unchecked.Add(fun _ -> sliderSp.IsEnabled <- false; sliderSp.Opacity <- 0.4)
+            options1sp.Children.Add(sliderSp) |> ignore
     optionsAllsp.Children.Add(options1sp) |> ignore
 
     //This section starts the reminders panel in the initial startup screen
@@ -280,6 +451,16 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
         row <- row + 1
 
     options2sp.Children.Add(options2Grid) |> ignore
+    // Reminder interval slider (label row then slider row for compact layout)
+    let reminderIntervalLabel = new TextBox(Text=sprintf "Reminder interval (minutes): %d" TrackerModelOptions.ReminderIntervalMinutes, IsReadOnly=true, Margin=Thickness(0.,4.,0.,0.), Background=Brushes.Transparent)
+    options2sp.Children.Add(reminderIntervalLabel) |> ignore
+    let reminderIntervalSlider = new Slider(Minimum=1., Maximum=60., TickFrequency=1., IsSnapToTickEnabled=true, Value=float TrackerModelOptions.ReminderIntervalMinutes, Width=200., Margin=Thickness(0.,0.,0.,2.))
+    reminderIntervalSlider.ToolTip <- "How often periodic reminders fire (recorder/power-bracelet spots, boomstick, white sword)"
+    reminderIntervalSlider.ValueChanged.Add(fun _ ->
+        let v = int reminderIntervalSlider.Value
+        TrackerModelOptions.ReminderIntervalMinutes <- v
+        reminderIntervalLabel.Text <- sprintf "Reminder interval (minutes): %d" v)
+    options2sp.Children.Add(reminderIntervalSlider) |> ignore
     if voice.GetInstalledVoices() |> Seq.filter (fun v -> v.Enabled) |> Seq.length > 1 then
         let changeVoiceButton = Graphics.makeButton("Change voice",None,None)
         changeVoiceButton.HorizontalAlignment <- HorizontalAlignment.Left
@@ -331,6 +512,262 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     } |> Async.StartImmediate
                 )
         options2sp.Children.Add(changeVoiceButton) |> ignore
+
+    let coopSettingsButton = Graphics.makeButton("Co-op Client Settings", None, None)
+    coopSettingsButton.HorizontalAlignment <- HorizontalAlignment.Left
+    do
+        let mutable popupIsActive = false
+        let mutable changedGlobal = false
+        coopSettingsButton.Click.Add(fun _ ->
+            if not popupIsActive then
+                popupIsActive <- true
+                if not CustomComboBoxes.GlobalFlag.popupIsActive then
+                    CustomComboBoxes.GlobalFlag.popupIsActive <- true
+                    changedGlobal <- true
+
+                let wh = new System.Threading.ManualResetEvent(false)
+                let sp = new StackPanel(Orientation=Orientation.Vertical, Margin=Thickness(10.))
+                AddStyle(sp)
+
+                // NEW: Enable Co-op checkbox
+                // NEW: Enable Co-op checkbox with label
+                let enableCoopCheckbox = new CheckBox()
+                // Initial validation of FunctionAppBase
+                let isValidUrl (url: string) =
+                    System.Uri.TryCreate(url, System.UriKind.Absolute) |> fst
+
+                let initialUrl = TrackerModelOptions.CoopSyncOptions.FunctionAppBase
+                let initialIsValid = isValidUrl initialUrl
+
+                // Only enable checkbox if URL is valid
+                enableCoopCheckbox.IsEnabled <- initialIsValid
+                enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit(initialIsValid && TrackerModelOptions.CoopSyncOptions.GetEnableCoop())
+
+                enableCoopCheckbox.HorizontalAlignment <- HorizontalAlignment.Left
+                enableCoopCheckbox.IsEnabled <- false
+                let enableCoopText = new TextBox(
+                    Text = "Enable Co-op Sync", 
+                    IsReadOnly = true, 
+                    BorderThickness = Thickness(0.),
+                    FontSize = 16., 
+                    Foreground = Brushes.Orange,
+                    Background = Brushes.Black,
+                    IsHitTestVisible = false
+                    
+                )
+                
+
+                let coopCheckStack = new StackPanel(Orientation = Orientation.Horizontal)
+                coopCheckStack.Children.Add(enableCoopCheckbox) |> ignore
+                coopCheckStack.Children.Add(enableCoopText) |> ignore
+
+
+                coopCheckStack.Margin <- Thickness(0., 0., 0., 10.)
+                coopCheckStack.ToolTip <- "Enables co-op syncing between two instances of Z-Tracker via Azure Functions and Azure SignalR.\nThis cannot be enabled if the value of Function App Base is not a valid URL"
+                ToolTipService.SetShowDuration(coopCheckStack, 10000)
+                enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit (TrackerModelOptions.CoopSyncOptions.GetEnableCoop())
+
+
+                sp.Children.Add(coopCheckStack) |> ignore
+                // Checkbox for Debug Mode
+                let debugModeCheckbox = new CheckBox(Content=new TextBlock(Text="Enable Debug Logging", Foreground=Brushes.Orange))
+                debugModeCheckbox.IsChecked <- System.Nullable.op_Implicit(TrackerModelOptions.DebugConfig.DebugMode)
+                debugModeCheckbox.ToolTip <- "Enables debug logging for co-op sync operations.\nThis is useful for troubleshooting issues with co-op sync."
+                ToolTipService.SetShowDuration(debugModeCheckbox, 10000)
+                sp.Children.Add(debugModeCheckbox) |> ignore
+
+                let urlLabel txt =
+                    new TextBox(
+                    Text = txt,
+                    IsReadOnly = true,
+                    BorderThickness = Thickness(0.),
+                    FontSize = 16.,
+                    Foreground = Brushes.Orange,
+                    Background = Brushes.Black
+                )
+
+                sp.Children.Add(urlLabel("Function App Base:")) |> ignore
+
+                let functionAppBaseBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.FunctionAppBase)
+
+                let functionAppBaseBorder = new Border(
+                    Child = functionAppBaseBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+
+                let functionAppBaseValidationMessage = 
+                    new TextBlock(
+                        Text = "Function App Base must be a valid URL",
+                        Foreground = Brushes.Red,
+                        Visibility = Visibility.Collapsed,
+                        Margin = Thickness(0., 0., 0., 6.)
+                    )
+
+                let validateFunctionAppBaseUrl () =
+                    let isValid = System.Uri.IsWellFormedUriString(functionAppBaseBox.Text, System.UriKind.Absolute)
+
+                    // Toggle checkbox state
+                    enableCoopCheckbox.IsEnabled <- isValid
+                    enableCoopCheckbox.Foreground <- if isValid then Brushes.Orange else Brushes.DarkGray
+                    if not isValid then
+                        enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit false
+
+                    // Border visual feedback
+                    functionAppBaseBorder.BorderBrush <- if isValid then Brushes.Orange else Brushes.Red
+
+                    // Error message visibility
+                    functionAppBaseValidationMessage.Visibility <- if isValid then Visibility.Collapsed else Visibility.Visible
+
+                // Initial validation on open
+                validateFunctionAppBaseUrl()
+
+                // Dynamic validation on text change
+                functionAppBaseBox.TextChanged.Add(fun _ -> validateFunctionAppBaseUrl())
+
+
+                functionAppBaseBox.TextChanged.Add(fun _ ->
+                    let isValid = isValidUrl functionAppBaseBox.Text
+                    if not isValid then
+                        enableCoopCheckbox.IsChecked <- System.Nullable.op_Implicit false
+                        enableCoopCheckbox.IsEnabled <- false
+                        enableCoopCheckbox.Foreground <- Brushes.DarkGray
+                    else
+                        enableCoopCheckbox.IsEnabled <- true
+                        enableCoopCheckbox.Foreground <- Brushes.Orange
+                )
+
+                functionAppBaseBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                functionAppBaseBox.TextAlignment <- TextAlignment.Left
+                
+                functionAppBaseBorder.ToolTip <- "The base URL for the Azure Function App that handles co-op sync operations.\nThis must be a valid URL."
+                ToolTipService.SetShowDuration(functionAppBaseBorder, 10000)
+                sp.Children.Add(functionAppBaseBorder) |> ignore
+
+                sp.Children.Add(functionAppBaseValidationMessage) |> ignore
+
+
+                sp.Children.Add(urlLabel("Negotiate Suffix:")) |> ignore
+                let negotiateUrlBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.baseNegotiateUrl)
+                negotiateUrlBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                negotiateUrlBox.TextAlignment <- TextAlignment.Left
+                let negotiateUrlBorder = new Border(
+                    Child = negotiateUrlBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                negotiateUrlBorder.ToolTip <- "The suffix for the Azure Function App that handles co-op sync operations.\nThis will be appended to the Function App Base."
+                ToolTipService.SetShowDuration(negotiateUrlBorder, 10000)
+                sp.Children.Add(negotiateUrlBorder) |> ignore
+
+                sp.Children.Add(urlLabel("SyncUpdate Suffix:")) |> ignore
+                let syncUpdateUrlBox = new TextBox(Text = TrackerModelOptions.CoopSyncOptions.baseSyncUpdateUrl)
+                syncUpdateUrlBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                syncUpdateUrlBox.TextAlignment <- TextAlignment.Left
+                let syncUpdateUrlBorder = new Border(
+                    Child = syncUpdateUrlBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                syncUpdateUrlBorder.ToolTip <- "The suffix for the Azure Function App that handles outgoing co-op sync operations.\nThis will be appended to the Function App Base."
+                ToolTipService.SetShowDuration(syncUpdateUrlBorder, 10000)
+                sp.Children.Add(syncUpdateUrlBorder) |> ignore
+
+                sp.Children.Add(new DockPanel(Height=10.)) |> ignore  // spacer before ID fields
+
+
+                sp.Children.Add(new TextBox(Text="Console ID (This instance):", IsReadOnly=true)) |> ignore
+                let myIdBox = new TextBox()
+                myIdBox.Text <- TrackerModelOptions.CoopSyncOptions.MyConsoleId
+                myIdBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                myIdBox.TextAlignment <- TextAlignment.Center
+
+                let myIdBorder = new Border(
+                    Child = myIdBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                myIdBorder.ToolTip <- "The unique ID for this console instance.\nThis is used to identify this console in co-op sync operations."
+                ToolTipService.SetShowDuration(myIdBorder, 10000)
+                sp.Children.Add(myIdBorder) |> ignore
+
+                let guidButton = Graphics.makeButton("Generate GUID", None, None)
+                guidButton.Click.Add(fun _ ->
+                    let newGuid = System.Guid.NewGuid().ToString()
+                    myIdBox.Text <- newGuid
+                )
+                guidButton.ToolTip <- "Generate a random ID for this console instance.\nThis will be used as the unique ID for this console in co-op sync operations."
+                ToolTipService.SetShowDuration(guidButton, 10000)
+                sp.Children.Add(guidButton) |> ignore
+
+                sp.Children.Add(new DockPanel(Height=10.)) |> ignore
+
+                sp.Children.Add(new TextBox(Text="Target Console ID (to sync with):", IsReadOnly=true)) |> ignore
+                let targetIdBox = new TextBox()
+                targetIdBox.Text <- TrackerModelOptions.CoopSyncOptions.TargetConsoleId
+                targetIdBox.HorizontalAlignment <- HorizontalAlignment.Stretch
+                targetIdBox.TextAlignment <- TextAlignment.Center
+
+                let targetIdBorder = new Border(
+                    Child = targetIdBox,
+                    BorderBrush = Brushes.Orange,
+                    BorderThickness = Thickness(2.),
+                    Margin = Thickness(0., 2., 0., 6.)
+                )
+                targetIdBorder.ToolTip <- "The unique ID for the target console instance.\nThis is used to identify the target console in co-op sync operations."
+                sp.Children.Add(targetIdBorder) |> ignore
+
+                sp.Children.Add(new DockPanel(Height=10.)) |> ignore
+
+                let saveButton = Graphics.makeButton("Save", None, None)
+                saveButton.Click.Add(fun _ ->
+                    TrackerModelOptions.CoopSyncOptions.MyConsoleId <- myIdBox.Text
+                    TrackerModelOptions.CoopSyncOptions.TargetConsoleId <- targetIdBox.Text
+                    
+                    TrackerModelOptions.CoopSyncOptions.FunctionAppBase <- functionAppBaseBox.Text
+                    TrackerModelOptions.CoopSyncOptions.baseNegotiateUrl <- negotiateUrlBox.Text
+                    TrackerModelOptions.CoopSyncOptions.baseSyncUpdateUrl <- syncUpdateUrlBox.Text
+
+                    TrackerModelOptions.CoopSyncOptions.SetEnableCoop( 
+                        match System.Nullable.op_Explicit(enableCoopCheckbox.IsChecked) with
+                        | true -> true
+                        | false -> false
+                        )
+                    TrackerModelOptions.DebugConfig.DebugMode <- 
+                        match System.Nullable.op_Explicit(debugModeCheckbox.IsChecked) with
+                        | true -> true
+                        | false -> false
+
+                    TrackerModelOptions.writeSettings()
+                    wh.Set() |> ignore
+                )
+                saveButton.ToolTip <- "Save the current settings for co-op sync operations.\nThis will update the settings."
+                sp.Children.Add(saveButton) |> ignore
+
+                async {
+                    do! CustomComboBoxes.DoModalDocked(cm, wh, Dock.Bottom,
+                        new Border(
+                            Child=sp,
+                            BorderBrush=Brushes.Gray,
+                            BorderThickness=Thickness(3.),
+                            Background = Brushes.Black,
+                            Width=400.,
+                            HorizontalAlignment=HorizontalAlignment.Center
+                        )
+                    )
+                    popupIsActive <- false
+                    if changedGlobal then
+                        CustomComboBoxes.GlobalFlag.popupIsActive <- false
+                } |> Async.StartImmediate
+        )
+    // Co-op buttons moved to the "Other" column below
+
+
+
 
     optionsAllsp.Children.Add(new DockPanel(Width=2.,Background=Brushes.Gray)) |> ignore
     optionsAllsp.Children.Add(options2sp) |> ignore
@@ -473,6 +910,22 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     ToolTipService.SetShowDuration(cb, 10000)
     options3sp.Children.Add(cb) |> ignore
 
+    let cb = new CheckBox(Content=new TextBox(Text="Race Mode",IsReadOnly=true))
+    cb.IsChecked <- System.Nullable.op_Implicit TrackerModelOptions.RaceMode.Value
+    cb.Checked.Add(fun _ -> TrackerModelOptions.RaceMode.Value <- true; raceModeChanged.Trigger())
+    cb.Unchecked.Add(fun _ -> TrackerModelOptions.RaceMode.Value <- false; raceModeChanged.Trigger())
+    cb.ToolTip <- "Disable many features that could be deemed an unfair advantage during a race."
+    ToolTipService.SetShowDuration(cb, 10000)
+    options3sp.Children.Add(cb) |> ignore
+
+    // Co-op buttons (moved here from Reminders column to reduce its height)
+    options3sp.Children.Add(new DockPanel(Height=6.)) |> ignore  // small spacer
+    options3sp.Children.Add(coopSettingsButton) |> ignore
+    let coopHostSettingsButton = Graphics.makeButton("Co-op Host Settings", None, None)
+    coopHostSettingsButton.HorizontalAlignment <- HorizontalAlignment.Left
+    coopHostSettingsButton.Click.Add(fun _ -> showCoopHostSettingsWindow(cm))
+    options3sp.Children.Add(coopHostSettingsButton) |> ignore
+
     optionsAllsp.Children.Add(options3sp) |> ignore
 
     let total = new StackPanel(Orientation=Orientation.Vertical)
@@ -487,4 +940,23 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     total.Children.Add(optionsAllsp) |> ignore
 
     all.Child <- total
+    
+    raceModeChanged.Publish.Add(fun () ->
+        if TrackerModelOptions.RaceMode.Value then
+            // Mute audio, same as checking the box
+            TrackerModelOptions.IsMuted <- true
+            voice.Volume <- 0
+            muteCB.IsChecked <- System.Nullable.op_Implicit true
+        else
+            // Restore checkbox to what user had previously selected
+            TrackerModelOptions.IsMuted <- false
+            voice.Volume <- TrackerModelOptions.Volume
+            muteCB.IsChecked <- System.Nullable.op_Implicit false
+    )
+
+
+
+
+
+
     all

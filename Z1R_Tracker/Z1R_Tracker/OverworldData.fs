@@ -1,9 +1,15 @@
 ﻿module OverworldData
+open System.Reflection
+open System
 
-let VersionString = "1.3.1"
+//Update version - was 1.3.1
+let version : Version =
+    Assembly.GetExecutingAssembly().GetName().Version
+let VersionString : string =
+    sprintf "%d.%d.%d" version.Major version.Minor version.Build
 let ProgramNameString = sprintf "Z-Tracker v%s" VersionString
-let Website = "https://github.com/brianmcn/Zelda1RandoTools"
-let AboutBody = sprintf "%s by Dr. Brian Lorgon111\n\nLearn more at\n%s\n" ProgramNameString Website
+let Website = "https://github.com/Neononane/Zelda1RandoTools"
+let AboutBody = sprintf "BETA RELEASE version %s of %s originally by Dr. Brian Lorgon111 with updates by Neononane\n\nLearn more at\n%s\n" (version.ToString()) ProgramNameString Website
 
 
 

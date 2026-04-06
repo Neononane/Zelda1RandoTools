@@ -7,6 +7,12 @@ open System.Windows
 open HotKeys.MyKey
 open CustomComboBoxes.GlobalFlag
 
+open Z1R_Tracker.Models.Z1R_TrackerInterop
+open Z1R_Tracker.Models
+
+
+
+
 // door colors
 let highlightOpacity = 1.0
 let highlight = Brushes.Cyan // new SolidColorBrush(Color.FromRgb(200uy, 200uy, 200uy)) :> Brush
@@ -33,30 +39,177 @@ type DoorState =
         elif x=3 then DoorState.YELLOW
         elif x=4 then DoorState.PURPLE
         else failwith "bad DoorState.FromInt() value"
+    static member FromString(str: string) =
+        match str with
+        | "UNKNOWN" -> DoorState.UNKNOWN
+        | "NO"      -> DoorState.NO
+        | "YES"     -> DoorState.YES
+        | "YELLOW"  -> DoorState.YELLOW
+        | "PURPLE"  -> DoorState.PURPLE
+        | _         -> failwithf "Unknown DoorState string: %s" str
 
-type Door(state:DoorState, redraw) =
+
+module DoorInterop =
+    let fromCSharp (cs: Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState) : DoorState =
+        match cs with
+        | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Unknown -> DoorState.UNKNOWN
+        | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.No      -> DoorState.NO
+        | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Yes     -> DoorState.YES
+        | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Yellow  -> DoorState.YELLOW
+        | Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Purple  -> DoorState.PURPLE
+        | _ -> failwith "Unrecognized DoorState from C# interop"
+
+    let toCSharp (fs: DoorState) : Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState =
+        match fs with
+        | DoorState.UNKNOWN -> Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Unknown
+        | DoorState.NO      -> Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.No
+        | DoorState.YES     -> Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Yes
+        | DoorState.YELLOW  -> Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Yellow
+        | DoorState.PURPLE  -> Z1R_Tracker.Models.Z1R_TrackerInterop.DoorState.Purple
+
+    let fromString (s: string) =
+        match s.ToUpperInvariant() with
+        | "UNKNOWN" -> DoorState.UNKNOWN
+        | "NO"      -> DoorState.NO
+        | "YES"     -> DoorState.YES
+        | "YELLOW"  -> DoorState.YELLOW
+        | "PURPLE"  -> DoorState.PURPLE
+        | other     -> failwithf "Unrecognized DoorState string: %s" other
+
+type Door(state: DoorState, redraw: DoorState -> unit, level: int, x: int, y: int, isHorizontal: bool) =
     let mutable state = state
-    member _this.State with get() = state and set(x) = state <- x; redraw(x)
+
+    member _this.State
+        with get() = state
+        and set(value) =
+            state <- value
+            redraw(value)
+            // Sync back to C# model
+            let csharpState = DoorInterop.toCSharp value
+            if isHorizontal then
+                CDungeonModelStore.HorizontalDoors.[level - 1].[y, x] <- csharpState
+            else
+                CDungeonModelStore.VerticalDoors.[level - 1].[y, x] <- csharpState
+
     member _this.Next() =
-        state <-
+        let newState =
             match state with
             | DoorState.UNKNOWN -> DoorState.YES
             | DoorState.YES -> DoorState.NO
             | DoorState.NO -> DoorState.YELLOW
             | DoorState.YELLOW -> DoorState.PURPLE
             | DoorState.PURPLE -> DoorState.UNKNOWN
-        redraw(state)
+        _this.State <- newState
+
     member _this.Prev() =
-        state <-
+        let newState =
             match state with
             | DoorState.UNKNOWN -> DoorState.PURPLE
-            | DoorState.YES -> DoorState.UNKNOWN
-            | DoorState.NO -> DoorState.YES
-            | DoorState.YELLOW -> DoorState.NO
             | DoorState.PURPLE -> DoorState.YELLOW
-        redraw(state)
+            | DoorState.YELLOW -> DoorState.NO
+            | DoorState.NO -> DoorState.YES
+            | DoorState.YES -> DoorState.UNKNOWN
+        _this.State <- newState
+
     member _this.Redraw() = redraw(state)
-    member _this.IsTraversible = state=DoorState.YES || state=DoorState.YELLOW || state=DoorState.PURPLE
+
+    member _this.IsTraversible =
+        state = DoorState.YES || state = DoorState.YELLOW || state = DoorState.PURPLE
+
+let mutable roomChangedCallback : (int -> int -> int -> unit) = fun _ _ _ -> ()
+
+let SetRoomChangedCallback(cb: int -> int -> int -> unit) =
+    roomChangedCallback <- cb
+
+let mutable signalRHostProcess : System.Diagnostics.Process option = None
+
+// Windows Job Object: ties child process lifetime to the parent process.
+// When this process exits for any reason (crash, task kill, window close),
+// the OS automatically kills all processes in the job.
+[<System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)>]
+extern System.IntPtr CreateJobObject(System.IntPtr lpJobAttributes, System.IntPtr lpName)
+
+[<System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)>]
+extern bool AssignProcessToJobObject(System.IntPtr hJob, System.IntPtr hProcess)
+
+[<System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)>]
+extern bool SetInformationJobObject(System.IntPtr hJob, int infoClass, System.IntPtr lpInfo, uint32 cbInfoLength)
+
+let mutable signalRJobHandle = System.IntPtr.Zero
+
+let createSignalRJob() =
+    try
+        let job = CreateJobObject(System.IntPtr.Zero, System.IntPtr.Zero)
+        if job <> System.IntPtr.Zero then
+            // LimitFlags is always at offset 16 (after two LARGE_INTEGERs) regardless of bitness.
+            // The total struct size depends on compiler alignment settings; try all plausible values:
+            //   x64 natural alignment: 144  |  x64 pack=4: 136
+            //   x86 with 8-byte-aligned ULONGLONG: 112  |  x86 pack=4: 108
+            let JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+            let JobObjectExtendedLimitInformation = 9
+            let sizesToTry =
+                if System.IntPtr.Size = 8 then [| 144; 136 |]
+                else [| 112; 108 |]
+            let mutable jobSet = false
+            for structSize in sizesToTry do
+                if not jobSet then
+                    let ptr = System.Runtime.InteropServices.Marshal.AllocHGlobal(structSize)
+                    try
+                        for i in 0 .. structSize - 1 do
+                            System.Runtime.InteropServices.Marshal.WriteByte(ptr, i, 0uy)
+                        System.Runtime.InteropServices.Marshal.WriteInt32(ptr, 16, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
+                        if SetInformationJobObject(job, JobObjectExtendedLimitInformation, ptr, uint32 structSize) then
+                            signalRJobHandle <- job
+                            jobSet <- true
+                        else
+                            let err = System.Runtime.InteropServices.Marshal.GetLastWin32Error()
+                            if err <> 24 then  // 24 = ERROR_BAD_LENGTH; only retry for that specific error
+                                printfn "[Sync] SetInformationJobObject failed (error %d)" err
+                                jobSet <- true  // non-recoverable error; stop trying other sizes
+                    finally
+                        System.Runtime.InteropServices.Marshal.FreeHGlobal(ptr)
+            if not jobSet then
+                printfn "[Sync] SetInformationJobObject: no struct size worked (%s)" (if System.IntPtr.Size = 8 then "x64" else "x86")
+    with ex ->
+        printfn "[Sync] Could not create job object: %s" ex.Message
+
+let startLocalSignalRHost (port: string) =
+    try
+        let exePath = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "Z1R_SignalRHost.exe")
+        if System.IO.File.Exists(exePath) then
+            // Defer job creation to first actual use; calling at module-load time (do) can trigger
+            // SetInformationJobObject error 24 on first launch due to static-initializer ordering.
+            if signalRJobHandle = System.IntPtr.Zero then
+                createSignalRJob()
+            let psi = new System.Diagnostics.ProcessStartInfo()
+            psi.FileName <- exePath
+            psi.Arguments <- port
+            psi.UseShellExecute <- false
+            psi.CreateNoWindow <- true
+            let proc = System.Diagnostics.Process.Start(psi)
+            // Add to job object so it is killed automatically if ZTracker exits for any reason
+            if signalRJobHandle <> System.IntPtr.Zero then
+                AssignProcessToJobObject(signalRJobHandle, proc.Handle) |> ignore
+            signalRHostProcess <- Some proc
+            printfn "[Sync] Launched SignalR host on port %s" port
+        else
+            printfn "[Sync] Host EXE not found at %s" exePath
+    with ex ->
+        printfn "[Sync] Launch error: %s" ex.Message
+
+let stopLocalSignalRHost() =
+    match signalRHostProcess with
+    | Some proc ->
+        try
+            if not proc.HasExited then
+                proc.Kill()
+                proc.WaitForExit(3000) |> ignore
+            proc.Dispose()
+            printfn "[Sync] Stopped Z1R_SignalRHost.exe"
+        with ex ->
+            printfn "[Sync] Error stopping host: %s" (ex.Message)
+        signalRHostProcess <- None
+    | _ -> ()
 
 type GrabHelper() =
     let mutable isGrabMode = false
@@ -70,7 +223,7 @@ type GrabHelper() =
     member this.PreviewGrab(mouseX, mouseY, roomStates:DungeonRoomState.DungeonRoomState[,]) =
         if not this.IsGrabMode || this.HasGrab then
             failwith "bad"
-        if roomStates.[mouseX,mouseY].RoomType.IsNotMarked then
+        if RoomTypeExtensions.IsNotMarked(roomStates.[mouseX,mouseY].RoomType) then
             failwith "bad"
         // compute set of contiguous rooms
         let contiguous = Array2D.zeroCreate 8 8
@@ -93,7 +246,11 @@ type GrabHelper() =
         grabMouseX <- mouseX
         grabMouseY <- mouseY
         contigous |> Array2D.iteri (fun x y v -> grabContiguousRooms.[x,y] <- v)
-        roomStatesIfGrabWereACut <- Array2D.init 8 8 (fun x y -> if contigous.[x,y] then new DungeonRoomState.DungeonRoomState() else roomStates.[x,y].Clone())
+        roomStatesIfGrabWereACut <- Array2D.init 8 8 (fun x y ->
+            let clone = roomStates.[x,y].Clone()
+            clone
+        )
+
         roomIsCircledIfGrabWereACut <- Array2D.init 8 8 (fun x y -> if contigous.[x,y] then false else roomIsCircled.[x,y])
         horizontalDoorsIfGrabWereACut <- Array2D.init 7 8 (fun x y -> if contigous.[x,y] || contigous.[x+1,y] then DoorState.UNKNOWN else horizontalDoors.[x,y].State)
         verticalDoorsIfGrabWereACut <- Array2D.init 8 7 (fun x y -> if contigous.[x,y] || contigous.[x,y+1] then DoorState.UNKNOWN else verticalDoors.[x,y].State)
@@ -120,34 +277,61 @@ type GrabHelper() =
         if not this.IsGrabMode || not this.HasGrab then
             failwith "bad"
         let dx,dy = mouseX-grabMouseX, mouseY-grabMouseY
-        let oldRoomStates = roomStates |> Array2D.map (fun s -> s.Clone())
+        let oldRoomStates = roomStates |> Array2D.map (fun s -> 
+            let clone = s.Clone()
+            (clone, s)  // return both clone and original reference
+        )
+
         let oldRoomIsCircled = roomIsCircled.Clone() :?> bool[,]
         let oldHorizontalDoors = horizontalDoors |> Array2D.map (fun c -> c.State)
         let oldVerticalDoors = verticalDoors |> Array2D.map (fun c -> c.State)
-        roomStatesIfGrabWereACut |> Array2D.iteri (fun x y v -> roomStates.[x,y] <- v)
+        roomStatesIfGrabWereACut
+        |> Array2D.iteri (fun x y clone ->
+            let target = roomStates.[x,y]
+            target.CSharp.CopyFrom(clone.CSharp)
+            target.CSharp.FireChangedManually()
+        )
+
+
         roomIsCircledIfGrabWereACut |> Array2D.iteri (fun x y v -> roomIsCircled.[x,y] <- v)
         horizontalDoorsIfGrabWereACut |> Array2D.iteri (fun x y v -> horizontalDoors.[x,y].State <- v)
         verticalDoorsIfGrabWereACut |> Array2D.iteri (fun x y v -> verticalDoors.[x,y].State <- v)
-        for x = 0 to 7 do
-            for y = 0 to 7 do
-                let i,j = x-dx, y-dy
-                if i>=0 && i<=7 && j>=0 && j<=7 then
-                    if grabContiguousRooms.[i,j] then
-                        roomStates.[x,y] <- oldRoomStates.[i,j]
+        for i = 0 to 7 do
+            for j = 0 to 7 do
+                if grabContiguousRooms.[i,j] then
+                    let x, y = i + dx, j + dy
+                    if x >= 0 && x <= 7 && y >= 0 && y <= 7 then
+                        let source = oldRoomStates.[i,j] |> fst
+                        let destination = roomStates.[x,y]
+
+                        // Move room data
+                        destination.CSharp.CopyFrom(source.CSharp)
+                        destination.CSharp.X <- x
+                        destination.CSharp.Y <- y
+                        destination.CSharp.FireChangedManually()
+
                         roomIsCircled.[x,y] <- oldRoomIsCircled.[i,j]
+
                         let do_door(target:Door[,], x, y, source:DoorState[,], i, j) =
                             if source.[i,j] <> DoorState.UNKNOWN then
                                 target.[x,y].State <- source.[i,j]
-                        if x<7 && i<7 then
-                            do_door(horizontalDoors,x,y,oldHorizontalDoors,i,j)  // door right of room
-                        if x>0 && i>0 then
-                            do_door(horizontalDoors,x-1,y,oldHorizontalDoors,i-1,j)  // door left of room
-                        if y<7 && j<7 then
-                            do_door(verticalDoors,x,y,oldVerticalDoors,i,j)  // door below room
-                        if y>0 && j>0 then
-                            do_door(verticalDoors,x,y-1,oldVerticalDoors,i,j-1)  // door above room
-        this.Abort()
+                        if x<7 && i<7 then do_door(horizontalDoors,x,y,oldHorizontalDoors,i,j)
+                        if x>0 && i>0 then do_door(horizontalDoors,x-1,y,oldHorizontalDoors,i-1,j)
+                        if y<7 && j<7 then do_door(verticalDoors,x,y,oldVerticalDoors,i,j)
+                        if y>0 && j>0 then do_door(verticalDoors,x,y-1,oldVerticalDoors,i,j-1)
 
+        // Second pass: clear source positions that are not also destinations of another grabbed room.
+        // Doing this in the same loop as the copy causes rooms to be erroneously cleared when the
+        // destination of one grabbed room coincides with the source of another (e.g. moving a group right).
+        for i = 0 to 7 do
+            for j = 0 to 7 do
+                if grabContiguousRooms.[i,j] then
+                    let si, sj = i - dx, j - dy
+                    let isAlsoDestination = si >= 0 && si <= 7 && sj >= 0 && sj <= 7 && grabContiguousRooms.[si,sj]
+                    if not isAlsoDestination then
+                        roomStates.[i,j].CSharp.Clear()
+
+        this.Abort()
 
     member this.ToggleGrabMode() = isGrabMode <- not isGrabMode
     member this.IsGrabMode = isGrabMode
