@@ -12,8 +12,8 @@ Sample screenshots:
 
 ![sample tracker screenshot](doc/screenshots/full-tracker-example1.png)
 
-The most recent beta release is v2.0.3, and you can find the [documentation here](https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/doc/TOC.md), which includes links for
-downloading and installing Z-Tracker.
+The most recent release is v2.1.0, and you can find the [documentation here](https://github.com/Neononane/Zelda1RandoTools/blob/2.0.X-Initial---CoopSync/doc/TOC.md), which includes links for
+downloading and installing Z-Tracker. v2.1.0 introduces co-op synchronization, self-hosted sync server, race mode, live overworld quest switching, custom marker tiles, and many UI improvements.
 
 ## Motivation
 
