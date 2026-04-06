@@ -336,32 +336,12 @@ let GetIconBMPAndExtraDecorations(cm, ms:MapStateProxy,i,j) =   // returns: (sho
             else
                 false, Graphics.theFullTileBmpTable.[ms.State].[0], []
     else
-        // Check if this non-shop tile has an extra item icon overlay (only when option is enabled)
-        if TrackerModelOptions.AllowItemIconOnNonShopTile.Value then
-            let item2 = TrackerModel.getShopItem2_1based(i,j)
-            if item2 <> 0 then
-                let tileBmp = Graphics.theFullTileBmpTable.[ms.State].[0]
-                let itemBmp = Graphics.theInteriorBmpTable.[item2 - 1 + TrackerModel.MapSquareChoiceDomainHelper.ARROW].[0]
-                // overlay item icon in bottom-right corner of the tile
-                let composed = new System.Drawing.Bitmap(16*3, 11*3)
-                for px = 0 to 16*3-1 do
-                    for py = 0 to 11*3-1 do
-                        composed.SetPixel(px, py, tileBmp.GetPixel(px, py))
-                // item icon at bottom-right: x=10*3..14*3, y=5*3..9*3 (scaled 5x9 -> slightly smaller area)
-                let ox, oy = 11*3, 5*3
-                for px = 0 to 5*3-1 do
-                    for py = 0 to 9*3-1 do
-                        let dx = ox + px/2
-                        let dy = oy + py/2
-                        if dx < 16*3 && dy < 11*3 then
-                            let c = itemBmp.GetPixel(px, py)
-                            if c.A > 0uy then
-                                composed.SetPixel(dx, dy, c)
-                false, composed, []
-            else
-                false, Graphics.theFullTileBmpTable.[ms.State].[0], []
-        else
-            false, Graphics.theFullTileBmpTable.[ms.State].[0], []
+        // Return just the tile bitmap; item icon overlays for marked tiles (state >= 0) are intentionally
+        // NOT shown here — they only appear on unmarked (state=-1) tiles or dark-X tiles, which are
+        // handled by the state=-1 branch above and the redrawGridSpot dark-X path respectively.
+        // Composing here caused the popup hover callback to show a spurious "letter icon" in the tile
+        // preview whenever a tile with leftover shop data was hovered over PP/WARP tiles in the selector.
+        false, Graphics.theFullTileBmpTable.[ms.State].[0], []
 
 let toggleables = [| 
     TrackerModel.MapSquareChoiceDomainHelper.TAKE_ANY
