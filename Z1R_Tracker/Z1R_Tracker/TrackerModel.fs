@@ -1174,7 +1174,7 @@ let recomputeMapStateSummary() =
                         if hasItem(MapSquareChoiceDomainHelper.ARROW)       then foundArrowShop_ <- true
                         if hasItem(MapSquareChoiceDomainHelper.BOMB)        then foundBombShop_ <- true
                     else
-                        if n=MapSquareChoiceDomainHelper.THE_LETTER && getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.THE_LETTER)=0 then 
+                        if n=MapSquareChoiceDomainHelper.THE_LETTER && getOverworldMapExtraData(i,j,MapSquareChoiceDomainHelper.THE_LETTER)=MapSquareChoiceDomainHelper.THE_LETTER then
                             havePotionLetter_ <- true
                 let isInteresting = overworldMapMarks.[i,j].Current() <> -1 && overworldMapMarks.[i,j].Current() <> mapSquareChoiceDomain.MaxKey
                 if OverworldData.owMapSquaresSecondQuestOnly.[j].Chars(i) = 'X' then 
