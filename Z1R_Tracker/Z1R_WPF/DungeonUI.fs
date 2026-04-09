@@ -1438,8 +1438,10 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
 
                 let SetNewValue(newState: DungeonRoomState) =
                     let originalState = roomStates.[i,j].Clone()
+#if DEBUG
                     System.Diagnostics.Debug.WriteLine(sprintf "SetNewValue called for (%d,%d) - New ID: %O - Current ID: %O"
                         i j newState.DebugId (roomStates.[i,j].DebugId.ToString()))
+#endif
 
 
                     if
@@ -1505,27 +1507,37 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                             let ktn = newState.RoomType.KnownTransportNumber()
                             let secondTransport = ktn.HasValue && usedTransports.[ktn.Value] = 2
 
-                            if TrackerModelOptions.DoDoorInference.Value && originallyWasNotMarked() && not newState.IsEmpty && not secondTransport && not newState.IsGannonOrZelda then
-                                let possibleEntries = ResizeArray()
-                                let maybeAdd (door: Dungeon.Door) =
-                                    if door.State <> Dungeon.DoorState.NO then
-                                        possibleEntries.Add(door)
-                                if i > 0 && not roomStates.[i-1,j].IsEmpty then maybeAdd(horizontalDoors.[i-1,j])
-                                if i < 7 && not roomStates.[i+1,j].IsEmpty then maybeAdd(horizontalDoors.[i,j])
-                                if j > 0 && not roomStates.[i,j-1].IsEmpty then maybeAdd(verticalDoors.[i,j-1])
-                                if j < 7 && not roomStates.[i,j+1].IsEmpty then maybeAdd(verticalDoors.[i,j])
-
-                                if possibleEntries.Count = 1 then
-                                    let door = possibleEntries.[0]
-                                    if door.State = Dungeon.DoorState.UNKNOWN then
-                                        door.State <- Dungeon.DoorState.YES
+                            // Door inference: only infer when a previously-unmarked room is now marked.
+                            // Track whether any door state actually changed so we can skip the redrawAllDoors() call
+                            // when nothing needs updating (the common case for plain room marks).
+                            let doorInferenceChanged =
+                                if TrackerModelOptions.DoDoorInference.Value && originallyWasNotMarked() && not newState.IsEmpty && not secondTransport && not newState.IsGannonOrZelda then
+                                    let possibleEntries = ResizeArray()
+                                    let maybeAdd (door: Dungeon.Door) =
+                                        if door.State <> Dungeon.DoorState.NO then
+                                            possibleEntries.Add(door)
+                                    if i > 0 && not roomStates.[i-1,j].IsEmpty then maybeAdd(horizontalDoors.[i-1,j])
+                                    if i < 7 && not roomStates.[i+1,j].IsEmpty then maybeAdd(horizontalDoors.[i,j])
+                                    if j > 0 && not roomStates.[i,j-1].IsEmpty then maybeAdd(verticalDoors.[i,j-1])
+                                    if j < 7 && not roomStates.[i,j+1].IsEmpty then maybeAdd(verticalDoors.[i,j])
+                                    if possibleEntries.Count = 1 then
+                                        let door = possibleEntries.[0]
+                                        if door.State = Dungeon.DoorState.UNKNOWN then
+                                            door.State <- Dungeon.DoorState.YES
+                                            true  // a door state changed; redraw needed
+                                        else false
+                                    else false
+                                else false
 
                             //let rendered = roomStates.[i,j].CurrentDisplayEx(usedTransports)
                             //System.Diagnostics.Debug.WriteLine(sprintf "[SetNewValue] Render preview: IsComplete = %b" newState.IsComplete)
 
                             updateHeaderCanvases()
                             redraw()
-                            redrawAllDoors()
+                            // Only redraw doors when something actually changed: a transport was added/removed
+                            // (already causes redrawAllRooms above) or door inference set a new door state.
+                            if removedTransport || addedTransport || doorInferenceChanged then
+                                redrawAllDoors()
                             animateDungeonRoomTile(i,j)
                             if not popupIsActive then
                                 triggerRoomChanged {
@@ -1850,7 +1862,9 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                         else
                                             if isFirstTimeClickingAnyRoom.[level-1].Value then
                                                 let room = roomStates.[i,j]
+#if DEBUG
                                                 printf "Room X at %d and y at %d" room.X room.Y
+#endif
                                                 let original = room.Clone()
                                                 room.RoomType <- RoomType.StartEnterFromS
                                                 room.IsComplete <- true
@@ -1887,8 +1901,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
                                                     justUnmarked <- None
                                                     ea.Handled <- true
 
-
-                                        redraw()
+                                    // SetNewValue already calls redraw() internally; no second call needed.
                                     ea.Handled <- true
                             elif ea.ChangedButton = Input.MouseButton.Right then
                                 if not grabHelper.IsGrabMode then  // cannot right click rooms in grab mode

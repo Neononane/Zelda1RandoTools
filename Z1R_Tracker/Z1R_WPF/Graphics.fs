@@ -431,9 +431,11 @@ type DragDropSurface<'T>(surface:FrameworkElement, onStartDrag : _ * ('T -> unit
                 // This is the windows setting for click v drag
                 //     if Math.Abs(pos.X - startPoint.Value.X) > SystemParameters.MinimumHorizontalDragDistance || Math.Abs(pos.Y - startPoint.Value.Y) > SystemParameters.MinimumVerticalDragDistance then
                 // However it defaults to just 4 pixels, and some folks were inadvertantly dragging when they wanted to click.
-                // The only place setupClickVersusDrag() is called in for 'painting rooms' in dungeon UI.  You would always need to go across the distance of 1 door (12.0) to paint multiple rooms.
-                // So make size that the threshold, for less accidental-drag behavior.
-                if Math.Abs(pos.X - startPoint.Value.X) > 12.0 || Math.Abs(pos.Y - startPoint.Value.Y) > 12.0 then
+                // The only place setupClickVersusDrag() is called is for 'painting rooms' in dungeon UI.  Intentional drag-painting
+                // requires crossing to a different room (each room is ~39px wide), so 20px gives plenty of margin over hand tremor
+                // (~5-8px) while still triggering well before the user reaches the next room.  The old 12px threshold was measured
+                // from the click point (not the room edge), so even a small wobble mid-click could silently swallow the click.
+                if Math.Abs(pos.X - startPoint.Value.X) > 20.0 || Math.Abs(pos.Y - startPoint.Value.Y) > 20.0 then
                     //printfn "%A  -  %A" startPoint pos
                     isDragging <- true
                     onStartDrag(ea, initiateDragFunc.Value)
