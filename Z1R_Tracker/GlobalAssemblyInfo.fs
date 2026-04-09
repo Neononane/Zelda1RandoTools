@@ -1,7 +1,7 @@
 namespace System
 open System.Reflection
 
-[<assembly: AssemblyVersion("2.1.0.1")>]
-[<assembly: AssemblyFileVersion("2.1.0.1")>]
+[<assembly: AssemblyVersion("2.1.0.2")>]
+[<assembly: AssemblyFileVersion("2.1.0.2")>]
 [<assembly: AssemblyInformationalVersion("2.1.0")>]
 do ()
