@@ -2,8 +2,8 @@
 
 ### A tracker for Zelda 1 Randomizer
 
-The most recent production release is v2.1.0, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/master/doc/TOC.md), which includes links for
-downloading and installing Z-Tracker.v2.1.0 introduces co-op synchronization, self-hosted sync server, race mode, live overworld quest switching, custom marker tiles, and many UI improvements.
+The most recent production release is v2.1.0.2, and you can find the [documentation here](https://github.com/neononane/Zelda1RandoTools/blob/master/doc/TOC.md), which includes links for
+downloading and installing Z-Tracker. v2.1.0.2 introduces co-op synchronization, self-hosted sync server, race mode, live overworld quest switching, custom marker tiles, and many UI improvements.
 
 Sample screenshots:
 
@@ -15,7 +15,7 @@ Sample screenshots:
 
 ## Motivation
 
-This is a tracking tool for those play seeds of fcouglin's Zelda 1 Randomizer ([z1r discord](https://discord.gg/BEwVJUxxrW), [z1r wiki](https://z1r.wiki), [old z1r site](https://sites.google.com/site/zeldarandomizer/)).
+This is a tracking tool for those who play seeds of fcouglin's Zelda 1 Randomizer ([z1r discord](https://discord.gg/BEwVJUxxrW), [z1r wiki](https://z1r.wiki), [old z1r site](https://sites.google.com/site/zeldarandomizer/)).
 
 This tool is inspired by [ZHelper](http://questwizard.net/zhelper/), a tool commonly used by z1r racers.  (Other alternatives for tracking z1r include using an EmoTracker pack,
 using pen & paper, or using electronic notetaking in spreadsheets/Notepad.)
@@ -38,6 +38,6 @@ Enjoy! - _Dr. Brian Lorgon111_
 
 ## Z-Tracker Future
 
-Dr. Brian Lorgon111 has passed the torch on this project to others who are willing to contribute to the structure, goals, and outcomes. This was the attempt by Neononane to add some requested features and capabilities to the project. At this stage it likely will not see future updates and will be stable at v2.1.0.
+Dr. Brian Lorgon111 has passed the torch on this project to others who are willing to contribute to the structure, goals, and outcomes. This was the attempt by Neononane to add some requested features and capabilities to the project. At this stage it likely will not see future updates and will be stable at v2.1.0.2.
 
 Regards - _Neononane_
