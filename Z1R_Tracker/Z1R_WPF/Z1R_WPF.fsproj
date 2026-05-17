@@ -46,7 +46,11 @@
        also set as the ApplicationIcon above.
        ─────────────────────────────────────────────────── -->
   <ItemGroup>
-    <EmbeddedResource Include="icons\*.png" />
+    <!-- LogicalName preserves the old non-SDK resource-name convention: callers use
+         GetManifestResourceStream("filename.png") without any namespace prefix. -->
+    <EmbeddedResource Include="icons\*.png">
+      <LogicalName>%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
     <Content Include="icons\ztlogo64x64.ico">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
