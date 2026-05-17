@@ -316,7 +316,7 @@ let BmpToSource(bmp:System.Drawing.Bitmap) =
     bmp.UnlockBits(bitmapData)
     bitmapSource
 *)
-let BItoImage(bi:System.Windows.Media.Imaging.BitmapImage) =
+let BItoImage(bi:System.Windows.Media.Imaging.BitmapSource) =
     if dpi.Value.DpiScaleX=1.0 && dpi.Value.DpiScaleY=1.0 then
         new Image(Source=bi)
     else
@@ -326,38 +326,49 @@ let BItoImage(bi:System.Windows.Media.Imaging.BitmapImage) =
         let rawImage : byte[] = Array.zeroCreate (rawStride * bi.PixelHeight)
         bi.CopyPixels(rawImage, rawStride, 0)                                                            // dpi.ppix, dpi.ppiy
         new Image(Source=System.Windows.Media.Imaging.BitmapSource.Create(bi.PixelWidth, bi.PixelHeight, 96., 96., pf, null, rawImage, rawStride))
-/// Encode an SKBitmap to PNG and wrap in a frozen BitmapImage (for use as WPF ImageSource).
-let BMPToBI(bmp:SKBitmap) =
-    use ms = new System.IO.MemoryStream()
-    use img  = SKImage.FromBitmap(bmp)
-    use data = img.Encode(SKEncodedImageFormat.Png, 100)
-    data.SaveTo(ms)
-    ms.Position <- 0L
-    let bi = new System.Windows.Media.Imaging.BitmapImage()
-    bi.BeginInit()
-    bi.StreamSource <- ms
-    bi.CacheOption <- System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
-    bi.EndInit()
-    bi.Freeze()
-    bi
 
-/// Encode an SKBitmap to PNG and return an Image control sized to the bitmap.
-let BMPtoImage(bmp:SKBitmap) =
-    let ms = new System.IO.MemoryStream()
-    use img  = SKImage.FromBitmap(bmp)
-    use data = img.Encode(SKEncodedImageFormat.Png, 100)
-    data.SaveTo(ms)
-    ms.Seek(0L, System.IO.SeekOrigin.Begin) |> ignore
-    let bmimage = new System.Windows.Media.Imaging.BitmapImage()
-    bmimage.BeginInit()
-    bmimage.CreateOptions <- System.Windows.Media.Imaging.BitmapCreateOptions.DelayCreation
-    bmimage.CacheOption <- System.Windows.Media.Imaging.BitmapCacheOption.OnDemand  // must 'let' ms
-    bmimage.StreamSource <- ms
-    bmimage.EndInit()
+// ── SKBitmap → WPF BitmapSource conversion ───────────────────────────────
+// Uses BitmapSource.Create with a raw pixel pointer — no PNG encode/decode
+// round-trip.  Results are cached by SKBitmap identity so every unique
+// bitmap object pays the conversion cost exactly once.
+let private bsCache =
+    System.Runtime.CompilerServices.ConditionalWeakTable<SKBitmap, System.Windows.Media.Imaging.BitmapSource>()
+
+let private skToBitmapSource (bmp: SKBitmap) : System.Windows.Media.Imaging.BitmapSource =
+    // BitmapSource.Create(IntPtr) expects Bgra8888 byte order (= WPF Bgra32).
+    // SKBitmap.Decode gives Bgra8888 on Windows; new SKBitmap(w,h) gives Rgba8888.
+    // Copy to Bgra8888 if needed — one-time cost because results are cached.
+    let needsCopy = bmp.ColorType <> SKColorType.Bgra8888
+    let src = if needsCopy then bmp.Copy(SKColorType.Bgra8888) else bmp
+    try
+        let ptr    = src.GetPixels()
+        let stride = src.Width * 4
+        let bs =
+            System.Windows.Media.Imaging.BitmapSource.Create(
+                src.Width, src.Height, 96., 96.,
+                PixelFormats.Bgra32, null, ptr, src.Height * stride, stride)
+        bs.Freeze()
+        bs
+    finally
+        if needsCopy then src.Dispose()
+
+let private getBS (bmp: SKBitmap) : System.Windows.Media.Imaging.BitmapSource =
+    match bsCache.TryGetValue(bmp) with
+    | true, bs -> bs
+    | _ ->
+        let bs = skToBitmapSource bmp
+        bsCache.Add(bmp, bs)
+        bs
+
+/// Convert an SKBitmap to a frozen BitmapSource. Result is cached per SKBitmap instance.
+let BMPToBI (bmp: SKBitmap) : System.Windows.Media.Imaging.BitmapSource = getBS bmp
+
+/// Wrap an SKBitmap in a WPF Image sized to the bitmap. BitmapSource is cached per SKBitmap instance.
+let BMPtoImage (bmp: SKBitmap) =
     let i = new Image()
-    i.Source <- bmimage
-    i.Height <- float bmp.Height
-    i.Width  <- float bmp.Width
+    i.Source <- getBS bmp
+    i.Height  <- float bmp.Height
+    i.Width   <- float bmp.Width
     i
 
 /// Convert a System.Drawing.Icon to a WPF Image control (used only for dialog icons in CustomMessageBox/CustomComboBoxes).
