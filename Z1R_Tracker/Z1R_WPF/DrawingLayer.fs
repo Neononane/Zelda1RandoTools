@@ -1,70 +1,70 @@
 ﻿module DrawingLayer
 
 module ExtraZTbmps =
-    open System.Drawing
+    open SkiaSharp
 
     let Vertical =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         for py = 0 to 15 do
-            r.SetPixel(8, py, Color.Red)
+            r.SetPixel(8, py, SKColors.Red)
         r
     let Horizontal =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         for px = 0 to 15 do
-            r.SetPixel(px, 8, Color.Red)
+            r.SetPixel(px, 8, SKColors.Red)
         r
-    let top(r:Bitmap) =
+    let top(r:SKBitmap) =
         for px = 0 to 15 do
-            r.SetPixel(px, 0, Color.Red)
-    let bottom(r:Bitmap) =
+            r.SetPixel(px, 0, SKColors.Red)
+    let bottom(r:SKBitmap) =
         for px = 0 to 15 do
-            r.SetPixel(px, 15, Color.Red)
-    let left(r:Bitmap) =
+            r.SetPixel(px, 15, SKColors.Red)
+    let left(r:SKBitmap) =
         for py = 0 to 15 do
-            r.SetPixel(0, py, Color.Red)
-    let right(r:Bitmap) =
+            r.SetPixel(0, py, SKColors.Red)
+    let right(r:SKBitmap) =
         for py = 0 to 15 do
-            r.SetPixel(15, py, Color.Red)
+            r.SetPixel(15, py, SKColors.Red)
     let UL =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         top(r)
         left(r)
         r
     let UR =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         top(r)
         right(r)
         r
     let LL =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         bottom(r)
         left(r)
         r
     let LR =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         bottom(r)
         right(r)
         r
     let OnlyLeft =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         top(r)
         bottom(r)
         right(r)
         r
     let OnlyUp =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         left(r)
         bottom(r)
         right(r)
         r
     let OnlyRight =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         left(r)
         bottom(r)
         top(r)
         r
     let OnlyDown =
-        let r = new Bitmap(16,16)
+        let r = new SKBitmap(16,16)
         left(r)
         right(r)
         top(r)
@@ -89,8 +89,8 @@ open System.Windows.Media
 
 open CustomComboBoxes
 
-let unborder(bmp:System.Drawing.Bitmap) =  // turn 18x18 into 16x16
-    let r = new System.Drawing.Bitmap(16,16)
+let unborder(bmp:SkiaSharp.SKBitmap) =  // turn 18x18 into 16x16
+    let r = new SkiaSharp.SKBitmap(16,16)
     for i = 0 to 15 do
         for j = 0 to 15 do
             r.SetPixel(i, j, bmp.GetPixel(i+1,j+1))
@@ -106,7 +106,7 @@ let ExtraIconsResourceTable =
             let results = ResizeArray()
             for filename in System.IO.Directory.EnumerateFiles(extraIconsDirectory, "*.png") do
                 currentFilename <- System.IO.Path.GetFileName(filename)
-                let bmp = System.Drawing.Bitmap.FromFile(filename) :?> System.Drawing.Bitmap
+                let bmp = SkiaSharp.SKBitmap.Decode(filename)
                 let shortFilename = System.IO.Path.GetFileNameWithoutExtension(filename)
                 results.Add(shortFilename, bmp)
             if results.Count = 0 then
@@ -187,7 +187,7 @@ open DungeonSaveAndLoad  // has Model types for DrawingLayer
 let mutable mouse = None
 let imgHighlightBorder = new Border(BorderThickness=Thickness(2.), BorderBrush=Brushes.Pink, Width=36., Height=36., Opacity=0.0)
 
-let makeImage(bmp:System.Drawing.Bitmap) = 
+let makeImage(bmp:SkiaSharp.SKBitmap) =
     let img = Graphics.BMPtoImage bmp
     if bmp.Width = 16 || bmp.Height = 16 then
         img.Width <- 32.

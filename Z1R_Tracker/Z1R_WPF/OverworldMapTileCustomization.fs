@@ -109,11 +109,11 @@ overworldAcceleratorTable.Add(TrackerModel.MapSquareChoiceDomainHelper.SWORD2, (
 
 let sword2LeftSideFullTileBmp =
     let interiorBmp = Graphics.theInteriorBmpTable.[TrackerModel.MapSquareChoiceDomainHelper.SWORD2].[0]
-    let fullTileBmp = new System.Drawing.Bitmap(16*3,11*3)
-    let BG = System.Drawing.Color.FromArgb(int Graphics.TRANS_BG.A, int Graphics.TRANS_BG.R, int Graphics.TRANS_BG.G, int Graphics.TRANS_BG.B)   // the compiler is being stupid, clone this color to workaround
+    let fullTileBmp = new SkiaSharp.SKBitmap(16*3,11*3)
+    let BG = Graphics.TRANS_BG
     for px = 0 to 16*3-1 do
         for py = 0 to 11*3-1 do
-            if px>=1*3 && px<6*3 && py>=1*3 && py<10*3 then 
+            if px>=1*3 && px<6*3 && py>=1*3 && py<10*3 then
                 fullTileBmp.SetPixel(px, py, interiorBmp.GetPixel(px-1*3, py-1*3))
             else
                 fullTileBmp.SetPixel(px, py, BG)
@@ -130,7 +130,7 @@ let makeTwoItemShopBmp(item1, item2) =  // 0-based, -1 for blank
         | true, r -> r
         | _ ->
             // cons up a two-item shop image
-            let tile = new System.Drawing.Bitmap(16*3,11*3)
+            let tile = new SkiaSharp.SKBitmap(16*3,11*3)
             for px = 0 to 16*3-1 do
                 for py = 0 to 11*3-1 do
                     // two-icon area
@@ -142,13 +142,13 @@ let makeTwoItemShopBmp(item1, item2) =  // 0-based, -1 for blank
                         // icon 1
                         if px/3 >= 4 && px/3 <= 6 && py/3 >= 2 && py/3 <= 8 then
                             let c = Graphics.itemsBMP.GetPixel(item1*3 + px/3-4, py/3-2)
-                            if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                            if not (c.Red=0uy && c.Green=0uy && c.Blue=0uy) then
                                 tile.SetPixel(px, py, c)
                     if item2 >= 0 then
                         // icon 2
                         if px/3 >= 8 && px/3 <= 10 && py/3 >= 2 && py/3 <= 8 then
                             let c = Graphics.itemsBMP.GetPixel(item2*3 + px/3-8, py/3-2)
-                            if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                            if not (c.Red=0uy && c.Green=0uy && c.Blue=0uy) then
                                 tile.SetPixel(px, py, c)
             twoItemShopBmpCache.Add((item1,item2), tile)
             tile
@@ -157,7 +157,7 @@ let makeThreeItemShopBmp(item1, item2, item3) =  // 0-based, -1 for blank
     match threeItemShopBmpCache.TryGetValue((item1,item2,item3)) with
     | true, r -> r
     | _ ->
-        let tile = new System.Drawing.Bitmap(16*3,11*3)
+        let tile = new SkiaSharp.SKBitmap(16*3,11*3)
         for px = 0 to 16*3-1 do
             for py = 0 to 11*3-1 do
                 if px/3 >= 3 && px/3 <= 11 && py/3 >= 1 && py/3 <= 9 then
@@ -167,17 +167,17 @@ let makeThreeItemShopBmp(item1, item2, item3) =  // 0-based, -1 for blank
                 if item1 >= 0 then
                     if px/3 >= 3 && px/3 <= 5 && py/3 >= 2 && py/3 <= 8 then
                         let c = Graphics.itemsBMP.GetPixel(item1*3 + px/3-3, py/3-2)
-                        if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                        if not (c.Red=0uy && c.Green=0uy && c.Blue=0uy) then
                             tile.SetPixel(px, py, c)
                 if item2 >= 0 then
                     if px/3 >= 6 && px/3 <= 8 && py/3 >= 2 && py/3 <= 8 then
                         let c = Graphics.itemsBMP.GetPixel(item2*3 + px/3-6, py/3-2)
-                        if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                        if not (c.Red=0uy && c.Green=0uy && c.Blue=0uy) then
                             tile.SetPixel(px, py, c)
                 if item3 >= 0 then
                     if px/3 >= 9 && px/3 <= 11 && py/3 >= 2 && py/3 <= 8 then
                         let c = Graphics.itemsBMP.GetPixel(item3*3 + px/3-9, py/3-2)
-                        if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                        if not (c.Red=0uy && c.Green=0uy && c.Blue=0uy) then
                             tile.SetPixel(px, py, c)
         threeItemShopBmpCache.Add((item1,item2,item3), tile)
         tile
@@ -302,8 +302,8 @@ let GetIconBMPAndExtraDecorations(cm, ms:MapStateProxy,i,j) =   // returns: (sho
         else
             false, Graphics.theFullTileBmpTable.[ms.State].[0], []
     elif ms.IsDungeon then
-        let combine(number:System.Drawing.Bitmap, letter:System.Drawing.Bitmap) =
-            let fullTileBmp = new System.Drawing.Bitmap(16*3,11*3)
+        let combine(number:SkiaSharp.SKBitmap, letter:SkiaSharp.SKBitmap) =
+            let fullTileBmp = new SkiaSharp.SKBitmap(16*3,11*3)
             let TRANS_BG = Graphics.TRANS_BG
             for px = 0 to 16*3-1 do
                 for py = 0 to 11*3-1 do

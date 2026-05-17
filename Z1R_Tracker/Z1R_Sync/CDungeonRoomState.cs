@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Drawing;
+using SkiaSharp;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -202,22 +202,22 @@ namespace Z1R_Tracker.Models
                 }
                 return RoomType.Unmarked;
             }
-            public static Bitmap UncompletedBI(this RoomType rt)
+            public static SKBitmap UncompletedBI(this RoomType rt)
             {
                 return RoomTypeGraphics.GetBmpPair(rt).Item1;
             }
 
-            public static Bitmap CompletedBI(this RoomType rt)
+            public static SKBitmap CompletedBI(this RoomType rt)
             {
 
                 return RoomTypeGraphics.GetBmpPair(rt).Item2;
             }
-            public static Bitmap TinyUncompletedBI(this RoomType rt)
+            public static SKBitmap TinyUncompletedBI(this RoomType rt)
             {
                 return RoomTypeGraphics.GetTinyBmpPair(rt).Item1;
             }
 
-            public static Bitmap TinyCompletedBI(this RoomType rt)
+            public static SKBitmap TinyCompletedBI(this RoomType rt)
             {
                 return RoomTypeGraphics.GetTinyBmpPair(rt).Item2;
             }
@@ -393,9 +393,9 @@ namespace Z1R_Tracker.Models
                     default: return "(Unknown)";
                 }
             }
-            public static Bitmap Bmp(this MonsterDetail detail)
+            public static SKBitmap Bmp(this MonsterDetail detail)
             {
-                return MonsterGraphics.GetBitmap(detail);
+                return MonsterGraphics.GetSKBitmap(detail);
             }
 
 
@@ -461,9 +461,9 @@ namespace Z1R_Tracker.Models
             {
                 return detail == FloorDropDetail.Unmarked;
             }
-            public static Bitmap Bmp(this FloorDropDetail detail)
+            public static SKBitmap Bmp(this FloorDropDetail detail)
             {
-                return FloorDropGraphics.GetBitmap(detail);
+                return FloorDropGraphics.GetSKBitmap(detail);
             }
 
 
@@ -810,16 +810,16 @@ namespace Z1R_Tracker.Models
     }
     public static class MonsterGraphics
     {
-        private static readonly Dictionary<MonsterDetail, Bitmap> _bitmapMap;
+        private static readonly Dictionary<MonsterDetail, SKBitmap> _bitmapMap;
 
         static MonsterGraphics()
         {
-            _bitmapMap = LoadBitmaps();
+            _bitmapMap = LoadSKBitmaps();
         }
 
-        private static Dictionary<MonsterDetail, Bitmap> LoadBitmaps()
+        private static Dictionary<MonsterDetail, SKBitmap> LoadSKBitmaps()
         {
-            var result = new Dictionary<MonsterDetail, Bitmap>();
+            var result = new Dictionary<MonsterDetail, SKBitmap>();
 
             var resourceName = "zelda_bosses16x16.png";
             var assembly = AppDomain.CurrentDomain.GetAssemblies()
@@ -833,7 +833,7 @@ namespace Z1R_Tracker.Models
                 if (imageStream == null)
                     throw new InvalidOperationException($"Embedded resource '{resourceName}' not found. Ensure it's marked as Embedded Resource in Z1R_WPF.");
 
-                var source = new Bitmap(imageStream);
+                var source = SKBitmap.Decode(imageStream);
                 int spriteWidth = 16;
                 int spriteHeight = 16;
 
@@ -878,20 +878,18 @@ namespace Z1R_Tracker.Models
                     var detail = kvp.Key;
                     int index = kvp.Value;
 
-                    var tile = new Bitmap(18, 18); // 1px border
-                    using (Graphics g = Graphics.FromImage(tile))
-                    {
-                        g.Clear(Color.Black);
+                    var tile = new SKBitmap(18, 18); // 1px border
+                    using (var canvas = new SKCanvas(tile))
+                        canvas.Clear(SKColors.Black);
 
-                        for (int px = 0; px < spriteWidth; px++)
+                    for (int px = 0; px < spriteWidth; px++)
+                    {
+                        for (int py = 0; py < spriteHeight; py++)
                         {
-                            for (int py = 0; py < spriteHeight; py++)
+                            var color = source.GetPixel(px + index * spriteWidth, py);
+                            if (!(color.Red == 0 && color.Green == 0 && color.Blue == 0))
                             {
-                                var color = source.GetPixel(px + index * spriteWidth, py);
-                                if (color.ToArgb() != Color.Black.ToArgb())
-                                {
-                                    tile.SetPixel(px + 1, py + 1, color); // offset by 1px for border
-                                }
+                                tile.SetPixel(px + 1, py + 1, color); // offset by 1px for border
                             }
                         }
                     }
@@ -913,7 +911,9 @@ namespace Z1R_Tracker.Models
                 var detail = kvp.Key;
                 var bmp = kvp.Value;
                 string filename = Path.Combine(folder, $"{(int)detail:00}_{detail}.png");
-                bmp.Save(filename, System.Drawing.Imaging.ImageFormat.Png);
+                using (var data = SKImage.FromBitmap(bmp).Encode(SKEncodedImageFormat.Png, 100))
+                using (var fs = File.OpenWrite(filename))
+                    data.SaveTo(fs);
             }
         }
 
@@ -922,7 +922,7 @@ namespace Z1R_Tracker.Models
 
 
 
-        public static Bitmap GetBitmap(MonsterDetail detail)
+        public static SKBitmap GetSKBitmap(MonsterDetail detail)
         {
             if (_bitmapMap.TryGetValue(detail, out var bmp))
                 return bmp;
@@ -936,16 +936,16 @@ namespace Z1R_Tracker.Models
 
     public static class FloorDropGraphics
     {
-        private static readonly Dictionary<FloorDropDetail, Bitmap> _bitmapMap;
+        private static readonly Dictionary<FloorDropDetail, SKBitmap> _bitmapMap;
 
         static FloorDropGraphics()
         {
-            _bitmapMap = LoadBitmaps();
+            _bitmapMap = LoadSKBitmaps();
         }
 
-        private static Dictionary<FloorDropDetail, Bitmap> LoadBitmaps()
+        private static Dictionary<FloorDropDetail, SKBitmap> LoadSKBitmaps()
         {
-            var result = new Dictionary<FloorDropDetail, Bitmap>();
+            var result = new Dictionary<FloorDropDetail, SKBitmap>();
 
             var assembly = AppDomain.CurrentDomain.GetAssemblies()
                 .FirstOrDefault(a => a.GetName().Name == "Z1R_WPF");
@@ -958,7 +958,7 @@ namespace Z1R_Tracker.Models
                 if (imageStream == null)
                     throw new InvalidOperationException("Embedded resource 'zelda_items16x16.png' not found. Ensure it is marked as Embedded Resource under Z1R_WPF.Resources.icons.");
 
-                var source = new Bitmap(imageStream);
+                var source = SKBitmap.Decode(imageStream);
                 int spriteWidth = 16;
                 int spriteHeight = 16;
 
@@ -980,20 +980,18 @@ namespace Z1R_Tracker.Models
                     var detail = kvp.Key;
                     int index = kvp.Value;
 
-                    var tile = new Bitmap(18, 18); // with 1px border
-                    using (Graphics g = Graphics.FromImage(tile))
-                    {
-                        g.Clear(Color.Black);
+                    var tile = new SKBitmap(18, 18); // with 1px border
+                    using (var canvas = new SKCanvas(tile))
+                        canvas.Clear(SKColors.Black);
 
-                        for (int px = 0; px < spriteWidth; px++)
+                    for (int px = 0; px < spriteWidth; px++)
+                    {
+                        for (int py = 0; py < spriteHeight; py++)
                         {
-                            for (int py = 0; py < spriteHeight; py++)
+                            var color = source.GetPixel(px + index * spriteWidth, py);
+                            if (!(color.Red == 0 && color.Green == 0 && color.Blue == 0))
                             {
-                                var color = source.GetPixel(px + index * spriteWidth, py);
-                                if (color.ToArgb() != Color.Black.ToArgb())
-                                {
-                                    tile.SetPixel(px + 1, py + 1, color); // 1px padding
-                                }
+                                tile.SetPixel(px + 1, py + 1, color); // 1px padding
                             }
                         }
                     }
@@ -1009,7 +1007,7 @@ namespace Z1R_Tracker.Models
 
 
 
-        public static Bitmap GetBitmap(FloorDropDetail detail)
+        public static SKBitmap GetSKBitmap(FloorDropDetail detail)
         {
             if (_bitmapMap.TryGetValue(detail, out var bmp))
                 return bmp;
@@ -1020,13 +1018,13 @@ namespace Z1R_Tracker.Models
 
     public static class RoomTypeGraphics
     {
-        private static readonly Tuple<Bitmap, Bitmap>[] dungeonRoomBmpPairs;
-        private static readonly Tuple<Bitmap, Bitmap>[] dungeonRoomTinyBmpPairs;
+        private static readonly Tuple<SKBitmap, SKBitmap>[] dungeonRoomBmpPairs;
+        private static readonly Tuple<SKBitmap, SKBitmap>[] dungeonRoomTinyBmpPairs;
 
         static RoomTypeGraphics()
         {
             dungeonRoomBmpPairs = LoadUpscaledRoomBitmapPairs(GetResourceStreamFromWPF("new_icons13x9.png"));
-            dungeonRoomTinyBmpPairs = LoadTinyRoomBitmapPairs(GetResourceStreamFromWPF("new_icons13x9.png"));
+            dungeonRoomTinyBmpPairs = LoadTinyRoomSKBitmapPairs(GetResourceStreamFromWPF("new_icons13x9.png"));
         }
 
         public static Stream GetResourceStreamFromWPF(string resourceFileName)
@@ -1045,23 +1043,23 @@ namespace Z1R_Tracker.Models
 
             return wpfAssembly.GetManifestResourceStream(resourceName);
         }
-        public static Tuple<Bitmap, Bitmap>[] LoadUpscaledRoomBitmapPairs(Stream stream)
+        public static Tuple<SKBitmap, SKBitmap>[] LoadUpscaledRoomBitmapPairs(Stream stream)
         {
-            Bitmap src = new Bitmap(stream);
+            SKBitmap src = SKBitmap.Decode(stream);
             int count = src.Width / 13;
-            var pairs = new Tuple<Bitmap, Bitmap>[count];
+            var pairs = new Tuple<SKBitmap, SKBitmap>[count];
 
             for (int i = 0; i < count; i++)
             {
-                Bitmap uncompleted = new Bitmap(13 * 3, 9 * 3);
-                Bitmap completed = new Bitmap(13 * 3, 9 * 3);
+                SKBitmap uncompleted = new SKBitmap(13 * 3, 9 * 3);
+                SKBitmap completed = new SKBitmap(13 * 3, 9 * 3);
 
                 for (int px = 0; px < 13 * 3; px++)
                 {
                     for (int py = 0; py < 9 * 3; py++)
                     {
-                        Color uncolor = src.GetPixel(px / 3 + i * 13, py / 3);
-                        Color comcolor = src.GetPixel(px / 3 + i * 13, py / 3 + 9);
+                        SKColor uncolor = src.GetPixel(px / 3 + i * 13, py / 3);
+                        SKColor comcolor = src.GetPixel(px / 3 + i * 13, py / 3 + 9);
 
                         uncompleted.SetPixel(px, py, uncolor);
                         completed.SetPixel(px, py, comcolor);
@@ -1074,19 +1072,19 @@ namespace Z1R_Tracker.Models
             return pairs;
         }
 
-        private static Tuple<Bitmap, Bitmap>[] LoadRoomBitmapPairs(Stream stream)
+        private static Tuple<SKBitmap, SKBitmap>[] LoadRoomSKBitmapPairs(Stream stream)
         {
-            Bitmap fullImage = new Bitmap(stream);
+            SKBitmap fullImage = SKBitmap.Decode(stream);
             int tileWidth = 13;
             int tileHeight = 9;
             int numTiles = fullImage.Width / tileWidth;
 
-            var result = new Tuple<Bitmap, Bitmap>[numTiles];
+            var result = new Tuple<SKBitmap, SKBitmap>[numTiles];
 
             for (int i = 0; i < numTiles; i++)
             {
-                Bitmap uncompleted = new Bitmap(tileWidth, tileHeight);
-                Bitmap completed = new Bitmap(tileWidth, tileHeight);
+                SKBitmap uncompleted = new SKBitmap(tileWidth, tileHeight);
+                SKBitmap completed = new SKBitmap(tileWidth, tileHeight);
 
                 for (int x = 0; x < tileWidth; x++)
                 {
@@ -1104,19 +1102,19 @@ namespace Z1R_Tracker.Models
         }
 
 
-        private static Tuple<Bitmap, Bitmap>[] LoadTinyRoomBitmapPairs(Stream stream)
+        private static Tuple<SKBitmap, SKBitmap>[] LoadTinyRoomSKBitmapPairs(Stream stream)
         {
-            Bitmap fullImage = new Bitmap(stream);
+            SKBitmap fullImage = SKBitmap.Decode(stream);
             int iconWidth = 13;
             int iconHeight = 9;
             int pairCount = fullImage.Width / iconWidth;
 
-            var result = new Tuple<Bitmap, Bitmap>[pairCount];
+            var result = new Tuple<SKBitmap, SKBitmap>[pairCount];
 
             for (int i = 0; i < pairCount; i++)
             {
-                Bitmap uncompleted = new Bitmap(iconWidth, iconHeight);
-                Bitmap completed = new Bitmap(iconWidth, iconHeight);
+                SKBitmap uncompleted = new SKBitmap(iconWidth, iconHeight);
+                SKBitmap completed = new SKBitmap(iconWidth, iconHeight);
 
                 for (int x = 0; x < iconWidth; x++)
                 {
@@ -1134,7 +1132,7 @@ namespace Z1R_Tracker.Models
         }
 
 
-        public static Tuple<Bitmap, Bitmap> GetBmpPair(RoomType rt)
+        public static Tuple<SKBitmap, SKBitmap> GetBmpPair(RoomType rt)
         {
             switch (rt)
             {
@@ -1179,7 +1177,7 @@ namespace Z1R_Tracker.Models
             }
         }
 
-        public static Tuple<Bitmap, Bitmap> GetTinyBmpPair(RoomType rt)
+        public static Tuple<SKBitmap, SKBitmap> GetTinyBmpPair(RoomType rt)
         {
             switch (rt)
             {

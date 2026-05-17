@@ -30,8 +30,10 @@
     <PackageReference Include="SharpDX.DirectInput" Version="4.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="7.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <!-- System.Drawing.Common is required for System.Drawing.Bitmap/Color pixel ops.
-         It is Windows-only at runtime and safe to reference on net8.0-windows. -->
+    <!-- SkiaSharp replaces System.Drawing.Bitmap/Color for all pixel operations.
+         System.Drawing.Common is kept only for System.Drawing.Icon used in dialogs
+         (CustomMessageBox / CustomComboBoxes) — will be removed in Phase 4 (Avalonia). -->
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
     <!-- Speech recognition (SpeechRecognition.fs).  Published as a NuGet package
          for .NET 8; Windows-only at runtime. -->

@@ -269,7 +269,7 @@ let MakeItemGrid(cm:CustomComboBoxes.CanvasManager, boxItemImpl, timelineItems:R
 
     let extrasCanvasGlobalBoxMouseOverHighlight = new Views.GlobalBoxMouseOverHighlight()
     // brown sword, blue candle, blue ring, magical sword
-    let veryBasicBoxImpl(bmp:System.Drawing.Bitmap, timelineID, prop:TrackerModel.BoolProperty, located:TrackerModel.IEventingReader<bool>, superseded:TrackerModel.IEventingReader<bool>) =
+    let veryBasicBoxImpl(bmp:SkiaSharp.SKBitmap, timelineID, prop:TrackerModel.BoolProperty, located:TrackerModel.IEventingReader<bool>, superseded:TrackerModel.IEventingReader<bool>) =
         let c = new Canvas(Width=30., Height=30., Background=Brushes.Black)
         let no = CustomComboBoxes.no
         let yes = CustomComboBoxes.yes

@@ -97,16 +97,13 @@ let isFirstTimeClickingAnyRoom = Array.init 9 (fun _ -> new TrackerModel.Eventin
 
 
 
-let createSizedCenteredIcon (bmp: System.Drawing.Bitmap) (xOffset: int) (yOffset: int) (height: int) (scale: int) (shiftRight: int) =
+let createSizedCenteredIcon (bmp: SkiaSharp.SKBitmap) (xOffset: int) (yOffset: int) (height: int) (scale: int) (shiftRight: int) =
     let width = 8
     let iconW, iconH = width * scale, height * scale
     let targetW, targetH = 39, 27  // tile size
     let dx = (targetW - iconW) / 2 + shiftRight
     let dy = (targetH - iconH) / 2
-    let result = new System.Drawing.Bitmap(targetW, targetH)
-    for x = 0 to targetW - 1 do
-        for y = 0 to targetH - 1 do
-            result.SetPixel(x, y, System.Drawing.Color.Transparent)
+    let result = new SkiaSharp.SKBitmap(targetW, targetH)  // initializes to transparent
     for sx = 0 to width - 1 do
         for sy = 0 to height - 1 do
             let color = bmp.GetPixel(xOffset + sx, yOffset + sy)
@@ -127,8 +124,8 @@ let rowBmp =
         createSizedCenteredIcon full 72 8 4 scale 2
         createSizedCenteredIcon full 72 12 4 scale 2
         // Empty rows
-        new System.Drawing.Bitmap(39, 27)
-        new System.Drawing.Bitmap(39, 27)
+        new SkiaSharp.SKBitmap(39, 27)
+        new SkiaSharp.SKBitmap(39, 27)
         // Bomb top/bottom (Y: 24–31) — NOW rows 4/5
         createSizedCenteredIcon full 72 24 4 scale 2
         createSizedCenteredIcon full 72 28 4 scale 2
@@ -750,7 +747,7 @@ let makeDungeonTabs(cm:CustomComboBoxes.CanvasManager, layoutF, posYF, selectDun
         // rupee/blank/key/bomb row highlighter
         let highlightRow =
             let bmp = Dungeon.MakeLoZMinimapDisplayBmp(Array2D.zeroCreate 8 8, '?') 
-            let rupeeKeyBomb = new System.Drawing.Bitmap(8, 32)
+            let rupeeKeyBomb = new SkiaSharp.SKBitmap(8, 32)
             for i = 0 to 7 do
                 for j = 0 to 31 do
                     rupeeKeyBomb.SetPixel(i, j, bmp.GetPixel(72+i, 8+j))

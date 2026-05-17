@@ -213,7 +213,7 @@ let setup(cm:CustomComboBoxes.CanvasManager, owInstance:OverworldData.OverworldI
             dungeon.HiddenDungeonColorOrLabelChanged.Add(fun (color,labelChar) -> 
                 colorCanvas.Background <- Graphics.freeze(new SolidColorBrush(Graphics.makeColor(color)))
                 colorCanvas.Children.Clear()
-                let color = if Graphics.isBlackGoodContrast(color) then System.Drawing.Color.Black else System.Drawing.Color.White
+                let color = if Graphics.isBlackGoodContrast(color) then SkiaSharp.SKColors.Black else SkiaSharp.SKColors.White
                 if TrackerModel.GetDungeon(i).LabelChar <> '?' then  // ? and 7 look alike, and also it is easier to parse 'blank' as unknown/unset dungeon number
                     colorCanvas.Children.Add(Graphics.BMPtoImage(Graphics.alphaNumOnTransparentBmp(labelChar, color, 28, 28, 3, 2))) |> ignore
                 )

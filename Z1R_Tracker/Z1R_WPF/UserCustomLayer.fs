@@ -110,7 +110,7 @@ let InitializeUserCustom(cm:CustomComboBoxes.CanvasManager, timelineItems:Resize
                 System.Diagnostics.Process.Start(psi) |> ignore
     if SaveAndLoad.theUserCustomChecklist <> null && thePanel = null then
         let backgroundImageFilename = System.IO.Path.Combine(extraIconsDirectory, SaveAndLoad.theUserCustomChecklist.BackgroundImageFilename)
-        let backgroundImageBmp = System.Drawing.Bitmap.FromFile(backgroundImageFilename) :?> System.Drawing.Bitmap
+        let backgroundImageBmp = SkiaSharp.SKBitmap.Decode(backgroundImageFilename)
 
         let W,H = cm.AppMainCanvas.Width, OverworldItemGridUI.THRU_BLOCKERS_H
         let hRatio = H / float(backgroundImageBmp.Height)
@@ -135,16 +135,13 @@ let InitializeUserCustom(cm:CustomComboBoxes.CanvasManager, timelineItems:Resize
                     let tid = Timeline.TimelineID.UserCustom(ti)
                     if not(TrackerModel.TimelineItemModel.All.ContainsKey(tid.Identifier)) then
                         let bmpFile = System.IO.Path.Combine(extraIconsDirectory, ti)
-                        let orig = System.Drawing.Bitmap.FromFile(bmpFile) :?> System.Drawing.Bitmap
-                        let bmp = 
+                        let orig = SkiaSharp.SKBitmap.Decode(bmpFile)
+                        let bmp =
                             if orig.Width=16 && orig.Height=16 then
-                                let bmp = new System.Drawing.Bitmap(21,21)
-                                for i = 0 to 20 do
-                                    for j = 0 to 20 do
-                                        bmp.SetPixel(i,j,System.Drawing.Color.Transparent)
+                                let bmp = new SkiaSharp.SKBitmap(21,21)  // initializes to transparent
                                 for i = 1 to 18 do
                                     for j = 1 to 18 do
-                                        bmp.SetPixel(i,j,System.Drawing.Color.Black)
+                                        bmp.SetPixel(i,j,SkiaSharp.SKColors.Black)
                                 for i = 2 to 17 do
                                     for j = 2 to 17 do
                                         bmp.SetPixel(i,j,orig.GetPixel(i-2,j-2))

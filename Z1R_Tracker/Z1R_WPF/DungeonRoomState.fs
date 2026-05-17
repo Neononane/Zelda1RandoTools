@@ -26,7 +26,7 @@ let mkTxt(txt) =
 
 let entranceRoomArrowColorBrush =
     let c = Graphics.entranceRoomArrowColor.Value
-    Graphics.freeze(new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B)))
+    Graphics.freeze(new SolidColorBrush(Color.FromRgb(c.Red, c.Green, c.Blue)))
 
 let scale(bmp, scale) =
     if bmp = null then null

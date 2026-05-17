@@ -137,7 +137,7 @@ let DoShowRunCustom(refocusMainWindow) =
             | Line.SHOW(imgFile, ltwho) ->
                 if not(System.IO.File.Exists(imgFile)) then
                     raise <| new HotKeys.UserError(sprintf "The file to SHOW does not exist:\n%s" imgFile)
-                let bmp = new System.Drawing.Bitmap(imgFile)
+                let bmp = SkiaSharp.SKBitmap.Decode(imgFile)
                 let img = Graphics.BMPtoImage(bmp)
                 let b = new System.Windows.Controls.Border(Background=new System.Windows.Media.ImageBrush(img.Source), Width=float bmp.Width, Height=float bmp.Height)
                 let window = new Window(Title="Z-Tracker SHOW", Owner=Application.Current.MainWindow, Content=b)

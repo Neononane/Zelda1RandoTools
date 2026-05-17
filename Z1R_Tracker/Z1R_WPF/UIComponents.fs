@@ -16,7 +16,7 @@ let UNICODE_RIGHT = "\U0001F846"
 let arrowColor = Graphics.freeze(new SolidColorBrush(Color.FromArgb(255uy,0uy,180uy,250uy)))
 let bgColor = Graphics.freeze(new SolidColorBrush(Color.FromArgb(220uy,0uy,0uy,0uy)))
 
-let MakeMagnifier(mirrorOverworldFEs:ResizeArray<FrameworkElement>, owMapNum, owMapBMPs:System.Drawing.Bitmap[,]) =
+let MakeMagnifier(mirrorOverworldFEs:ResizeArray<FrameworkElement>, owMapNum, owMapBMPs:SkiaSharp.SKBitmap[,]) =
     // nearby ow tiles magnified overlay
     let ENLARGE = 8.
     let POP = 1  // width of entrance border
@@ -52,9 +52,9 @@ let MakeMagnifier(mirrorOverworldFEs:ResizeArray<FrameworkElement>, owMapNum, ow
     for i = 0 to 15 do
         for j = 0 to 7 do
             let bmp = 
-                let magnifierFilename = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, sprintf """Magnifier\quest.%d.ow.%2d.%2d.bmp""" owMapNum i j)
+                let magnifierFilename = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, sprintf """Magnifier\quest.%d.ow.%2d.%2d.png""" owMapNum i j)
                 Graphics.readCacheFileOrCreateBmp(magnifierFilename, fun () ->
-                    let bmp = new System.Drawing.Bitmap(16*int ENLARGE, 11*int ENLARGE)
+                    let bmp = new SkiaSharp.SKBitmap(16*int ENLARGE, 11*int ENLARGE)
                     for x = 0 to 15 do
                         for y = 0 to 10 do
                             let c = owMapBMPs.[i,j].GetPixel(x*3, y*3)
@@ -96,9 +96,9 @@ let MakeMagnifier(mirrorOverworldFEs:ResizeArray<FrameworkElement>, owMapNum, ow
                                         else 
                                             c
                                     // edges of squares
-                                    let c = 
+                                    let c =
                                         if (px+1) % int ENLARGE = 0 || (py+1) % int ENLARGE = 0 then
-                                            System.Drawing.Color.FromArgb(int c.R / 2, int c.G / 2, int c.B / 2)
+                                            new SkiaSharp.SKColor(byte(int c.Red / 2), byte(int c.Green / 2), byte(int c.Blue / 2))
                                         else
                                             c
                                     bmp.SetPixel(x*int ENLARGE + px, y*int ENLARGE + py, c)
@@ -107,29 +107,29 @@ let MakeMagnifier(mirrorOverworldFEs:ResizeArray<FrameworkElement>, owMapNum, ow
                     for x = 1 to 14 do
                         for y = 1 to 9 do
                             let c = owMapBMPs.[i,j].GetPixel(x*3, y*3)
-                            let border = 
-                                if c.ToArgb() = System.Drawing.Color.Black.ToArgb() then    // black open cave
+                            let border =
+                                if c.Red=0uy && c.Green=0uy && c.Blue=0uy then    // black open cave
                                     let c2 = owMapBMPs.[i,j].GetPixel((x-1)*3, y*3)
-                                    if c2.ToArgb() = System.Drawing.Color.Black.ToArgb() then    // also black to the left, this is vanilla 6 two-wide entrance, only show one
+                                    if c2.Red=0uy && c2.Green=0uy && c2.Blue=0uy then    // also black to the left, this is vanilla 6 two-wide entrance, only show one
                                         None
                                     else
-                                        Some(System.Drawing.Color.FromArgb(0xFF,0x00,0xCC,0xCC))
-                                elif c.ToArgb() = System.Drawing.Color.FromArgb(0xFF,0x00,0xFF,0xFF).ToArgb() then  // cyan bomb spot
-                                    Some(System.Drawing.Color.FromArgb(0xFF,0x00,0x00,0x00))
-                                elif c.ToArgb() = System.Drawing.Color.FromArgb(0xFF,0xFF,0xFF,0x00).ToArgb() then  // yellow recorder spot
-                                    Some(System.Drawing.Color.FromArgb(0xFF,0x00,0x00,0x00))
-                                elif c.ToArgb() = System.Drawing.Color.FromArgb(0xFF,0xFF,0x00,0x00).ToArgb() then  // red burn spot
-                                    Some(System.Drawing.Color.FromArgb(0xFF,0x00,0x00,0x00))
-                                elif c.ToArgb() = System.Drawing.Color.FromArgb(0xFF,0xFF,0x00,0xFF).ToArgb() then  // magenta pushblock spot
-                                    Some(System.Drawing.Color.FromArgb(0xFF,0x00,0x00,0x00))
+                                        Some(new SkiaSharp.SKColor(0x00uy, 0xCCuy, 0xCCuy))  // cyan border for open cave
+                                elif c = new SkiaSharp.SKColor(0x00uy, 0xFFuy, 0xFFuy) then  // cyan bomb spot
+                                    Some(SkiaSharp.SKColors.Black)
+                                elif c = new SkiaSharp.SKColor(0xFFuy, 0xFFuy, 0x00uy) then  // yellow recorder spot
+                                    Some(SkiaSharp.SKColors.Black)
+                                elif c = new SkiaSharp.SKColor(0xFFuy, 0x00uy, 0x00uy) then  // red burn spot
+                                    Some(SkiaSharp.SKColors.Black)
+                                elif c = new SkiaSharp.SKColor(0xFFuy, 0x00uy, 0xFFuy) then  // magenta pushblock spot
+                                    Some(SkiaSharp.SKColors.Black)
                                 else
                                     None
                             match border with
-                            | Some bc -> 
+                            | Some bc ->
                                 // thin black outline
                                 for px = x*int ENLARGE - POP - 1 to (x+1)*int ENLARGE - 1 + POP + 1 do
                                     for py = y*int ENLARGE - POP - 1 to (y+1)*int ENLARGE - 1 + POP + 1 do
-                                        bmp.SetPixel(px, py, System.Drawing.Color.Black)
+                                        bmp.SetPixel(px, py, SkiaSharp.SKColors.Black)
                                 // border color
                                 for px = x*int ENLARGE - POP to (x+1)*int ENLARGE - 1 + POP do
                                     for py = y*int ENLARGE - POP to (y+1)*int ENLARGE - 1 + POP do
@@ -1025,20 +1025,20 @@ let MakeBlockers(cm:CustomComboBoxes.CanvasManager, blockerQueries:ResizeArray<_
 let MakeZoneOverlay(overworldCanvas:Canvas, ensurePlaceholderFinished, mirrorOverworldFEs:ResizeArray<FrameworkElement>) =
     // zone overlay
     let owMapZoneColorCanvases, owMapZoneBlackCanvases =
-        let avg(c1:System.Drawing.Color, c2:System.Drawing.Color) = System.Drawing.Color.FromArgb((int c1.R + int c2.R)/2, (int c1.G + int c2.G)/2, (int c1.B + int c2.B)/2)
-        let toBrush(c:System.Drawing.Color) = Graphics.freeze(new SolidColorBrush(Color.FromRgb(c.R, c.G, c.B)))
-        let colors = 
+        let avg(c1:SkiaSharp.SKColor, c2:SkiaSharp.SKColor) = new SkiaSharp.SKColor(byte((int c1.Red + int c2.Red)/2), byte((int c1.Green + int c2.Green)/2), byte((int c1.Blue + int c2.Blue)/2))
+        let toBrush(c:SkiaSharp.SKColor) = Graphics.freeze(new SolidColorBrush(Color.FromRgb(c.Red, c.Green, c.Blue)))
+        let colors =
             dict [
-                'M', avg(System.Drawing.Color.Pink, System.Drawing.Color.Crimson) |> toBrush
-                'L', System.Drawing.Color.BlueViolet |> toBrush
-                'R', System.Drawing.Color.LightSeaGreen |> toBrush
-                'H', System.Drawing.Color.Gray |> toBrush
-                'C', System.Drawing.Color.LightBlue |> toBrush
-                'G', avg(System.Drawing.Color.LightSteelBlue, System.Drawing.Color.SteelBlue) |> toBrush
-                'D', System.Drawing.Color.Orange |> toBrush
-                'F', System.Drawing.Color.LightGreen |> toBrush
-                'S', System.Drawing.Color.DarkGray |> toBrush
-                'W', System.Drawing.Color.Brown |> toBrush
+                'M', avg(SkiaSharp.SKColors.Pink, SkiaSharp.SKColors.Crimson) |> toBrush
+                'L', SkiaSharp.SKColors.BlueViolet |> toBrush
+                'R', SkiaSharp.SKColors.LightSeaGreen |> toBrush
+                'H', SkiaSharp.SKColors.Gray |> toBrush
+                'C', SkiaSharp.SKColors.LightBlue |> toBrush
+                'G', avg(SkiaSharp.SKColors.LightSteelBlue, SkiaSharp.SKColors.SteelBlue) |> toBrush
+                'D', SkiaSharp.SKColors.Orange |> toBrush
+                'F', SkiaSharp.SKColors.LightGreen |> toBrush
+                'S', SkiaSharp.SKColors.DarkGray |> toBrush
+                'W', SkiaSharp.SKColors.Brown |> toBrush
             ]
         let imgs,darks = Array2D.zeroCreate 16 8, Array2D.zeroCreate 16 8
         for x = 0 to 15 do

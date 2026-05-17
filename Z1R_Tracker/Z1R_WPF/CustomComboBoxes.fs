@@ -198,7 +198,7 @@ let DoModalMessageBoxCore(cm:CanvasManager, icon:System.Drawing.Icon, mainText, 
     grid.RowDefinitions.Add(new RowDefinition(Height=GridLength.Auto))
 
     let mainDock = new DockPanel()
-    let image = Graphics.BMPtoImage(icon.ToBitmap())
+    let image = Graphics.IconToImage(icon)
     image.HorizontalAlignment <- HorizontalAlignment.Left
     image.Margin <- Thickness(30.,0.,0.,0.)
     mainDock.Children.Add(image) |> ignore

@@ -45,10 +45,10 @@ let showHotKeys(isRightClick) =
 ////////////////////////////////////////////////
 
 let makeFauxItemsAndHeartsHUD() =
-    let r = new System.Drawing.Bitmap(98,61+18)
+    let r = new SkiaSharp.SKBitmap(98,61+18)
     let best = Graphics.allItemsHUDBestBMP
     let worst = Graphics.allItemsHUDWorstBMP
-    let BLACK = System.Drawing.Color.Black
+    let BLACK = SkiaSharp.SKColors.Black
     // draw full HUD
     for x = 0 to best.Width-1 do
         for y = 0 to best.Height-1 do

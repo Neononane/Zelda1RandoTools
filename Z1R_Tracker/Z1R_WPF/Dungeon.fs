@@ -926,29 +926,26 @@ XX...XX.
         else //elif letter = '?' then
             questionMark
 
-let BLUE = System.Drawing.Color.FromArgb(71, 47, 228)
+let BLUE = new SkiaSharp.SKColor(71uy, 47uy, 228uy)
 let zeldaLetterCache = new System.Collections.Generic.Dictionary<_,_>()
 let MakeLetterBIInZeldaFont(letter, preferBlack) =
     match zeldaLetterCache.TryGetValue((letter,preferBlack)) with
     | true, v -> v
     | _ ->
-        let bmp = new System.Drawing.Bitmap(8, 8)
-        for x = 0 to 7 do
-            for y = 0 to 7 do
-                bmp.SetPixel(x,y,System.Drawing.Color.Transparent)
+        let bmp = new SkiaSharp.SKBitmap(8, 8)  // initializes to transparent
         let a = ZeldaFont.fromLetter(letter)
         for x = 0 to 7 do
             for y = 0 to 7 do
                 if a.[y].Chars(x)='X' then
-                    bmp.SetPixel(x, y, if preferBlack then System.Drawing.Color.Black else System.Drawing.Color.White)
+                    bmp.SetPixel(x, y, if preferBlack then SkiaSharp.SKColors.Black else SkiaSharp.SKColors.White)
         let bi = Graphics.BMPToBI bmp
         zeldaLetterCache.Add((letter, preferBlack), bi)
         bi
 let MakeMiniMiniMapBmp() =
-    let bmp = new System.Drawing.Bitmap(8, 8)
+    let bmp = new SkiaSharp.SKBitmap(8, 8)
     for x = 0 to 7 do
         for y = 0 to 7 do
-            bmp.SetPixel(x,y,System.Drawing.Color.Black)
+            bmp.SetPixel(x,y,SkiaSharp.SKColors.Black)
     for x = 0 to 6 do
         for y = 0 to 2 do
             bmp.SetPixel(x,y,BLUE)
@@ -956,12 +953,12 @@ let MakeMiniMiniMapBmp() =
             bmp.SetPixel(x,y,BLUE)
     bmp
 let MakeLoZMinimapDisplayBmp(rooms:bool[,], letter) =
-    let OFFWHITE = System.Drawing.Color.FromArgb(210, 210, 210)
-    let YELLOW = System.Drawing.Color.FromArgb(215, 152, 42)
-    let bmp = new System.Drawing.Bitmap(80, 40)
+    let OFFWHITE = new SkiaSharp.SKColor(210uy, 210uy, 210uy)
+    let YELLOW = new SkiaSharp.SKColor(215uy, 152uy, 42uy)
+    let bmp = new SkiaSharp.SKBitmap(80, 40)
     for x = 0 to 79 do
         for y = 0 to 39 do
-            bmp.SetPixel(x,y,System.Drawing.Color.Black)
+            bmp.SetPixel(x,y,SkiaSharp.SKColors.Black)
     let mutable xoff = 0
     let w(x,y) = bmp.SetPixel(xoff+x,y,OFFWHITE)
     let LEVEL = [| ZeldaFont.L; ZeldaFont.E; ZeldaFont.V; ZeldaFont.E; ZeldaFont.L |]

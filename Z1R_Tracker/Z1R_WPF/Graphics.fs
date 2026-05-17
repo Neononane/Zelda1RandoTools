@@ -2,8 +2,9 @@
 
 open System
 open System.Windows
-open System.Windows.Controls 
+open System.Windows.Controls
 open System.Windows.Media
+open SkiaSharp
 
 let mutable theWindow : System.Windows.Window = null
 
@@ -236,43 +237,47 @@ let isBlackGoodContrast(rgb) =
     let use_black = l > 0.5*0.5
     use_black  // else use white
 
-let transformColor(bmp:System.Drawing.Bitmap, f) =
-    let r = new System.Drawing.Bitmap(bmp.Width,bmp.Height)
+// ── SkiaSharp bitmap helpers ────────────────────────────────────────────────
+// SKBitmap.GetPixel / SetPixel have the same signatures as System.Drawing.Bitmap,
+// so pixel-loop code translates directly.
+
+let transformColor(bmp:SKBitmap, f:SKColor->SKColor) =
+    let r = new SKBitmap(bmp.Width, bmp.Height)
     for px = 0 to bmp.Width-1 do
         for py = 0 to bmp.Height-1 do
-            let c = bmp.GetPixel(px,py)
-            r.SetPixel(px, py, f c)
+            r.SetPixel(px, py, f(bmp.GetPixel(px, py)))
     r
 
-let greyscale(bmp:System.Drawing.Bitmap) =
-    transformColor(bmp, fun c -> 
-        if c.ToArgb() = System.Drawing.Color.Transparent.ToArgb() then
-            c
+let greyscale(bmp:SKBitmap) =
+    transformColor(bmp, fun c ->
+        if c.Alpha = 0uy then c
         else
-            let avg = (int c.R + int c.G + int c.B) / 5  // not just average, but overall darker
-            let avg = if avg = 0 then 0 else avg + 60    // never too dark
-            System.Drawing.Color.FromArgb(avg, avg, avg)
-        )
-let desaturateColor(c:System.Drawing.Color, pct) =
-    let f = pct   // 0.60 // desaturate by 60%
-    let L = 0.3*float c.R + 0.6*float c.G + 0.1*float c.B
-    let newR = float c.R + f * (L - float c.R)
-    let newG = float c.G + f * (L - float c.G)
-    let newB = float c.B + f * (L - float c.B)
-    System.Drawing.Color.FromArgb(int newR, int newG, int newB)
-let desaturate(bmp:System.Drawing.Bitmap, pct) = transformColor(bmp, (fun c -> desaturateColor(c,pct)))
-let darkenImpl pct (bmp:System.Drawing.Bitmap) =
-    let r = new System.Drawing.Bitmap(bmp.Width,bmp.Height)
+            let avg = (int c.Red + int c.Green + int c.Blue) / 5  // not just average, but overall darker
+            let avg = if avg = 0 then 0 else avg + 60             // never too dark
+            new SKColor(byte avg, byte avg, byte avg))
+
+let desaturateColor(c:SKColor, pct) =
+    let f = pct
+    let L = 0.3*float c.Red + 0.6*float c.Green + 0.1*float c.Blue
+    let newR = float c.Red   + f * (L - float c.Red)
+    let newG = float c.Green + f * (L - float c.Green)
+    let newB = float c.Blue  + f * (L - float c.Blue)
+    new SKColor(byte(int newR), byte(int newG), byte(int newB))
+
+let desaturate(bmp:SKBitmap, pct) = transformColor(bmp, (fun c -> desaturateColor(c, pct)))
+
+let darkenImpl pct (bmp:SKBitmap) =
+    let r = new SKBitmap(bmp.Width, bmp.Height)
     for px = 0 to bmp.Width-1 do
         for py = 0 to bmp.Height-1 do
-            let c = bmp.GetPixel(px,py)
-            let c = System.Drawing.Color.FromArgb(int(float c.R * pct), int(float c.G * pct), int(float c.B * pct))
-            r.SetPixel(px, py, c)
+            let c = bmp.GetPixel(px, py)
+            r.SetPixel(px, py, new SKColor(byte(float c.Red * pct), byte(float c.Green * pct), byte(float c.Blue * pct)))
     r
-let darken(bmp:System.Drawing.Bitmap) =
-    darkenImpl 0.5 bmp
-let mediaColor(c:System.Drawing.Color) =
-    Media.Color.FromArgb(c.A, c.R, c.G, c.B)
+
+let darken(bmp:SKBitmap) = darkenImpl 0.5 bmp
+
+/// Convert an SKColor to a WPF Media.Color (used while the WPF layer is still active).
+let mediaColor(c:SKColor) = Media.Color.FromArgb(c.Alpha, c.Red, c.Green, c.Blue)
 
 (*
 let ConvertPixelFormat(pixelFormat:System.Drawing.Imaging.PixelFormat) =
@@ -321,48 +326,61 @@ let BItoImage(bi:System.Windows.Media.Imaging.BitmapImage) =
         let rawImage : byte[] = Array.zeroCreate (rawStride * bi.PixelHeight)
         bi.CopyPixels(rawImage, rawStride, 0)                                                            // dpi.ppix, dpi.ppiy
         new Image(Source=System.Windows.Media.Imaging.BitmapSource.Create(bi.PixelWidth, bi.PixelHeight, 96., 96., pf, null, rawImage, rawStride))
-let BMPToBI(b:System.Drawing.Bitmap) =
+/// Encode an SKBitmap to PNG and wrap in a frozen BitmapImage (for use as WPF ImageSource).
+let BMPToBI(bmp:SKBitmap) =
     use ms = new System.IO.MemoryStream()
-    b.Save(ms, System.Drawing.Imaging.ImageFormat.Png)
+    use img  = SKImage.FromBitmap(bmp)
+    use data = img.Encode(SKEncodedImageFormat.Png, 100)
+    data.SaveTo(ms)
     ms.Position <- 0L
-    let bitmapImage = new System.Windows.Media.Imaging.BitmapImage()
-    bitmapImage.BeginInit()
-    bitmapImage.StreamSource <- ms
-    bitmapImage.CacheOption <- System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
-    bitmapImage.EndInit()
-    bitmapImage.Freeze()
-    bitmapImage
-let BMPtoImage(bmp:System.Drawing.Bitmap) =
+    let bi = new System.Windows.Media.Imaging.BitmapImage()
+    bi.BeginInit()
+    bi.StreamSource <- ms
+    bi.CacheOption <- System.Windows.Media.Imaging.BitmapCacheOption.OnLoad
+    bi.EndInit()
+    bi.Freeze()
+    bi
+
+/// Encode an SKBitmap to PNG and return an Image control sized to the bitmap.
+let BMPtoImage(bmp:SKBitmap) =
     let ms = new System.IO.MemoryStream()
-    bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png)  // must be png (not bmp) to save transparency info
+    use img  = SKImage.FromBitmap(bmp)
+    use data = img.Encode(SKEncodedImageFormat.Png, 100)
+    data.SaveTo(ms)
     ms.Seek(0L, System.IO.SeekOrigin.Begin) |> ignore
     let bmimage = new System.Windows.Media.Imaging.BitmapImage()
     bmimage.BeginInit()
-    
-    // this is slower in practice
-    //bmimage.CacheOption <- System.Windows.Media.Imaging.BitmapCacheOption.OnLoad    // can 'use' ms with this
-    
-    // this is faster in practice
     bmimage.CreateOptions <- System.Windows.Media.Imaging.BitmapCreateOptions.DelayCreation
-    bmimage.CacheOption <- System.Windows.Media.Imaging.BitmapCacheOption.OnDemand    // must 'let' ms with this
-    
+    bmimage.CacheOption <- System.Windows.Media.Imaging.BitmapCacheOption.OnDemand  // must 'let' ms
     bmimage.StreamSource <- ms
     bmimage.EndInit()
     let i = new Image()
     i.Source <- bmimage
-//    i.Source <- BmpToSource(bmp)
-    i.Height <- float bmp.Height 
-    i.Width <- float bmp.Width 
+    i.Height <- float bmp.Height
+    i.Width  <- float bmp.Width
+    i
+
+/// Convert a System.Drawing.Icon to a WPF Image control (used only for dialog icons in CustomMessageBox/CustomComboBoxes).
+/// Uses WPF's CreateBitmapSourceFromHIcon to avoid a System.Drawing.Bitmap → SKBitmap round-trip.
+let IconToImage(icon:System.Drawing.Icon) =
+    let bs = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                icon.Handle,
+                System.Windows.Int32Rect.Empty,
+                System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions())
+    let i = new Image()
+    i.Source <- bs
+    i.Width  <- float icon.Width
+    i.Height <- float icon.Height
     i
 
 let OMTW = 48.  // overworld map tile width - at normal aspect ratio, is 48 (16*3)
-let green = freeze(new SolidColorBrush(mediaColor(desaturateColor(System.Drawing.Color.Lime, 0.50))))
-let cyan = freeze(new SolidColorBrush(mediaColor(desaturateColor(System.Drawing.Color.FromArgb(0xFF, 0, 0xFF, 0xFF), 0.30))))
-let yellow = freeze(new SolidColorBrush(mediaColor(desaturateColor(System.Drawing.Color.Yellow, 0.50))))
-let red = freeze(new SolidColorBrush(mediaColor(desaturateColor(System.Drawing.Color.Red, 0.50))))
-let palegreen = freeze(new SolidColorBrush(mediaColor(desaturateColor(System.Drawing.Color.Lime, 0.65))))
-let paleyellow = freeze(new SolidColorBrush(mediaColor(desaturateColor(System.Drawing.Color.Yellow, 0.65))))
-let palered = freeze(new SolidColorBrush(mediaColor(desaturateColor(System.Drawing.Color.Red, 0.65))))
+let green     = freeze(new SolidColorBrush(mediaColor(desaturateColor(SKColors.Lime,                      0.50))))
+let cyan      = freeze(new SolidColorBrush(mediaColor(desaturateColor(new SKColor(0uy, 255uy, 255uy),     0.30))))
+let yellow    = freeze(new SolidColorBrush(mediaColor(desaturateColor(SKColors.Yellow,                    0.50))))
+let red       = freeze(new SolidColorBrush(mediaColor(desaturateColor(SKColors.Red,                       0.50))))
+let palegreen = freeze(new SolidColorBrush(mediaColor(desaturateColor(SKColors.Lime,                      0.65))))
+let paleyellow= freeze(new SolidColorBrush(mediaColor(desaturateColor(SKColors.Yellow,                    0.65))))
+let palered   = freeze(new SolidColorBrush(mediaColor(desaturateColor(SKColors.Red,                       0.65))))
 type TileHighlightRectangle() as this =
     let s = new Shapes.Rectangle(Width=OMTW,Height=11.*3.,Stroke=Brushes.Lime,StrokeThickness=3.,Opacity=0.0,IsHitTestVisible=false)
     let Draw(isPale) =
@@ -464,85 +482,71 @@ type DragDropSurface<'T>(surface:FrameworkElement, onStartDrag : _ * ('T -> unit
 
 ////////////////////////////////////////////////////
 
-let alphaNumBmp =
+let alphaNumBmp : SKBitmap =
     let imageStream = GetResourceStream("alphanumerics3x5.png")
-    new System.Drawing.Bitmap(imageStream)
-let paintAlphanumerics3x5(ch, color, bmp:System.Drawing.Bitmap, x, y) =  // x and y are 1-pixel coordinates, even though bmp is blown up 3x
+    SKBitmap.Decode(imageStream)
+
+/// Paint a single alphanumeric character from the 3×5 spritesheet onto bmp at pixel position (x,y).
+/// x, y are 1-pixel coordinates; the character is rendered blown up 3× on the destination bitmap.
+let paintAlphanumerics3x5(ch, color:SKColor, bmp:SKBitmap, x, y) =
     let index =
         match ch with
-        | '1' -> 0
-        | '2' -> 1
-        | '3' -> 2
-        | '4' -> 3
-        | '5' -> 4
-        | '6' -> 5
-        | '7' -> 6
-        | '8' -> 7
-        | '9' -> 8
-        | '?' -> 9
-        | 'A' -> 10
-        | 'B' -> 11
-        | 'C' -> 12
-        | 'D' -> 13
-        | 'E' -> 14
-        | 'F' -> 15
-        | 'G' -> 16
-        | 'H' -> 17
-        | 'S' -> 18 // sword
-        | 'L' -> 19 // ladder
-        | 'R' -> 20 // robot armos
-        | 'T' -> 21 // T for take any
+        | '1' -> 0 | '2' -> 1 | '3' -> 2 | '4' -> 3 | '5' -> 4
+        | '6' -> 5 | '7' -> 6 | '8' -> 7 | '9' -> 8 | '?' -> 9
+        | 'A' -> 10 | 'B' -> 11 | 'C' -> 12 | 'D' -> 13 | 'E' -> 14
+        | 'F' -> 15 | 'G' -> 16 | 'H' -> 17
+        | 'S' -> 18  // sword
+        | 'L' -> 19  // ladder
+        | 'R' -> 20  // robot armos
+        | 'T' -> 21  // T for take any
         | _ -> failwith "bad alphanumeric character to paint"
     for i = 0 to 2 do
         for j = 0 to 4 do
-            if alphaNumBmp.GetPixel(index*3 + i, j).ToArgb() = System.Drawing.Color.Black.ToArgb() then
-                // blow it up 3x
+            // The spritesheet marks character pixels with black; all others are background
+            let src = alphaNumBmp.GetPixel(index*3 + i, j)
+            if src.Red = 0uy && src.Green = 0uy && src.Blue = 0uy then
+                // blow it up 3×
                 for dx = 0 to 2 do
                     for dy = 0 to 2 do
                         bmp.SetPixel(3*(x+i)+dx, 3*(y+j)+dy, color)
 
-let alphaNumOnTransparentBmp(ch, color, w:int, h:int, x, y) =
-    let r = new System.Drawing.Bitmap(w,h)
-    for px = 0 to w-1 do
-        for py = 0 to h-1 do
-            r.SetPixel(px, py, System.Drawing.Color.Transparent)
+let alphaNumOnTransparentBmp(ch, color:SKColor, w:int, h:int, x, y) =
+    let r = new SKBitmap(w, h)   // SKBitmap initialises all pixels to transparent (0,0,0,0)
     paintAlphanumerics3x5(ch, color, r, x, y)
     r
 
-let openCaveIconBmp = 
+let openCaveIconBmp : SKBitmap =
     let imageStream = GetResourceStream("open_cave20x20.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    bmp
+    SKBitmap.Decode(imageStream)
 
 let (filled_small_heart_bmp, empty_small_heart_bmp) =
     let imageStream = GetResourceStream("icons8x8.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    let a = [|  
+    let bmp = SKBitmap.Decode(imageStream)
+    let a = [|
         for i = 0 to bmp.Width/8 - 1 do
-            let r = new System.Drawing.Bitmap(8,8)
-            for px = 0 to 8-1 do
-                for py = 0 to 8-1 do
-                    let color = bmp.GetPixel(px + i*8, py)
-                    //let color = if color.ToArgb() = System.Drawing.Color.Black.ToArgb() then System.Drawing.Color.Transparent else color
-                    r.SetPixel(px, py, color)
+            let r = new SKBitmap(8, 8)
+            for px = 0 to 7 do
+                for py = 0 to 7 do
+                    r.SetPixel(px, py, bmp.GetPixel(px + i*8, py))
             yield r
         |]
     (a.[0], a.[1])
 
-let (boomerang_bmp, bow_bmp, magic_boomerang_bmp, raft_bmp, ladder_bmp, recorder_bmp, wand_bmp, red_candle_bmp, book_bmp, key_bmp, 
-        silver_arrow_bmp, wood_arrow_bmp, red_ring_bmp, magic_shield_bmp, boom_book_bmp, 
+let (boomerang_bmp, bow_bmp, magic_boomerang_bmp, raft_bmp, ladder_bmp, recorder_bmp, wand_bmp, red_candle_bmp, book_bmp, key_bmp,
+        silver_arrow_bmp, wood_arrow_bmp, red_ring_bmp, magic_shield_bmp, boom_book_bmp,
         heart_container_bmp, power_bracelet_bmp, white_sword_bmp, ow_key_armos_bmp,
         brown_sword_bmp, magical_sword_bmp, blue_candle_bmp, blue_ring_bmp,
         ganon_bmp, zelda_bmp, bomb_bmp, bow_and_arrow_bmp, bait_bmp, question_marks_bmp, rupee_bmp, basement_stair_bmp, ws_ms_bomb_upgrade_bmp) =
     let imageStream = GetResourceStream("icons7x7.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    let a = [|  
+    let bmp = SKBitmap.Decode(imageStream)
+    let a = [|
         for i = 0 to bmp.Width/7 - 1 do
-            let r = new System.Drawing.Bitmap(7*3,7*3)
+            let r = new SKBitmap(7*3, 7*3)
             for px = 0 to 7*3-1 do
                 for py = 0 to 7*3-1 do
                     let color = bmp.GetPixel(px/3 + i*7, py/3)
-                    let color = if color.ToArgb() = System.Drawing.Color.Black.ToArgb() then System.Drawing.Color.Transparent else color
+                    // black pixels in the spritesheet act as transparent (these are item outlines)
+                    let color = if color.Red = 0uy && color.Green = 0uy && color.Blue = 0uy then SKColors.Transparent else color
                     r.SetPixel(px, py, color)
             yield r
     |]
@@ -550,46 +554,43 @@ let (boomerang_bmp, bow_bmp, magic_boomerang_bmp, raft_bmp, ladder_bmp, recorder
         a.[10], a.[11], a.[12], a.[13], a.[14], a.[15], a.[16], a.[17], a.[18], a.[19],
         a.[20], a.[21], a.[22], a.[23], a.[24], a.[25], a.[26], a.[27], a.[28], a.[29], a.[30], a.[31])
 
-let bg16x16 = System.Drawing.Color.FromArgb(45, 50, 00)
+let bg16x16 = new SKColor(45uy, 50uy, 0uy)
 let (digdogger_bmp, gleeok_bmp, gohma_bmp, manhandla_bmp, wizzrobe_bmp, patra_bmp, dodongo_bmp, red_bubble_bmp, blue_bubble_bmp, blue_darknut_bmp, other_monster_bmp, old_man_bmp,
         vire_bmp, zol_bmp, pols_voice_bmp, red_tektite, red_goriya, rope, stalfos, wallmaster, gel, keese, likelike, gibdo, red_lynel, blue_moblin, aquamentus, blue_lanmola,
         moldorm, rupee_boss, traps, other_monster2) =
     let imageStream = GetResourceStream("zelda_bosses16x16.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    let a = [|  
+    let bmp = SKBitmap.Decode(imageStream)
+    let a = [|
         for i = 0 to bmp.Width/16 - 1 do
-            let r = new System.Drawing.Bitmap(18,18)  // border around it
+            let r = new SKBitmap(18, 18)  // 1px coloured border around each 16×16 sprite
             for px = 0 to 17 do
                 for py = 0 to 17 do
-                    if px=0 || px=17 || py=0 || py=17 then
-                        r.SetPixel(px, py, bg16x16)
-                    else
-                        r.SetPixel(px, py, System.Drawing.Color.Black)
+                    r.SetPixel(px, py, if px=0 || px=17 || py=0 || py=17 then bg16x16 else SKColors.Black)
             for px = 0 to 15 do
                 for py = 0 to 15 do
                     let color = bmp.GetPixel(px + i*16, py)
-                    if color.ToArgb() = System.Drawing.Color.Black.ToArgb() then () else r.SetPixel(px+1, py+1, color)
+                    // black pixels in the spritesheet are "transparent" (not drawn over the border fill)
+                    if not (color.Red = 0uy && color.Green = 0uy && color.Blue = 0uy) then
+                        r.SetPixel(px+1, py+1, color)
             yield r
     |]
-    (a.[0], a.[1], a.[2], a.[3], a.[4], a.[5], a.[6], a.[7], a.[8], a.[9], a.[10], a.[11], a.[12], a.[13], a.[14], a.[15], a.[16], a.[17], a.[18], a.[19], a.[20], 
+    (a.[0], a.[1], a.[2], a.[3], a.[4], a.[5], a.[6], a.[7], a.[8], a.[9], a.[10], a.[11], a.[12], a.[13], a.[14], a.[15], a.[16], a.[17], a.[18], a.[19], a.[20],
         a.[21], a.[22], a.[23], a.[24], a.[25], a.[26], a.[27], a.[28], a.[29], a.[30], a.[31])
 
 let (zi_triforce_bmp, zi_heart_bmp, zi_bomb_bmp, zi_key_bmp, zi_fiver_bmp, zi_map_bmp, zi_compass_bmp, zi_other_item_bmp, zi_alt_bomb_bmp, zi_rock, zi_tree, zi_atlas, zi_staircase) =
     let imageStream = GetResourceStream("zelda_items16x16.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    let a = [|  
+    let bmp = SKBitmap.Decode(imageStream)
+    let a = [|
         for i = 0 to bmp.Width/16 - 1 do
-            let r = new System.Drawing.Bitmap(18,18)  // border around it
+            let r = new SKBitmap(18, 18)
             for px = 0 to 17 do
                 for py = 0 to 17 do
-                    if px=0 || px=17 || py=0 || py=17 then
-                        r.SetPixel(px, py, bg16x16)
-                    else
-                        r.SetPixel(px, py, System.Drawing.Color.Black)
+                    r.SetPixel(px, py, if px=0 || px=17 || py=0 || py=17 then bg16x16 else SKColors.Black)
             for px = 0 to 15 do
                 for py = 0 to 15 do
                     let color = bmp.GetPixel(px + i*16, py)
-                    if color.ToArgb() = System.Drawing.Color.Black.ToArgb() then () else r.SetPixel(px+1, py+1, color)
+                    if not (color.Red = 0uy && color.Green = 0uy && color.Blue = 0uy) then
+                        r.SetPixel(px+1, py+1, color)
             yield r
     |]
     (a.[0], a.[1], a.[2], a.[3], a.[4], a.[5], a.[6], a.[7], a.[8], a.[9], a.[10], a.[11], a.[12])
@@ -613,120 +614,125 @@ let (zi_triforce_bmp, zi_heart_bmp, zi_bomb_bmp, zi_key_bmp, zi_fiver_bmp, zi_ma
 //            yield r
 //    |]
 //    (a.[0], a.[1], a.[2], a.[3], a.[4], a.[5], a.[6], a.[7])
-let unborder(bmp:System.Drawing.Bitmap) =
-    let r = new System.Drawing.Bitmap(bmp.Width-2, bmp.Height-2)
+/// Remove the 1-pixel coloured border added when loading 16×16 sprites → 18×18 bitmaps.
+let unborder(bmp:SKBitmap) =
+    let r = new SKBitmap(bmp.Width-2, bmp.Height-2)
     for i = 0 to r.Width-1 do
         for j = 0 to r.Height-1 do
-            r.SetPixel(i,j,bmp.GetPixel(i+1,j+1))
+            r.SetPixel(i, j, bmp.GetPixel(i+1, j+1))
     r
 let zi_staircase_unborderedBI = unborder(zi_staircase) |> BMPToBI
 
-let _brightTriforce_bmp, fullOrangeTriforce_bmp, _dullOrangeTriforce_bmp, greyTriforce_bmp, owHeartSkipped_bmp, owHeartEmpty_bmp, owHeartFull_bmp, iconRightArrow_bmp, iconCheckMark_bmp, iconExtras_bmp, iconDisk_bmp, owHeartTallFull_bmp = 
+let _brightTriforce_bmp, fullOrangeTriforce_bmp, _dullOrangeTriforce_bmp, greyTriforce_bmp, owHeartSkipped_bmp, owHeartEmpty_bmp, owHeartFull_bmp, iconRightArrow_bmp, iconCheckMark_bmp, iconExtras_bmp, iconDisk_bmp, owHeartTallFull_bmp =
     let imageStream = GetResourceStream("icons10x10.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
+    let bmp = SKBitmap.Decode(imageStream)
     let all = [|
         for i = 0 to bmp.Width/10 - 1 do
-            let r = new System.Drawing.Bitmap(10*3,10*3)
+            let r = new SKBitmap(10*3, 10*3)
             for px = 0 to 10*3-1 do
                 for py = 0 to 10*3-1 do
                     let color = bmp.GetPixel(px/3 + i*10, py/3)
-                    let color = if color.ToArgb() = System.Drawing.Color.White.ToArgb() then System.Drawing.Color.Transparent else color
+                    // white pixels in this spritesheet are "transparent"
+                    let color = if color.Red = 255uy && color.Green = 255uy && color.Blue = 255uy then SKColors.Transparent else color
                     r.SetPixel(px, py, color)
             yield r
         |]
-    transformColor(all.[1], (fun c -> if c.ToArgb() <> System.Drawing.Color.Transparent.ToArgb() then System.Drawing.Color.LightGray else c)), 
+    transformColor(all.[1], (fun c -> if c.Alpha > 0uy then SKColors.LightGray else c)),
         all.[1],
-        transformColor(all.[1], (fun c -> if c.ToArgb() <> System.Drawing.Color.Transparent.ToArgb() then desaturateColor(c, 0.25) else c)), 
+        transformColor(all.[1], (fun c -> if c.Alpha > 0uy then desaturateColor(c, 0.25) else c)),
         all.[0], all.[2], all.[3], all.[4], all.[5], all.[6], all.[7], all.[8], all.[9]
-let UNFOUND_NUMERAL_COLOR = System.Drawing.Color.FromArgb(0x77,0x77,0x99)
-let FOUND_NUMERAL_COLOR = System.Drawing.Color.White
+
+let UNFOUND_NUMERAL_COLOR = new SKColor(0x77uy, 0x77uy, 0x99uy)
+let FOUND_NUMERAL_COLOR   = SKColors.White
+
 let heartFromTakeAny_bmp, heartFromWhiteSwordCave_bmp, heartFromCoast_bmp, heartFromArmos_bmp, heartFromNumberedDungeon_bmps, heartFromLetteredDungeon_bmps =
-    let LABEL = System.Drawing.Color.FromArgb(0xFF,0xFF,0xFF)
-    let paint(ch) = 
-        let bmp = owHeartTallFull_bmp.Clone() :?> System.Drawing.Bitmap
+    let LABEL = SKColors.White
+    let paint(ch) =
+        let bmp = owHeartTallFull_bmp.Copy(owHeartTallFull_bmp.ColorType)
         paintAlphanumerics3x5(ch, LABEL, bmp, 4, 2)
         bmp
     let a = [|
         for ch in ["123456789"; "ABCDEFGH9"] do
-            yield [|
-            for i = 0 to 8 do
-                yield paint(ch.Chars(i))
-            |] |]
+            yield [| for i = 0 to 8 do yield paint(ch.Chars(i)) |] |]
     paint('T'), paint('S'), paint('L'), paint('R'), a.[0], a.[1]
-let emptyUnfoundNumberedTriforce_bmps, emptyUnfoundLetteredTriforce_bmps = 
+
+let emptyUnfoundNumberedTriforce_bmps, emptyUnfoundLetteredTriforce_bmps =
     let a = [|
         for ch in ['1'; 'A'] do
             yield [|
             for i = 0 to 7 do
-                let bmp = greyTriforce_bmp.Clone() :?> System.Drawing.Bitmap
+                let bmp = greyTriforce_bmp.Copy(greyTriforce_bmp.ColorType)
                 paintAlphanumerics3x5(char(int ch + i), UNFOUND_NUMERAL_COLOR, bmp, 4, 4)
                 yield bmp
             |] |]
     a.[0], a.[1]
-let emptyFoundNumberedTriforce_bmps, emptyFoundLetteredTriforce_bmps = 
+
+let emptyFoundNumberedTriforce_bmps, emptyFoundLetteredTriforce_bmps =
     let a = [|
         for ch in ['1'; 'A'] do
             yield [|
             for i = 0 to 7 do
-                let bmp = greyTriforce_bmp.Clone() :?> System.Drawing.Bitmap
+                let bmp = greyTriforce_bmp.Copy(greyTriforce_bmp.ColorType)
                 paintAlphanumerics3x5(char(int ch + i), FOUND_NUMERAL_COLOR, bmp, 4, 4)
                 yield bmp
             |] |]
     a.[0], a.[1]
+
 let fullNumberedUnfoundTriforce_bmps, fullNumberedFoundTriforce_bmps, fullLetteredUnfoundTriforce_bmps, fullLetteredFoundTriforce_bmps =
     let a = [|
         for ch in ['1'; 'A'] do
             yield [|
             for i = 0 to 7 do
-                let bmp = fullOrangeTriforce_bmp.Clone() :?> System.Drawing.Bitmap
+                let bmp = fullOrangeTriforce_bmp.Copy(fullOrangeTriforce_bmp.ColorType)
                 paintAlphanumerics3x5(char(int ch + i), UNFOUND_NUMERAL_COLOR, bmp, 4, 4)
                 yield bmp
             |]
             yield [|
             for i = 0 to 7 do
-                let bmp = fullOrangeTriforce_bmp.Clone() :?> System.Drawing.Bitmap
+                let bmp = fullOrangeTriforce_bmp.Copy(fullOrangeTriforce_bmp.ColorType)
                 paintAlphanumerics3x5(char(int ch + i), FOUND_NUMERAL_COLOR, bmp, 4, 4)
                 yield bmp
             |]
         |]
     a.[0], a.[1], a.[2], a.[3]
-let unfoundL9_bmp,foundL9_bmp =
+
+let unfoundL9_bmp, foundL9_bmp =
     let unfoundTriforceColor = emptyUnfoundNumberedTriforce_bmps.[0].GetPixel(15, 28)
-    let u = new System.Drawing.Bitmap(10*3,10*3)
-    let f = new System.Drawing.Bitmap(10*3,10*3)
+    let u = new SKBitmap(10*3, 10*3)
+    let f = new SKBitmap(10*3, 10*3)
     // make a rectangle 'shield' to draw the 9 on, so that a hint halo does not wash out the '9'
     for i = 3*3 to 8*3-1 do
         for j = 3*3 to 10*3-1 do
-            u.SetPixel(i,j,unfoundTriforceColor)
-            f.SetPixel(i,j,unfoundTriforceColor)
+            u.SetPixel(i, j, unfoundTriforceColor)
+            f.SetPixel(i, j, unfoundTriforceColor)
     paintAlphanumerics3x5('9', UNFOUND_NUMERAL_COLOR, u, 4, 4)
     paintAlphanumerics3x5('9', FOUND_NUMERAL_COLOR, f, 4, 4)
     u, f
 
 let fairy_bmp =
     let imageStream = GetResourceStream("icons8x16.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    let r = new System.Drawing.Bitmap(16,32)
+    let bmp = SKBitmap.Decode(imageStream)
+    let r = new SKBitmap(16,32)
     for x = 0 to 15 do
         for y = 0 to 31 do
             let c = bmp.GetPixel(x/2, y/2)
-            if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+            if not (c.Red=0uy && c.Green=0uy && c.Blue=0uy) then
                 r.SetPixel(x, y, c)
     r
 
-let mutable entranceRoomArrowColor = None
+let mutable entranceRoomArrowColor : SKColor option = None
 let dungeonRoomBmpPairsF() =
     let imageStream = GetResourceStream("new_icons13x9.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    let a = [|  
+    let bmp = SKBitmap.Decode(imageStream)
+    let a = [|
         for i = 0 to bmp.Width/13 - 1 do
-            let cr = new System.Drawing.Bitmap(13*3,9*3)
-            let ur = new System.Drawing.Bitmap(13*3,9*3)
+            let cr = new SKBitmap(13*3,9*3)
+            let ur = new SKBitmap(13*3,9*3)
             for px = 0 to 13*3-1 do
                 for py = 0 to 9*3-1 do
                     ur.SetPixel(px, py, bmp.GetPixel(px/3 + i*13,   py/3))
                     cr.SetPixel(px, py, bmp.GetPixel(px/3 + i*13, 9+py/3))
-            if i=28 then 
+            if i=28 then
                 entranceRoomArrowColor <- Some(cr.GetPixel(18, 24))
             yield (BMPToBI ur, BMPToBI cr)
     |]
@@ -734,11 +740,11 @@ let dungeonRoomBmpPairsF() =
 let dungeonRoomBmpPairs = dungeonRoomBmpPairsF()
 let dungeonRoomTinyBmpPairsF() =
     let imageStream = GetResourceStream("new_icons13x9.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    let a = [|  
+    let bmp = SKBitmap.Decode(imageStream)
+    let a = [|
         for i = 0 to bmp.Width/13 - 1 do
-            let ur = new System.Drawing.Bitmap(13,9)
-            let cr = new System.Drawing.Bitmap(13,9)
+            let ur = new SKBitmap(13,9)
+            let cr = new SKBitmap(13,9)
             for px = 0 to 13-1 do
                 for py = 0 to 9-1 do
                     ur.SetPixel(px, py, bmp.GetPixel(px + i*13,   py))
@@ -785,39 +791,41 @@ let overworldImage =
     let file = files.[(new System.Random()).Next(files.Length)]
 //    printfn "selecting overworld file %s" file
     let imageStream = GetResourceStream(file)
-    new System.Drawing.Bitmap(imageStream)
+    SKBitmap.Decode(imageStream)
 let zhMapIcons =
     let imageStream = GetResourceStream("s_icon_overworld_strip39.png")
-    new System.Drawing.Bitmap(imageStream)
+    SKBitmap.Decode(imageStream)
 let zhDungeonIcons =
     let imageStream = GetResourceStream("s_btn_tr_dungeon_cell_strip3.png")
-    new System.Drawing.Bitmap(imageStream)
+    SKBitmap.Decode(imageStream)
 let zhDungeonNums =
     let imageStream = GetResourceStream("s_btn_tr_dungeon_num_strip18.png")
-    new System.Drawing.Bitmap(imageStream)
+    SKBitmap.Decode(imageStream)
 
 
 let allItemBMPs = [| book_bmp; boomerang_bmp; bow_bmp; power_bracelet_bmp; ladder_bmp; magic_boomerang_bmp; key_bmp; raft_bmp; recorder_bmp; red_candle_bmp; red_ring_bmp; silver_arrow_bmp; wand_bmp; white_sword_bmp |]
 let allItemBMPsWithHeartShuffle = [| yield! allItemBMPs; for _i = 0 to 8 do yield heart_container_bmp |]
 
-let readCacheFileOrCreateBmp(filename, createF : unit -> System.Drawing.Bitmap) =
+let readCacheFileOrCreateBmp(filename, createF : unit -> SKBitmap) =
     if System.IO.File.Exists(filename) then
-        System.Drawing.Bitmap.FromFile(filename) :?> System.Drawing.Bitmap
+        SKBitmap.Decode(filename)
     else
         let bmp = createF()
         System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(filename)) |> ignore
-        bmp.Save(filename)
+        use data = SKImage.FromBitmap(bmp).Encode(SKEncodedImageFormat.Png, 100)
+        use fs = System.IO.File.OpenWrite(filename)
+        data.SaveTo(fs)
         bmp
 
 let mutable alternativeOverworldMapFilename, shouldInitiallyHideOverworldMap = "", false   // startup screen can set these
 let blankTileBmp =
-    let fullTileBmp = new System.Drawing.Bitmap(16*3,11*3)
-    let main = System.Drawing.Color.DarkSlateGray
-    let alt = System.Drawing.Color.FromArgb(int main.R + 48, int main.G + 48, int main.B + 88)
+    let fullTileBmp = new SKBitmap(16*3,11*3)
+    let main = SKColors.DarkSlateGray
+    let alt = new SKColor(byte(int main.Red + 48), byte(int main.Green + 48), byte(int main.Blue + 88))
     for px = 0 to 16*3-1 do
         for py = 0 to 11*3-1 do
             if px >= 15*3 || py >= 10*3 then
-                fullTileBmp.SetPixel(px, py, System.Drawing.Color.Black)
+                fullTileBmp.SetPixel(px, py, SKColors.Black)
             else
                 fullTileBmp.SetPixel(px, py, (if (px/3+py/3)%2=0 then main else alt))
     fullTileBmp
@@ -825,11 +833,11 @@ let overworldMapBMPs(n) =
     let m = overworldImage
     let tiles = Array2D.zeroCreate 16 8
     if n=4 && not(System.String.IsNullOrEmpty(alternativeOverworldMapFilename)) then
-        let image = new System.Drawing.Bitmap(alternativeOverworldMapFilename) :> System.Drawing.Image
-        let bitmap = new System.Drawing.Bitmap( image, new System.Drawing.Size( 256*3, 88*3 ) )
+        let bmpOrig = SKBitmap.Decode(alternativeOverworldMapFilename)
+        let bitmap = bmpOrig.Resize(new SKSizeI(256*3, 88*3), SKFilterQuality.High)
         for x = 0 to 15 do
             for y = 0 to 7 do
-                let tile = new System.Drawing.Bitmap(16*3,11*3)
+                let tile = new SKBitmap(16*3,11*3)
                 for px = 0 to 16*3-1 do
                     for py = 0 to 11*3-1 do
                         tile.SetPixel(px, py, bitmap.GetPixel((x*16*3 + px), (y*11*3 + py)))
@@ -837,10 +845,10 @@ let overworldMapBMPs(n) =
     else
         for x = 0 to 15 do
             for y = 0 to 7 do
-                let tile = 
-                    let filename = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, sprintf """Overworld\quest.%d.ow.%2d.%2d.bmp""" n x y)
+                let tile =
+                    let filename = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, sprintf """Overworld\quest.%d.ow.%2d.%2d.png""" n x y)
                     readCacheFileOrCreateBmp(filename, fun () ->
-                        let tile = new System.Drawing.Bitmap(16*3,11*3)
+                        let tile = new SKBitmap(16*3,11*3)
                         for px = 0 to 16*3-1 do
                             for py = 0 to 11*3-1 do
                                 tile.SetPixel(px, py, m.GetPixel(256*n + (x*16*3 + px)/3, (y*11*3 + py)/3))
@@ -848,25 +856,25 @@ let overworldMapBMPs(n) =
                 tiles.[x,y] <- tile
     tiles
 
-let TRANS_BG = System.Drawing.Color.FromArgb(1, System.Drawing.Color.Black)  // transparent background (will be darkened in program layer)
-let itemBackgroundColor = System.Drawing.Color.FromArgb(0xEF,0x83,0)
-let itemsBMP = 
+let TRANS_BG = new SKColor(0uy, 0uy, 0uy, 1uy)  // transparent background (will be darkened in program layer)
+let itemBackgroundColor = new SKColor(0xEFuy, 0x83uy, 0uy)
+let itemsBMP =
     let imageStream = GetResourceStream("icons3x7.png")
-    new System.Drawing.Bitmap(imageStream)
+    SKBitmap.Decode(imageStream)
 
 let genericDungeonInterior_bmp =
-    let bmp = new System.Drawing.Bitmap(5*3,9*3)
+    let bmp = new SKBitmap(5*3,9*3)
     for px = 0 to 5*3-1 do
         for py = 0 to 9*3-1 do
-            bmp.SetPixel(px, py, System.Drawing.Color.Yellow)
-    paintAlphanumerics3x5('?', System.Drawing.Color.Black, bmp, 1, 2)
+            bmp.SetPixel(px, py, SKColors.Yellow)
+    paintAlphanumerics3x5('?', SKColors.Black, bmp, 1, 2)
     bmp
 
 let X_OPACITY = 0.55
 let overworldCommonestFloorColorBrush = freeze(new SolidColorBrush(Color.FromRgb(204uy,176uy,136uy)))
 let overworldCommonestFloorColorDarkBrush = freeze(new SolidColorBrush(Color.FromRgb(byte(float 204 * X_OPACITY),byte(float 176 * X_OPACITY),byte(float 136 * X_OPACITY))))
-let unmarkedBmp = new System.Drawing.Bitmap(5*3,9*3)
-let dontCareBmp = new System.Drawing.Bitmap(5*3,9*3)
+let unmarkedBmp = new SKBitmap(5*3,9*3)
+let dontCareBmp = new SKBitmap(5*3,9*3)
 
 // each overworld map tile may have multiple icons that can represent it (e.g. dungeon 1 versus dungeon A)
 // we store a table, where the array index is the mapSquareChoiceDomain index of the general entry type, and the value there is a list of all possible icons
@@ -874,43 +882,43 @@ let dontCareBmp = new System.Drawing.Bitmap(5*3,9*3)
 let theInteriorBmpTable = Array.init (TrackerModel.dummyOverworldTiles.Length) (fun _ -> ResizeArray())
 do
     let imageStream = GetResourceStream("ow_icons5x9.png")
-    let interiorIconStrip = new System.Drawing.Bitmap(imageStream)
+    let interiorIconStrip = SKBitmap.Decode(imageStream)
     let ubc = overworldCommonestFloorColorBrush
     for px = 0 to 5*3-1 do
         for py = 0 to 9*3-1 do
-            unmarkedBmp.SetPixel(px, py, System.Drawing.Color.FromArgb(int ubc.Color.R, int ubc.Color.G, int ubc.Color.B))
+            unmarkedBmp.SetPixel(px, py, new SKColor(ubc.Color.R, ubc.Color.G, ubc.Color.B))
     let dcbc = overworldCommonestFloorColorDarkBrush
     for px = 0 to 5*3-1 do
         for py = 0 to 9*3-1 do
-            dontCareBmp.SetPixel(px, py, System.Drawing.Color.FromArgb(int dcbc.Color.R, int dcbc.Color.G, int dcbc.Color.B))
-    let darkxbmp = new System.Drawing.Bitmap(5*3,9*3)
+            dontCareBmp.SetPixel(px, py, new SKColor(dcbc.Color.R, dcbc.Color.G, dcbc.Color.B))
+    let darkxbmp = new SKBitmap(5*3,9*3)
     for px = 0 to 5*3-1 do
         for py = 0 to 9*3-1 do
-            darkxbmp.SetPixel(px, py, System.Drawing.Color.Black)
-    let getInteriorIconFromStrip(i) = 
-        let bmp = new System.Drawing.Bitmap(5*3,9*3)
+            darkxbmp.SetPixel(px, py, SKColors.Black)
+    let getInteriorIconFromStrip(i) =
+        let bmp = new SKBitmap(5*3,9*3)
         for px = 0 to 5*3-1 do
             for py = 0 to 9*3-1 do
                 bmp.SetPixel(px, py, interiorIconStrip.GetPixel(i*5+px/3, py/3))
         bmp
     // 0-8  dungeons: 4 varieties (numbered yellow, numbered dark-yellow, lettered yellow, lettered dark-yellow)
     for labels in ["123456789";"ABCDEFGH9"] do
-        for color in [System.Drawing.Color.Yellow; System.Drawing.Color.FromArgb(153,153,0)] do
+        for color in [SKColors.Yellow; new SKColor(153uy, 153uy, 0uy)] do
             labels |> Seq.iteri (fun i ch ->
-                let bmp = new System.Drawing.Bitmap(5*3,9*3)
+                let bmp = new SKBitmap(5*3,9*3)
                 for px = 0 to 5*3-1 do
                     for py = 0 to 9*3-1 do
                         bmp.SetPixel(px, py, color)
-                paintAlphanumerics3x5(ch, System.Drawing.Color.Black, bmp, 1, 2)
+                paintAlphanumerics3x5(ch, SKColors.Black, bmp, 1, 2)
                 theInteriorBmpTable.[i].Add(bmp)
                 )
     // 9-12  any roads
     "1234" |> Seq.iteri (fun i ch ->
-        let bmp = new System.Drawing.Bitmap(5*3,9*3)
+        let bmp = new SKBitmap(5*3,9*3)
         for px = 0 to 5*3-1 do
             for py = 0 to 9*3-1 do
-                bmp.SetPixel(px, py, System.Drawing.Color.Orchid)
-        paintAlphanumerics3x5(ch, System.Drawing.Color.Black, bmp, 1, 2)
+                bmp.SetPixel(px, py, SKColors.Orchid)
+        paintAlphanumerics3x5(ch, SKColors.Black, bmp, 1, 2)
         theInteriorBmpTable.[i+9].Add(bmp)
         )
     // 13  sword3
@@ -924,13 +932,13 @@ do
     theInteriorBmpTable.[15].Add(getInteriorIconFromStrip(2) |> darkenImpl 0.6)
     // 16-23  item shops (as single-item icons)
     for i = 0 to TrackerModel.MapSquareChoiceDomainHelper.NUM_ITEMS-1 do
-        let bmp = new System.Drawing.Bitmap(5*3,9*3)
+        let bmp = new SKBitmap(5*3,9*3)
         for px = 0 to 5*3-1 do
             for py = 0 to 9*3-1 do
                 bmp.SetPixel(px, py, itemBackgroundColor)
                 if px/3 >= 1 && px/3 <= 3 && py/3 >= 1 && py/3 <= 7 then
                     let c = itemsBMP.GetPixel(i*3 + px/3-1, py/3-1)
-                    if c.ToArgb() <> System.Drawing.Color.Black.ToArgb() then
+                    if not (c.Red=0uy && c.Green=0uy && c.Blue=0uy) then
                         bmp.SetPixel(px, py, c)
         theInteriorBmpTable.[i+16].Add(bmp)
     // 24  unknown money secret
@@ -966,10 +974,10 @@ do
     // 35  'X'
     theInteriorBmpTable.[35].Add(darkxbmp)
     // Helper: paint a 3x3 block at unit coordinates (ux, uy) in black
-    let p3 (bmp:System.Drawing.Bitmap) (ux:int) (uy:int) =
+    let p3 (bmp:SKBitmap) (ux:int) (uy:int) =
         for dx = 0 to 2 do
             for dy = 0 to 2 do
-                bmp.SetPixel(3*ux+dx, 3*uy+dy, System.Drawing.Color.Black)
+                bmp.SetPixel(3*ux+dx, 3*uy+dy, SKColors.Black)
     // 36  personal preference 1 (magenta background, ✳ asterisk shape — not a dungeon letter)
     //  Pattern (unit coords, 5 wide x 9 tall):
     //    . X . X .   row 2
@@ -977,10 +985,10 @@ do
     //    X X X X X   row 4  (horizontal bar)
     //    . . X . .   row 5
     //    . X . X .   row 6
-    let pp1bmp = new System.Drawing.Bitmap(5*3, 9*3)
+    let pp1bmp = new SKBitmap(5*3, 9*3)
     for px = 0 to 5*3-1 do
         for py = 0 to 9*3-1 do
-            pp1bmp.SetPixel(px, py, System.Drawing.Color.Magenta)
+            pp1bmp.SetPixel(px, py, SKColors.Magenta)
     for ux,uy in [| (1,2);(3,2); (2,3); (0,4);(1,4);(2,4);(3,4);(4,4); (2,5); (1,6);(3,6) |] do
         p3 pp1bmp ux uy
     theInteriorBmpTable.[36].Add(pp1bmp)
@@ -991,10 +999,10 @@ do
     //    X X X X X   row 4  (widest)
     //    . X X X .   row 5
     //    . . X . .   row 6  (bottom point)
-    let pp2bmp = new System.Drawing.Bitmap(5*3, 9*3)
+    let pp2bmp = new SKBitmap(5*3, 9*3)
     for px = 0 to 5*3-1 do
         for py = 0 to 9*3-1 do
-            pp2bmp.SetPixel(px, py, System.Drawing.Color.Cyan)
+            pp2bmp.SetPixel(px, py, SKColors.Cyan)
     for ux,uy in [| (2,2); (1,3);(2,3);(3,3); (0,4);(1,4);(2,4);(3,4);(4,4); (1,5);(2,5);(3,5); (2,6) |] do
         p3 pp2bmp ux uy
     theInteriorBmpTable.[37].Add(pp2bmp)
@@ -1002,39 +1010,38 @@ do
 let theFullTileBmpTable = Array.init theInteriorBmpTable.Length (fun _ -> ResizeArray())
 let initFull() =
     let len = theInteriorBmpTable.Length
-    let BG = System.Drawing.Color.FromArgb(int TRANS_BG.A, int TRANS_BG.R, int TRANS_BG.G, int TRANS_BG.B)   // the compiler is being stupid, clone this color to workaround
+    let BG = TRANS_BG
     for i = 0 to len-1 do
         for interiorBmp in theInteriorBmpTable.[i] do
-            let fullTileBmp = new System.Drawing.Bitmap(16*3,11*3)
+            let fullTileBmp = new SKBitmap(16*3,11*3)
             for px = 0 to 16*3-1 do
                 for py = 0 to 11*3-1 do
-                    if px>=5*3 && px<10*3 && py>=1*3 && py<10*3 then 
+                    if px>=5*3 && px<10*3 && py>=1*3 && py<10*3 then
                         fullTileBmp.SetPixel(px, py, interiorBmp.GetPixel(px-5*3, py-1*3))
                     else
-                        fullTileBmp.SetPixel(px, py, if i=35 then System.Drawing.Color.Black else BG)  // 35=DARK_X gets black border; all others (including PersonalPref) get transparent BG
+                        fullTileBmp.SetPixel(px, py, if i=35 then SKColors.Black else BG)  // 35=DARK_X gets black border; all others (including PersonalPref) get transparent BG
             theFullTileBmpTable.[i].Add(fullTileBmp)
-do  
+do
     initFull()
 
 let linkFaceForward_bmp,linkRunRight_bmp,linkFaceRight_bmp,linkGotTheThing_bmp =
     let imageStream = GetResourceStream("link_icons.png")
-    let bmp = new System.Drawing.Bitmap(imageStream)
+    let bmp = SKBitmap.Decode(imageStream)
     let a = [|
         for i = 0 to 3 do
-            let r = new System.Drawing.Bitmap(16, 16)
+            let r = new SKBitmap(16, 16)
             for x = 0 to 15 do
                 for y = 0 to 15 do
                     let color = bmp.GetPixel(16*i+x, y)
-                    let color = if color.ToArgb() = System.Drawing.Color.Black.ToArgb() then System.Drawing.Color.Transparent else color
+                    let color = if color.Red=0uy && color.Green=0uy && color.Blue=0uy then SKColors.Transparent else color
                     r.SetPixel(x, y, color)
             yield r
         |]
     a.[0], a.[1], a.[2], a.[3]
-    
-let loadBMP(filename) = 
+
+let loadBMP(filename) =
     let imageStream = GetResourceStream(filename)
-    let bmp = new System.Drawing.Bitmap(imageStream)
-    bmp
+    SKBitmap.Decode(imageStream)
 let mouseIconButtonColorsBMP = loadBMP("mouse-icon-button-colors.png")
 let mouseIconButtonColors2BMP = loadBMP("mouse-icon-button-colors-2.png")
 

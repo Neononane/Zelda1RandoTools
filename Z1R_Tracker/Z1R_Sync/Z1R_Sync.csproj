@@ -10,8 +10,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="7.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <!-- CDungeonRoomState.cs uses System.Drawing.Bitmap for dungeon room image data -->
-    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <!-- CDungeonRoomState.cs bitmap ops migrated to SkiaSharp (Phase 2) -->
+    <PackageReference Include="SkiaSharp" Version="2.88.9" />
   </ItemGroup>
 
   <!-- SDK auto-globs all *.cs in the project directory; exclude the old

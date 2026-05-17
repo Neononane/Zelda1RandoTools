@@ -204,7 +204,7 @@ let MakeColorNumberCanvasForHDN(dungeonIndex) =
         let redraw(color,labelChar) =
             colorCanvas.Background <- new SolidColorBrush(Graphics.makeColor(color))
             colorCanvas.Children.Clear()
-            let color = if Graphics.isBlackGoodContrast(color) then System.Drawing.Color.Black else System.Drawing.Color.White
+            let color = if Graphics.isBlackGoodContrast(color) then SkiaSharp.SKColors.Black else SkiaSharp.SKColors.White
             if d.LabelChar <> '?' then
                 colorCanvas.Children.Add(Graphics.BMPtoImage(Graphics.alphaNumOnTransparentBmp(labelChar, color, 28, 28, 3, 2))) |> ignore
         redraw(d.Color, d.LabelChar)

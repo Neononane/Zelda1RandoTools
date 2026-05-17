@@ -33,7 +33,7 @@ let dungeonRoomExplainer, setOpacity =
         tb.Margin <- Thickness(0.,0.,3.,0.)
         tb
     let bg = Graphics.iconExtras_bmp.GetPixel(12,12)
-    let ellipsis = Graphics.transformColor(Graphics.iconExtras_bmp, fun c -> if c.ToArgb()=bg.ToArgb() then System.Drawing.Color.Black else c)
+    let ellipsis = Graphics.transformColor(Graphics.iconExtras_bmp, fun c -> if c = bg then SkiaSharp.SKColors.Black else c)
 
     let dp = new DockPanel()
     let header = mkTxt("UI reminder: When mousing a room on the dungeon map...")
