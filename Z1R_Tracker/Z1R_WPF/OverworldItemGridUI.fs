@@ -680,7 +680,7 @@ let MakeItemGrid(cm:CustomComboBoxes.CanvasManager, boxItemImpl, timelineItems:R
                     try
                         // make hard save
                         let filename = makeManualSave()
-                        let filename = System.IO.Path.GetFileName(filename)  // remove directory info (could have username in path, don't display PII on-screen)
+                        let filename = System.IO.Path.GetFileName(filename : string)  // remove directory info (could have username in path, don't display PII on-screen)
                         let! r = CustomComboBoxes.DoModalMessageBox(cm, System.Drawing.SystemIcons.Information, sprintf "Z-Tracker data saved to file\n%s\nThe tracker will now be reset." filename, ["Ok"])
                         ignore r
                         // remove triforces
