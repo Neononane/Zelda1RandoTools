@@ -825,9 +825,6 @@ let MakeMappedHotKeysDisplay() =
         let tb = DungeonRoomState.mkTxt("You have no HotKeys mapped.\nYou can edit HotKeys.txt to add\nsome, to use the next time you\nrestart the app.")
         tb.FontSize <- 16.
         all.Children.Add(tb) |> ignore
-        let fileToSelect = HotKeys.HotKeyFilename
-        let args = sprintf "/Select, \"%s\"" fileToSelect
-        let psi = new System.Diagnostics.ProcessStartInfo("Explorer.exe", args)
-        System.Diagnostics.Process.Start(psi) |> ignore
+        PlatformServices.shellOpen.OpenFolder(HotKeys.HotKeyFilename)
     total=0, new Border(BorderBrush=Brushes.Gray, BorderThickness=Thickness(3.), Background=Brushes.Black, Child=all)
 

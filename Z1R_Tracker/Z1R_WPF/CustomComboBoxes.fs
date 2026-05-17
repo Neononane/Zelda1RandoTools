@@ -603,7 +603,7 @@ let makeVersionButtonWithBehavior(cm:CanvasManager) =
                 let! r = DoModalMessageBox(cm, System.Drawing.SystemIcons.Information, OverworldData.AboutBody, ["Go to website"; "Ok"])
                 popupIsActive <- false
                 if r = "Go to website" then
-                    System.Diagnostics.Process.Start(OverworldData.Website) |> ignore
+                    PlatformServices.shellOpen.OpenUrl(OverworldData.Website)
             } |> Async.StartImmediate
         )
     vb

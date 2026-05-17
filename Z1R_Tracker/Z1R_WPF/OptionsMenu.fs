@@ -6,13 +6,20 @@ open System.Windows
 
 open CustomComboBoxes.GlobalFlag
 
-let voice = new System.Speech.Synthesis.SpeechSynthesizer()
-let defaultVoice = try voice.Voice.Name with _ -> ""
+/// Set by WpfPlatformServices.register() after the TTS engine is created.
+let mutable defaultVoice = ""
+
 let InitializeVoice() =
-    try 
-        voice.Volume <- TrackerModelOptions.Volume
-        voice.SelectVoice(TrackerModelOptions.PreferredVoice)
-    with _ -> ()
+    match PlatformServices.ttsEngine with
+    | Some tts ->
+        try
+            tts.Volume <- TrackerModelOptions.Volume
+            tts.SelectVoice(TrackerModelOptions.PreferredVoice)
+        with _ -> ()
+    | None -> ()
+
+/// Apply f to the TTS engine if one is available.
+let private withVoice f = PlatformServices.ttsEngine |> Option.iter f
 
 let mutable microphoneFailedToInitialize = false
 let mutable gamepadFailedToInitialize = false
@@ -405,8 +412,8 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     slider.ValueChanged.Add(fun _ -> 
         TrackerModelOptions.Volume <- int slider.Value
         Graphics.volumeChanged.Trigger(TrackerModelOptions.Volume)
-        if not(TrackerModelOptions.IsMuted) then 
-            voice.Volume <- TrackerModelOptions.Volume
+        if not(TrackerModelOptions.IsMuted) then
+            withVoice (fun tts -> tts.Volume <- TrackerModelOptions.Volume)
         )
     let dp = new DockPanel(VerticalAlignment=VerticalAlignment.Center, Margin=Thickness(0.))
     dp.Children.Add(slider) |> ignore
@@ -416,8 +423,8 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
     let muteCB = new CheckBox(Content=new TextBox(Text="Disable all",IsReadOnly=true))
     muteCB.ToolTip <- "Turn off all reminders (but you can still view them by\nclicking the reminder log in the upper-right of the timeline)"
     muteCB.IsChecked <- System.Nullable.op_Implicit TrackerModelOptions.IsMuted
-    muteCB.Checked.Add(fun _ -> TrackerModelOptions.IsMuted <- true; voice.Volume <- 0)
-    muteCB.Unchecked.Add(fun _ -> TrackerModelOptions.IsMuted <- false; voice.Volume <- TrackerModelOptions.Volume)
+    muteCB.Checked.Add(fun _ -> TrackerModelOptions.IsMuted <- true; withVoice (fun tts -> tts.Volume <- 0))
+    muteCB.Unchecked.Add(fun _ -> TrackerModelOptions.IsMuted <- false; withVoice (fun tts -> tts.Volume <- TrackerModelOptions.Volume))
     options2sp.Children.Add(muteCB) |> ignore
     // other settings
     let options2Grid = new Grid()
@@ -461,7 +468,11 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
         TrackerModelOptions.ReminderIntervalMinutes <- v
         reminderIntervalLabel.Text <- sprintf "Reminder interval (minutes): %d" v)
     options2sp.Children.Add(reminderIntervalSlider) |> ignore
-    if voice.GetInstalledVoices() |> Seq.filter (fun v -> v.Enabled) |> Seq.length > 1 then
+    let installedVoiceNames =
+        PlatformServices.ttsEngine
+        |> Option.map (fun tts -> tts.GetInstalledVoiceNames() |> Seq.toList)
+        |> Option.defaultValue []
+    if installedVoiceNames.Length > 1 then
         let changeVoiceButton = Graphics.makeButton("Change voice",None,None)
         changeVoiceButton.HorizontalAlignment <- HorizontalAlignment.Left
         do  // scope local mutable popupIsActive variable to this one button
@@ -478,34 +489,30 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
                     let sp = new StackPanel(Orientation=Orientation.Vertical)
                     AddStyle(sp)
                     sp.Children.Add(new TextBox(Text="Select preferred voice",IsReadOnly=true)) |> ignore
-                    for v in voice.GetInstalledVoices() do
-                        if v.Enabled then
-                            let name = v.VoiceInfo.Name
-                            let r = new StackPanel(Orientation=Orientation.Horizontal)
-                            r.Children.Add(new TextBox(Text=name,IsReadOnly=true,Width=250.)) |> ignore
-                            let testSpeech(f) =   // ensure we test aloud
-                                let wasMuted = TrackerModelOptions.IsMuted
-                                let wasVolumeOtherwiseZero = not wasMuted && TrackerModelOptions.Volume=0
-                                if wasMuted || wasVolumeOtherwiseZero then
-                                    voice.Volume <- 30  // default
-                                f()
-                                if wasVolumeOtherwiseZero || wasMuted then
-                                    voice.Volume <- 0
-                            let sb = Graphics.makeButton("Test it",None,None)
-                            sb.Click.Add(fun _ -> testSpeech(fun() -> voice.SelectVoice(name); voice.Speak("Hello")))
-                            r.Children.Add(sb) |> ignore
-                            let sb = Graphics.makeButton("Choose this",None,None)
-                            sb.Click.Add(fun _ -> testSpeech(fun() -> voice.SelectVoice(name); voice.Speak("Voice chosen"); TrackerModelOptions.PreferredVoice <- name; wh.Set() |> ignore))
-                            r.Children.Add(sb) |> ignore
-                            sp.Children.Add(r) |> ignore
+                    for name in installedVoiceNames do
+                        let r = new StackPanel(Orientation=Orientation.Horizontal)
+                        r.Children.Add(new TextBox(Text=name,IsReadOnly=true,Width=250.)) |> ignore
+                        let testSpeech(f) =   // ensure we test aloud
+                            let wasMuted = TrackerModelOptions.IsMuted
+                            let wasVolumeOtherwiseZero = not wasMuted && TrackerModelOptions.Volume=0
+                            if wasMuted || wasVolumeOtherwiseZero then
+                                withVoice (fun tts -> tts.Volume <- 30)  // default
+                            f()
+                            if wasVolumeOtherwiseZero || wasMuted then
+                                withVoice (fun tts -> tts.Volume <- 0)
+                        let sb = Graphics.makeButton("Test it",None,None)
+                        sb.Click.Add(fun _ -> testSpeech(fun() -> withVoice (fun tts -> tts.SelectVoice(name); tts.Speak("Hello"))))
+                        r.Children.Add(sb) |> ignore
+                        let sb = Graphics.makeButton("Choose this",None,None)
+                        sb.Click.Add(fun _ -> testSpeech(fun() -> withVoice (fun tts -> tts.SelectVoice(name); tts.Speak("Voice chosen")); TrackerModelOptions.PreferredVoice <- name; wh.Set() |> ignore))
+                        r.Children.Add(sb) |> ignore
+                        sp.Children.Add(r) |> ignore
                     async {
                         do! CustomComboBoxes.DoModalDocked(cm, wh, Dock.Bottom, new Border(Child=sp, BorderBrush=Brushes.Gray, BorderThickness=Thickness(3.), HorizontalAlignment=HorizontalAlignment.Center))
-                        try
-                            voice.SelectVoice(TrackerModelOptions.PreferredVoice)
-                        with _ -> 
-                            try
-                                voice.SelectVoice(defaultVoice)
-                            with _ -> ()
+                        withVoice (fun tts ->
+                            try tts.SelectVoice(TrackerModelOptions.PreferredVoice)
+                            with _ ->
+                                try tts.SelectVoice(defaultVoice) with _ -> ())
                         popupIsActive <- false
                         if changedGlobal then
                             CustomComboBoxes.GlobalFlag.popupIsActive <- false
@@ -945,12 +952,12 @@ let makeOptionsCanvas(cm:CustomComboBoxes.CanvasManager, includePopupExplainer, 
         if TrackerModelOptions.RaceMode.Value then
             // Mute audio, same as checking the box
             TrackerModelOptions.IsMuted <- true
-            voice.Volume <- 0
+            withVoice (fun tts -> tts.Volume <- 0)
             muteCB.IsChecked <- System.Nullable.op_Implicit true
         else
             // Restore checkbox to what user had previously selected
             TrackerModelOptions.IsMuted <- false
-            voice.Volume <- TrackerModelOptions.Volume
+            withVoice (fun tts -> tts.Volume <- TrackerModelOptions.Volume)
             muteCB.IsChecked <- System.Nullable.op_Implicit false
     )
 

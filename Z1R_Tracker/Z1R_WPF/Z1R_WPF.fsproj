@@ -85,6 +85,7 @@
     <Compile Include="..\GlobalAssemblyInfo.fs">
       <Link>GlobalAssemblyInfo.fs</Link>
     </Compile>
+    <Compile Include="IPlatformServices.fs" />
     <Compile Include="Gamepad.fs" />
     <Compile Include="Graphics.fs" />
     <Compile Include="CustomMessageBox.fs" />
@@ -121,6 +122,7 @@
     <Compile Include="DungeonCInterop.fs" />
     <Compile Include="CoopSync.fs" />
     <Compile Include="DungeonModelSync.fs" />
+    <Compile Include="WpfPlatformServices.fs" />
     <Compile Include="WPFUI.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

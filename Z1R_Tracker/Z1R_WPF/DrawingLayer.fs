@@ -378,8 +378,7 @@ let InteractWithDrawingLayer(cm:CanvasManager, drawingCanvas:Canvas) = async {
     canvasAdd(bottomCanvas, mkTxtBT("Here are icons found in your ExtraIcons folder:", 0.), X, 120.)
     canvasAdd(bottomCanvas, extraIconGrid, X, 140.)
     openFolderButton.Click.Add(fun _ ->
-        let psi = new System.Diagnostics.ProcessStartInfo("Explorer.exe", extraIconsDirectory)
-        System.Diagnostics.Process.Start(psi) |> ignore
+        PlatformServices.shellOpen.OpenFolder(extraIconsDirectory)
         )
     if anyErrorMessageRelatedToExtraIcons <> "" then
         let errorTB = mkTxt("Error while loading ExtraIcons:\n" + anyErrorMessageRelatedToExtraIcons)

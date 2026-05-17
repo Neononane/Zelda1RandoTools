@@ -134,22 +134,10 @@ type Win32() =
         SendInput(numberOfInputs, inputs, sizeOfInputStructure)
 
 let volumeChanged = new Event<int>()
-let soundPlayer = new MediaPlayer()
-soundPlayer.Volume <- float TrackerModelOptions.Volume / 300.
-soundPlayer.Open(new Uri("confirm_speech.wav", UriKind.Relative))
-let PlaySoundForSpeechRecognizedAndUsedToMark() =
-    soundPlayer.Position <- TimeSpan(0L)
-    soundPlayer.Play()
-let soundPlayer2 = new MediaPlayer()
-soundPlayer2.Volume <- float TrackerModelOptions.Volume / 300.
-soundPlayer2.Open(new Uri("reminder_clink.wav", UriKind.Relative))
-let PlaySoundForReminder() =
-    soundPlayer2.Position <- TimeSpan(0L)
-    soundPlayer2.Play()
-volumeChanged.Publish.Add(fun v ->
-    soundPlayer.Volume <- float v / 300.
-    soundPlayer2.Volume <- float v / 300.
-    )
+// Audio playback is delegated to PlatformServices.audioPlayer,
+// which is set to WpfAudioPlayer by WpfPlatformServices.register() at startup.
+let PlaySoundForSpeechRecognizedAndUsedToMark() = PlatformServices.audioPlayer.PlayConfirmSpeech()
+let PlaySoundForReminder()                      = PlatformServices.audioPlayer.PlayReminderClink()
 
 let mutable ErrorBeepWithReminderLogText = fun (_txt:string) -> ()
 
@@ -1193,10 +1181,14 @@ let placeSkippedItemXDecoration(innerc) = placeSkippedItemXDecorationImpl(innerc
 
 
 let ExeName = "Z1R_WPF.exe"
-let RestartTheApplication() = 
-    let cwd = System.IO.Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName)
+let RestartTheApplication() =
+    // Environment.ProcessPath is cross-platform (.NET 6+) and avoids
+    // Process.GetCurrentProcess().MainModule.FileName which can throw on Linux.
+    let cwd = System.IO.Path.GetDirectoryName(System.Environment.ProcessPath)
     let thisExe = System.IO.Path.Combine(cwd, ExeName)
-    System.Diagnostics.Process.Start(thisExe) |> ignore
+    let psi = new System.Diagnostics.ProcessStartInfo(thisExe)
+    psi.UseShellExecute <- true
+    System.Diagnostics.Process.Start(psi) |> ignore
     System.Windows.Application.Current.MainWindow.Close()
 
 // ideas from

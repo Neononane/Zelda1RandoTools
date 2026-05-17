@@ -113,10 +113,7 @@ let DoShowRunCustom(refocusMainWindow) =
                                 IsReadOnly=true, BorderThickness=Thickness(0.), Text=message, IsHitTestVisible=false)
         let window = new Window(Title=sprintf "Z-Tracker %s" titleKind, Owner=Application.Current.MainWindow, Content=tb, SizeToContent=SizeToContent.WidthAndHeight)
         window.Show()
-        let fileToSelect = ShowRunCustomFilename
-        let args = sprintf "/Select, \"%s\"" fileToSelect
-        let psi = new System.Diagnostics.ProcessStartInfo("Explorer.exe", args)
-        System.Diagnostics.Process.Start(psi) |> ignore
+        PlatformServices.shellOpen.OpenFolder(ShowRunCustomFilename)
     let mutable currentIndexBeingInterpreted = 0
     let mutable prefixErrorMessageWithContext = fun msg -> msg
     try
@@ -161,7 +158,7 @@ let DoShowRunCustom(refocusMainWindow) =
             | Line.RUN(comm,args) ->
                 if not(System.IO.File.Exists(comm)) then
                     if (comm.ToLowerInvariant().StartsWith("http://") || comm.ToLowerInvariant().StartsWith("https://")) && System.Uri.IsWellFormedUriString(comm, System.UriKind.Absolute) then
-                        System.Diagnostics.Process.Start(comm) |> ignore    // open a URL in default browser
+                        PlatformServices.shellOpen.OpenUrl(comm)              // open a URL in default browser
                         didAnything <- true
                     else
                         raise <| new HotKeys.UserError(sprintf "The file to RUN does not exist:\n%s" comm)

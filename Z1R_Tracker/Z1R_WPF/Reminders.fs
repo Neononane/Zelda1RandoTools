@@ -8,7 +8,6 @@ open System.Windows.Media
 open OverworldItemGridUI
 open CustomComboBoxes.GlobalFlag
 
-let voice = OptionsMenu.voice
 let upcb(bmp) : FrameworkElement = upcast Graphics.BMPtoImage bmp
 let mutable reminderAgent = MailboxProcessor.Start(fun _ -> async{return ()})
 let reminderLogSP = new StackPanel(Orientation=Orientation.Vertical)
@@ -43,7 +42,7 @@ let ReminderDescriptionTextBox(txt) =
         VerticalAlignment=VerticalAlignment.Center, HorizontalAlignment=HorizontalAlignment.Center, BorderThickness=Thickness(0.), TextAlignment=TextAlignment.Left)
 do
     Graphics.ErrorBeepWithReminderLogText <- (fun txt -> 
-        System.Media.SystemSounds.Asterisk.Play()
+        PlatformServices.audioPlayer.PlaySystemAsterisk()
         SendReminder(TrackerModel.ReminderCategory.Asterisk, txt, [Graphics.BMPtoImage Graphics.other_monster2; ReminderTextBox("Error beep")])
         )
 
@@ -100,8 +99,9 @@ let SetupReminderDisplayAndProcessing(cm) =
                 if shouldRemindVisual then
                     do! Async.Sleep(200) // give reminder clink sound time to play
                 let startSpeakTime = DateTime.Now
-                if shouldRemindVoice && voice.Volume <> 0 then
-                    voice.Speak(text) 
+                if shouldRemindVoice then
+                    PlatformServices.ttsEngine |> Option.iter (fun tts ->
+                        if tts.Volume <> 0 then tts.Speak(text))
                 if shouldRemindVisual || category=TrackerModel.ReminderCategory.Asterisk then
                     let minimumDuration = TimeSpan.FromSeconds(max 3 iconCount |> float)  // ensure at least 3s, and at least 1s per icon
                     let elapsed = DateTime.Now - startSpeakTime

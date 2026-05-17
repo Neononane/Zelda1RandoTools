@@ -77,8 +77,8 @@ let drawRoutesToImpl(routeDestinationOption, point, i, j, drawRouteMarks, maxBol
 let resetTimerEvent = new Event<unit>()
 let mutable currentlyMousedOWX, currentlyMousedOWY = -1, -1
 
-let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:Canvas, owMapNum, heartShuffle, kind, loadData:DungeonSaveAndLoad.AllData option, 
-                showProgress, speechRecognitionInstance:SpeechRecognition.SpeechRecognitionInstance) = async {
+let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:Canvas, owMapNum, heartShuffle, kind, loadData:DungeonSaveAndLoad.AllData option,
+                showProgress) = async {
     let ctxt = System.Threading.SynchronizationContext.Current
     Popouts.Initialize(mainWindow,ctxt)
     let refocusMainWindow = Popouts.refocusMainWindow
@@ -630,7 +630,7 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                             let curState = TrackerModel.overworldMapMarks.[i,j].Current()
                             if curState = -1 then
                                 // if unmarked, use voice to set new state
-                                match speechRecognitionInstance.ConvertSpokenPhraseToMapCell(phrase) with
+                                match PlatformServices.speechService |> Option.bind (fun svc -> svc.ConvertPhraseToCell(phrase)) with
                                 | Some newState -> 
                                     if isLegalHere(newState) && TrackerModel.overworldMapMarks.[i,j].AttemptToSet(newState) then
                                         if newState >=0 && newState <=8 then
@@ -646,7 +646,7 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                                 | None -> ()
                             elif MapStateProxy(curState).IsThreeItemShop && TrackerModel.getShopItem2_1based(i,j)=0 then
                                 // if item shop with only one item marked, use voice to set item2
-                                match speechRecognitionInstance.ConvertSpokenPhraseToMapCell(phrase) with
+                                match PlatformServices.speechService |> Option.bind (fun svc -> svc.ConvertPhraseToCell(phrase)) with
                                 | Some newState ->
                                     if TrackerModel.MapSquareChoiceDomainHelper.IsItem(newState) then
                                         TrackerModel.setShopItems(i,j,TrackerModel.MapSquareChoiceDomainHelper.ToItem(newState),0)
@@ -655,7 +655,7 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                                 | None -> ()
                             elif MapStateProxy(curState).IsThreeItemShop && TrackerModel.getShopItem3_1based(i,j)=0 then
                                 // if item shop with two items marked, use voice to set item3
-                                match speechRecognitionInstance.ConvertSpokenPhraseToMapCell(phrase) with
+                                match PlatformServices.speechService |> Option.bind (fun svc -> svc.ConvertPhraseToCell(phrase)) with
                                 | Some newState ->
                                     if TrackerModel.MapSquareChoiceDomainHelper.IsItem(newState) then
                                         TrackerModel.setShopItems(i,j,TrackerModel.getShopItem2_1based(i,j),TrackerModel.MapSquareChoiceDomainHelper.ToItem(newState))
@@ -893,18 +893,20 @@ let makeAll(mainWindow:Window, cm:CustomComboBoxes.CanvasManager, drawingCanvas:
                     redrawGridSpot()
                 elif TrackerModel.overworldMapMarks.[i,j].Current() = TrackerModel.MapSquareChoiceDomainHelper.DARK_X then
                     redrawGridSpot()  // quest-switchable tile that starts as AlwaysEmpty in the current quest; draw its initial dark X
-    if speechRecognitionInstance <> null then
-        speechRecognitionInstance.AttachSpeechRecognizedToApp(appMainCanvas, (fun recognizedText ->
-                                if currentlyMousedOWX >= 0 then // can hear speech before we have moused over any (uninitialized location)
-                                    let c = owCanvases.[currentlyMousedOWX,currentlyMousedOWY]
-                                    if c <> null && c.IsMouseOver then  // canvas can be null for always-empty grid places
-                                        // Note: IsMouseOver appears only be true if we are along the way from a mouse click to the visual root.
-                                        // As a result, the update never fires when a popup window is active, because the popup sunglasses would always 
-                                        // intercept the click in a different part of the Visual tree.  This is good, because we don't want speech 
-                                        // mutating the world while a popup is active (the popup's modality should block speech).
-                                        // I guess we could also ask 'cm' if a popup is active.
-                                        owUpdateFunctions.[currentlyMousedOWX,currentlyMousedOWY] 777 recognizedText
-                            ))
+    match PlatformServices.speechService with
+    | Some svc ->
+        svc.OnRecognized(fun recognizedText ->
+            appMainCanvas.Dispatcher.Invoke(fun () ->
+                if currentlyMousedOWX >= 0 then // can hear speech before we have moused over any (uninitialized location)
+                    let c = owCanvases.[currentlyMousedOWX,currentlyMousedOWY]
+                    if c <> null && c.IsMouseOver then  // canvas can be null for always-empty grid places
+                        // Note: IsMouseOver appears only be true if we are along the way from a mouse click to the visual root.
+                        // As a result, the update never fires when a popup window is active, because the popup sunglasses would always
+                        // intercept the click in a different part of the Visual tree.  This is good, because we don't want speech
+                        // mutating the world while a popup is active (the popup's modality should block speech).
+                        // I guess we could also ask 'cm' if a popup is active.
+                        owUpdateFunctions.[currentlyMousedOWX,currentlyMousedOWY] 777 recognizedText))
+    | None -> ()
     OptionsMenu.requestRedrawOverworldEvent.Publish.Add(fun _ ->
         for i = 0 to 15 do
             for j = 0 to 7 do

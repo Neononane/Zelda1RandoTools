@@ -104,10 +104,7 @@ let InitializeUserCustom(cm:CustomComboBoxes.CanvasManager, timelineItems:Resize
                 errorText <- errorText.Substring(0, 600) + "..."
             let! r = CustomComboBoxes.DoModalMessageBox(cm, System.Drawing.SystemIcons.Error, errorText, ["Open ExtraIcons folder"; "Ok"])
             if r <> "Ok" then
-                let fileToSelect = checklistFilename
-                let args = sprintf "/Select, \"%s\"" fileToSelect
-                let psi = new System.Diagnostics.ProcessStartInfo("Explorer.exe", args)
-                System.Diagnostics.Process.Start(psi) |> ignore
+                PlatformServices.shellOpen.OpenFolder(checklistFilename)
     if SaveAndLoad.theUserCustomChecklist <> null && thePanel = null then
         let backgroundImageFilename = System.IO.Path.Combine(extraIconsDirectory, SaveAndLoad.theUserCustomChecklist.BackgroundImageFilename)
         let backgroundImageBmp = SkiaSharp.SKBitmap.Decode(backgroundImageFilename)

@@ -262,10 +262,7 @@ type MyWindow() as this =
                 logCrashInfo "Or you can delete it, and an empty hotkeys template file will be created in its place."
                 logCrashInfo ""
                 finishCrashInfo()
-                let fileToSelect = HotKeys.HotKeyFilename
-                let args = sprintf "/Select, \"%s\"" fileToSelect
-                let psi = new System.Diagnostics.ProcessStartInfo("Explorer.exe", args)
-                System.Diagnostics.Process.Start(psi) |> ignore
+                PlatformServices.shellOpen.OpenFolder(HotKeys.HotKeyFilename)
                 printfn "Press a key to close this window"
                 System.Console.ReadKey() |> ignore
             | _ ->
@@ -326,7 +323,7 @@ type MyWindow() as this =
                 let ty = System.Type.GetTypeFromCLSID (System.Guid "00021401-0000-0000-C000-000000000046")
                 Activator.CreateInstance ty
             let isl = shellLink :?> Winterop.IShellLink
-            let cwd = System.IO.Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName)
+            let cwd = System.IO.Path.GetDirectoryName(System.Environment.ProcessPath)
             isl.SetDescription("Launch Z-Tracker")
             isl.SetPath(System.IO.Path.Combine(cwd, Graphics.ExeName))
             isl.SetWorkingDirectory(cwd)
@@ -1134,13 +1131,15 @@ type MyWindow() as this =
             if loadData.IsSome then
                 TrackerModel.IsSecondQuestDungeons <- loadData.Value.Items.SecondQuestDungeons
 
-            let mutable speechRecognitionInstance = null
             if TrackerModelOptions.ListenForSpeech.Value then
                 printfn "Initializing microphone for speech recognition..."
                 try
-                    speechRecognitionInstance <- new SpeechRecognition.SpeechRecognitionInstance(kind)
-                    SpeechRecognition.speechRecognizer.SetInputToDefaultAudioDevice()
-                    SpeechRecognition.speechRecognizer.RecognizeAsync(System.Speech.Recognition.RecognizeMode.Multiple)
+                    match PlatformServices.speechService with
+                    | Some svc ->
+                        svc.Configure(kind)
+                        svc.Start()
+                    | None ->
+                        OptionsMenu.microphoneFailedToInitialize <- true
                 with ex ->
                     printfn "An exception setting up speech, speech recognition will be non-functional, but rest of app will work. Exception:"
                     printfn "%s" (ex.ToString())
@@ -1172,7 +1171,7 @@ type MyWindow() as this =
             match loadData with
             | Some data -> lastUpdateMinute <- (data.TimeInSeconds / 60)
             | _ -> ()
-            let! u = WPFUI.makeAll(this, cm, drawingCanvas, n, heartShuffle, kind, loadData, showProgress, speechRecognitionInstance)
+            let! u = WPFUI.makeAll(this, cm, drawingCanvas, n, heartShuffle, kind, loadData, showProgress)
             updateTimeline <- u
             displayStartupTimeDiagnostics(sprintf "total startup took %dms" totalsw.ElapsedMilliseconds)
             appMainCanvas.Children.Remove(mainDock)  // remove for good
@@ -1470,7 +1469,7 @@ type DummyWindow() as this =
 [<EntryPoint>]
 let main _argv = 
     printfn "Starting Z-Tracker..."
-    let cwd = System.IO.Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName)
+    let cwd = System.IO.Path.GetDirectoryName(System.Environment.ProcessPath)
     let thisExe = System.IO.Path.Combine(cwd, Graphics.ExeName)
     let thisExeName = thisExe.Replace('\\', '_')   // backslash is not allowed character in mutex name
     use mutex = new System.Threading.Mutex(false, thisExeName)
@@ -1484,6 +1483,7 @@ let main _argv =
             Dungeon.stopLocalSignalRHost()
         )
         killAnyZombieHosts()
+        WpfPlatformServices.register()   // install concrete WPF implementations of platform services
         let app = new Application()
 #if DEBUG
         do
