@@ -1,4 +1,4 @@
-# Using Self-Hosted Coop in Z-Tracker Version 2.1.0.1
+# Using Self-Hosted Coop in Z-Tracker Version 2.1.0.2+
 
 # Concepts
 
